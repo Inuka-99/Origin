@@ -1,4 +1,5 @@
 import { createBrowserRouter } from 'react-router';
+import { ProtectedRoute } from './auth';
 import { LoginScreen } from './pages/LoginScreen';
 import { LoginScreenMobile } from './pages/LoginScreenMobile';
 import { RegisterPage } from './pages/RegisterPage';
@@ -23,10 +24,7 @@ import { Settings } from './pages/Settings';
 import { SettingsMobile } from './pages/SettingsMobile';
 
 export const router = createBrowserRouter([
-  {
-    path: '/',
-    Component: Dashboard,
-  },
+  // ─── Public routes (no auth required) ────────────────────────────
   {
     path: '/login',
     Component: LoginScreen,
@@ -51,68 +49,81 @@ export const router = createBrowserRouter([
     path: '/mfa-verify',
     Component: MFAVerificationPage,
   },
+
+  // ─── Protected routes (require authentication) ───────────────────
+  // All children of this layout route are guarded by ProtectedRoute.
+  // If the user is not logged in, they see the Unauthorized page.
   {
-    path: '/dashboard',
-    Component: Dashboard,
-  },
-  {
-    path: '/dashboard-mobile',
-    Component: DashboardMobile,
-  },
-  {
-    path: '/projects',
-    Component: Projects,
-  },
-  {
-    path: '/projects-mobile',
-    Component: ProjectsMobile,
-  },
-  {
-    path: '/project-board',
-    Component: ProjectBoard,
-  },
-  {
-    path: '/project-board-mobile',
-    Component: ProjectBoardMobile,
-  },
-  {
-    path: '/tasks',
-    Component: MyTasks,
-  },
-  {
-    path: '/tasks-mobile',
-    Component: MyTasksMobile,
-  },
-  {
-    path: '/calendar',
-    Component: Calendar,
-  },
-  {
-    path: '/calendar-mobile',
-    Component: CalendarMobile,
-  },
-  {
-    path: '/team',
-    Component: Team,
-  },
-  {
-    path: '/team-mobile',
-    Component: TeamMobile,
-  },
-  {
-    path: '/messages',
-    Component: Chat,
-  },
-  {
-    path: '/messages-mobile',
-    Component: ChatMobile,
-  },
-  {
-    path: '/settings',
-    Component: Settings,
-  },
-  {
-    path: '/settings-mobile',
-    Component: SettingsMobile,
+    Component: ProtectedRoute,
+    children: [
+      {
+        path: '/',
+        Component: Dashboard,
+      },
+      {
+        path: '/dashboard',
+        Component: Dashboard,
+      },
+      {
+        path: '/dashboard-mobile',
+        Component: DashboardMobile,
+      },
+      {
+        path: '/projects',
+        Component: Projects,
+      },
+      {
+        path: '/projects-mobile',
+        Component: ProjectsMobile,
+      },
+      {
+        path: '/project-board',
+        Component: ProjectBoard,
+      },
+      {
+        path: '/project-board-mobile',
+        Component: ProjectBoardMobile,
+      },
+      {
+        path: '/tasks',
+        Component: MyTasks,
+      },
+      {
+        path: '/tasks-mobile',
+        Component: MyTasksMobile,
+      },
+      {
+        path: '/calendar',
+        Component: Calendar,
+      },
+      {
+        path: '/calendar-mobile',
+        Component: CalendarMobile,
+      },
+      {
+        path: '/team',
+        Component: Team,
+      },
+      {
+        path: '/team-mobile',
+        Component: TeamMobile,
+      },
+      {
+        path: '/messages',
+        Component: Chat,
+      },
+      {
+        path: '/messages-mobile',
+        Component: ChatMobile,
+      },
+      {
+        path: '/settings',
+        Component: Settings,
+      },
+      {
+        path: '/settings-mobile',
+        Component: SettingsMobile,
+      },
+    ],
   },
 ]);
