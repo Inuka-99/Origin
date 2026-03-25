@@ -1,0 +1,117 @@
+/**
+ * projects.controller.ts
+ *
+ * REST endpoints for project CRUD with role-based access control.
+ *
+ * GET    /projects              — List projects (members see own, admins see all)
+ * POST   /projects              — Create a project (any authenticated user)
+ * GET    /projects/:id          — Get project details
+ * PATCH  /projects/:id          — Update project (project admin or global admin)
+ * DELETE /projects/:id          — Delete project (project admin or global admin)
+ * GET    /projects/:id/members  — List project members
+ * POST   /projects/:id/members  — Add a member (project admin or global admin)
+ * DELETE /projects/:id/members/:userId — Remove a member
+ */
+
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Param,
+  Body,
+  Req,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
+import {
+  JwtAuthGuard,
+  CurrentUser,
+  UserSyncInterceptor,
+  type AuthenticatedUser,
+} from '../auth';
+import { ProjectsService, type CreateProjectDto, type UpdateProjectDto } from './projects.service';
+import { SupabaseService } from '../supabase';
+
+@Controller('projects')
+@UseGuards(JwtAuthGuard)
+@UseInterceptors(UserSyncInterceptor)
+export class ProjectsController {
+  constructor(
+    private readonly projectsService: ProjectsService,
+    private readonly supabase: SupabaseService,
+  ) {}
+
+  /** Helper: get the user's global role from their Supabase profile */
+  private async getUserRole(userId: string): Promise<string> {
+    const { data } = await this.supabase
+      .getClient()
+      .from('profiles')
+      .select('role')
+      .eq('id', userId)
+      .single();
+    return data?.role ?? 'member';
+  }
+
+  @Get()
+  async list(@CurrentUser() user: AuthenticatedUser) {
+    const role = await this.getUserRole(user.userId);
+    return this.projectsService.listForUser(user.userId, role);
+  }
+
+  @Post()
+  async create(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: CreateProjectDto,
+  ) {
+    return this.projectsService.create(dto, user.userId);
+  }
+
+  @Get(':id')
+  async getOne(@Param('id') id: string) {
+    return this.projectsService.getById(id);
+  }
+
+  @Patch(':id')
+  async update(
+    @Param('id') id: string,
+    @Body() dto: UpdateProjectDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const role = await this.getUserRole(user.userId);
+    return this.projectsService.update(id, dto, user.userId, role);
+  }
+
+  @Delete(':id')
+  async remove(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const role = await this.getUserRole(user.userId);
+    await this.projectsService.delete(id, user.userId, role);
+    return { deleted: true };
+  }
+
+  @Get(':id/members')
+  async listMembers(@Param('id') id: string) {
+    return this.projectsService.listMembers(id);
+  }
+
+  @Post(':id/members')
+  async addMember(
+    @Param('id') id: string,
+    @Body() body: { user_id: string; role?: 'admin' | 'member' },
+  ) {
+    return this.projectsService.addMember(id, body.user_id, body.role);
+  }
+
+  @Delete(':id/members/:userId')
+  async removeMember(
+    @Param('id') id: string,
+    @Param('userId') userId: string,
+  ) {
+    await this.projectsService.removeMember(id, userId);
+    return { removed: true };
+  }
+}

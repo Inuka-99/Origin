@@ -1,13 +1,14 @@
-import { LayoutDashboard, Folder, CheckSquare, Calendar, Users, Settings, MessageSquare } from 'lucide-react';
-// TODO: restore image import once asset is available
-// import originLogo from 'figma:asset/966bedd3383407a6804dcd0980785a3c1cd7d32b.png';
+import { LayoutDashboard, Folder, CheckSquare, Calendar, Users, Settings, MessageSquare, Shield } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router';
+import { useUserRole } from '../auth/useUserRole';
 
 interface MenuItem {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   path: string;
   badge?: number;
+  /** If true, only visible to admins */
+  adminOnly?: boolean;
 }
 
 const menuItems: MenuItem[] = [
@@ -17,18 +18,24 @@ const menuItems: MenuItem[] = [
   { icon: MessageSquare, label: 'Messages', path: '/messages', badge: 3 },
   { icon: Calendar, label: 'Calendar', path: '/calendar' },
   { icon: Users, label: 'Team', path: '/team' },
+  { icon: Shield, label: 'Admin', path: '/admin', adminOnly: true },
   { icon: Settings, label: 'Settings', path: '/settings' },
 ];
 
 export function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { isAdmin } = useUserRole();
+
+  // Filter menu items based on user role
+  const visibleItems = menuItems.filter(
+    (item) => !item.adminOnly || isAdmin,
+  );
 
   return (
     <aside className="w-56 bg-[#203D70] h-screen fixed left-0 top-0 flex flex-col">
       {/* Logo Area */}
       <div className="px-4 py-6">
-        {/* Logo */}
         <div className="mb-4">
           <div className="text-white text-xl font-bold" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>ORIGIN</div>
         </div>
@@ -36,7 +43,7 @@ export function Sidebar() {
 
       {/* Navigation Menu */}
       <nav className="flex-1 px-3 pt-2">
-        {menuItems.map((item) => {
+        {visibleItems.map((item) => {
           const Icon = item.icon;
           const isActive = location.pathname === item.path;
           return (
@@ -64,6 +71,16 @@ export function Sidebar() {
           );
         })}
       </nav>
+
+      {/* Role indicator at bottom */}
+      {isAdmin && (
+        <div className="px-4 py-3 border-t border-white/10">
+          <div className="flex items-center gap-2 text-xs text-white/50">
+            <Shield className="w-3.5 h-3.5" />
+            <span>Admin Access</span>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }

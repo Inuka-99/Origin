@@ -12,5 +12,7 @@ export { Unauthorized } from './Unauthorized';
 export { LoginButton } from './LoginButton';
 export { LogoutButton } from './LogoutButton';
 export { useAuthUser } from './useAuthUser';
+export { useUserRole } from './useUserRole';
+export { RoleGuard } from './RoleGuard';
 export type { AuthUser, Auth0Config } from './auth.interfaces';
 export { getAuth0Config } from './auth.interfaces';

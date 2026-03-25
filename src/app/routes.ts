@@ -22,6 +22,7 @@ import { Chat } from './pages/Chat';
 import { ChatMobile } from './pages/ChatMobile';
 import { Settings } from './pages/Settings';
 import { SettingsMobile } from './pages/SettingsMobile';
+import { Admin } from './pages/Admin';
 
 export const router = createBrowserRouter([
   // ─── Public routes (no auth required) ────────────────────────────
@@ -119,6 +120,10 @@ export const router = createBrowserRouter([
       {
         path: '/settings',
         Component: Settings,
+      },
+      {
+        path: '/admin',
+        Component: Admin,
       },
       {
         path: '/settings-mobile',

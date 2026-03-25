@@ -6,27 +6,31 @@
  *
  * How it works:
  *  1. While Auth0 is loading → show AuthLoading spinner
- *  2. If not authenticated → show Unauthorized page
+ *  2. If not authenticated → redirect straight to Auth0 login
  *  3. If authenticated → render child routes via <Outlet />
  *
  * Used as a layout route in routes.ts so all protected pages are wrapped
  * without adding a guard to every individual route.
  */
 
+import { useEffect } from 'react';
 import { Outlet } from 'react-router';
+import { useAuth0 } from '@auth0/auth0-react';
 import { AuthLoading } from './AuthLoading';
-import { Unauthorized } from './Unauthorized';
 import { useAuthUser } from './useAuthUser';
 
 export function ProtectedRoute() {
   const { isAuthenticated, isLoading } = useAuthUser();
+  const { loginWithRedirect } = useAuth0();
 
-  if (isLoading) {
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      loginWithRedirect();
+    }
+  }, [isLoading, isAuthenticated, loginWithRedirect]);
+
+  if (isLoading || !isAuthenticated) {
     return <AuthLoading />;
-  }
-
-  if (!isAuthenticated) {
-    return <Unauthorized />;
   }
 
   return <Outlet />;
