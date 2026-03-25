@@ -11,4 +11,7 @@ export { JwtStrategy } from './jwt.strategy';
 export { PermissionsGuard } from './permissions.guard';
 export { RequirePermissions, PERMISSIONS_KEY } from './permissions.decorator';
 export { CurrentUser } from './current-user.decorator';
+export { Roles, ROLES_KEY } from './roles.decorator';
+export { RolesGuard } from './roles.guard';
+export { UserSyncInterceptor } from './user-sync.interceptor';
 export type { Auth0JwtPayload, AuthenticatedUser } from './auth.interfaces';

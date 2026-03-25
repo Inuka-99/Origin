@@ -11,10 +11,12 @@ import { Module } from '@nestjs/common';
 import { PassportModule } from '@nestjs/passport';
 import { JwtStrategy } from './jwt.strategy';
 import { PermissionsGuard } from './permissions.guard';
+import { RolesGuard } from './roles.guard';
+import { UserSyncInterceptor } from './user-sync.interceptor';
 
 @Module({
   imports: [PassportModule.register({ defaultStrategy: 'jwt' })],
-  providers: [JwtStrategy, PermissionsGuard],
-  exports: [PassportModule, PermissionsGuard],
+  providers: [JwtStrategy, PermissionsGuard, RolesGuard, UserSyncInterceptor],
+  exports: [PassportModule, PermissionsGuard, RolesGuard, UserSyncInterceptor],
 })
 export class AuthModule {}
