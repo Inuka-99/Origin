@@ -1,4 +1,4 @@
-﻿import {
+import {
   Injectable,
   NotFoundException,
   BadRequestException,
@@ -14,6 +14,7 @@ export interface Task {
   status: string;
   priority: string;
   due_date: string | null;
+  assigned_to: string | null; // User ID of the assigned team member
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -26,6 +27,7 @@ export interface CreateTaskDto {
   status?: 'To Do' | 'In Progress' | 'In Review' | 'Done';
   priority?: 'High' | 'Medium' | 'Low';
   due_date?: string;
+  assigned_to?: string | null; // User ID to assign the task to on creation
 }
 
 export interface UpdateTaskDto {
@@ -34,6 +36,7 @@ export interface UpdateTaskDto {
   status?: 'To Do' | 'In Progress' | 'In Review' | 'Done';
   priority?: 'High' | 'Medium' | 'Low';
   due_date?: string | null;
+  assigned_to?: string | null; // User ID to assign (or null to unassign)
 }
 
 @Injectable()
@@ -78,6 +81,7 @@ export class TasksService {
         status: convertStatus(dto.status ?? 'To Do'),
         priority: (dto.priority ?? 'Medium').toLowerCase(),
         due_date: dto.due_date ?? null,
+        assigned_to: dto.assigned_to ?? null,
         created_by: userId,
       })
       .select('*')
@@ -246,6 +250,18 @@ export class TasksService {
     if (error) {
       throw new BadRequestException(error.message);
     }
+  }
+
+  /**
+   * Assign a task to a team member (or unassign by passing null)
+   */
+  async assignTask(
+    id: string,
+    assigneeId: string | null,
+    userId: string,
+    userRole: string,
+  ): Promise<Task> {
+    return this.update(id, { assigned_to: assigneeId }, userId, userRole);
   }
 
   private async assertProjectMember(projectId: string, userId: string): Promise<void> {
