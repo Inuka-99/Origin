@@ -16,6 +16,7 @@ import { AuthModule } from './auth';
 import { SupabaseModule } from './supabase';
 import { UsersModule } from './users';
 import { ProjectsModule } from './projects';
+import { TasksModule } from './tasks/tasks.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -37,6 +38,9 @@ import { AppController } from './app.controller';
 
     // Project CRUD with role-based access
     ProjectsModule,
+
+    // Task CRUD with role-based access
+    TasksModule,
   ],
   controllers: [AppController],
 })
