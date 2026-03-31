@@ -152,12 +152,43 @@ export class ProjectsService {
     if (error) throw new BadRequestException(error.message);
   }
 
-  /** Add a member to a project. */
+  /** List members of a project. Only project members or admins can view. */
+  async listMembers(projectId: string, userId: string, globalRole: string): Promise<ProjectMember[]> {
+    // Check if user is a member or admin
+    if (globalRole !== 'admin') {
+      const { data: membership } = await this.supabase
+        .getClient()
+        .from('project_members')
+        .select('user_id')
+        .eq('project_id', projectId)
+        .eq('user_id', userId)
+        .single();
+
+      if (!membership) {
+        throw new ForbiddenException('You are not a member of this project');
+      }
+    }
+
+    const { data, error } = await this.supabase
+      .getClient()
+      .from('project_members')
+      .select('*, profiles(full_name, email, avatar_url)')
+      .eq('project_id', projectId);
+
+    if (error) throw new BadRequestException(error.message);
+    return (data ?? []) as ProjectMember[];
+  }
+
+  /** Add a member to a project. Only project admins or global admins can add members. */
   async addMember(
     projectId: string,
     memberId: string,
     role: 'admin' | 'member' = 'member',
+    userId: string,
+    globalRole: string,
   ): Promise<ProjectMember> {
+    await this.assertProjectAccess(projectId, userId, globalRole);
+
     const { data, error } = await this.supabase
       .getClient()
       .from('project_members')
@@ -169,20 +200,15 @@ export class ProjectsService {
     return data as ProjectMember;
   }
 
-  /** List members of a project. */
-  async listMembers(projectId: string): Promise<ProjectMember[]> {
-    const { data, error } = await this.supabase
-      .getClient()
-      .from('project_members')
-      .select('*, profiles(full_name, email, avatar_url)')
-      .eq('project_id', projectId);
+  /** Remove a member from a project. Only project admins or global admins can remove members. */
+  async removeMember(
+    projectId: string,
+    memberId: string,
+    userId: string,
+    globalRole: string,
+  ): Promise<void> {
+    await this.assertProjectAccess(projectId, userId, globalRole);
 
-    if (error) throw new BadRequestException(error.message);
-    return (data ?? []) as ProjectMember[];
-  }
-
-  /** Remove a member from a project. */
-  async removeMember(projectId: string, memberId: string): Promise<void> {
     const { error } = await this.supabase
       .getClient()
       .from('project_members')

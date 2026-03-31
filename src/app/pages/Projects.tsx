@@ -1,12 +1,10 @@
 import { Sidebar } from '../components/Sidebar';
 import { TopBar } from '../components/TopBar';
-import { Search, Filter, ChevronDown, Plus, Grid3x3, List, Users, Calendar, MoreVertical, CheckSquare } from 'lucide-react';
+import { Search, Filter, ChevronDown, Plus, Grid3x3, List, Users, Calendar, MoreVertical, CheckSquare, Loader2 } from 'lucide-react';
 import { useState } from 'react';
+import { useProjects, useProjectMembers, type Project as ApiProject } from '../lib/useProjects';
 
-interface Project {
-  id: string;
-  name: string;
-  description: string;
+interface Project extends ApiProject {
   progress: number;
   tasksTotal: number;
   tasksCompleted: number;
@@ -85,13 +83,42 @@ const mockProjects: Project[] = [
 ];
 
 export function Projects() {
+  const { projects: apiProjects, loading, error, createProject, updateProject, deleteProject } = useProjects();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [showMembersModal, setShowMembersModal] = useState(false);
+  const { members, loading: membersLoading, addMember, removeMember } = useProjectMembers(selectedProject?.id || '');
 
-  const filteredProjects = mockProjects.filter(project =>
+  // Convert API projects to display format with placeholder stats
+  const projects: Project[] = apiProjects.map(apiProject => ({
+    ...apiProject,
+    progress: 0, // TODO: Calculate from tasks
+    tasksTotal: 0, // TODO: Fetch from tasks API
+    tasksCompleted: 0, // TODO: Fetch from tasks API
+    status: 'Active' as const, // TODO: Determine from project state
+    team: [], // TODO: Get from members
+    lastUpdated: new Date(apiProject.updated_at).toLocaleDateString(),
+  }));
+
+  const filteredProjects = projects.filter(project =>
     project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    project.description.toLowerCase().includes(searchQuery.toLowerCase())
+    project.description?.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const handleCreateProject = async (data: { name: string; description?: string }) => {
+    try {
+      setCreating(true);
+      await createProject(data);
+      setShowCreateModal(false);
+    } catch (err) {
+      console.error('Failed to create project:', err);
+    } finally {
+      setCreating(false);
+    }
+  };
 
   const getStatusColor = (status: Project['status']) => {
     switch (status) {
@@ -119,7 +146,10 @@ export function Projects() {
             </h1>
             <p className="text-gray-600">Manage and track all active projects</p>
           </div>
-          <button className="flex items-center gap-2 px-4 py-2.5 bg-[#204EA7] text-white rounded-lg hover:bg-[#1a3d8a] transition-colors font-medium">
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-[#204EA7] text-white rounded-lg hover:bg-[#1a3d8a] transition-colors font-medium"
+          >
             <Plus className="w-5 h-5" />
             Create Project
           </button>
@@ -170,7 +200,22 @@ export function Projects() {
         </div>
 
         {/* Projects Grid/List */}
-        {filteredProjects.length === 0 ? (
+        {loading ? (
+          <div className="bg-white rounded-lg p-12 text-center shadow-sm">
+            <Loader2 className="w-8 h-8 animate-spin text-[#204EA7] mx-auto mb-4" />
+            <p className="text-gray-600">Loading projects...</p>
+          </div>
+        ) : error ? (
+          <div className="bg-red-50 rounded-lg p-6 text-center shadow-sm">
+            <p className="text-red-600 mb-4">{error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        ) : filteredProjects.length === 0 ? (
           <div className="bg-white rounded-lg p-12 text-center shadow-sm">
             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Grid3x3 className="w-8 h-8 text-gray-400" />
@@ -189,6 +234,10 @@ export function Projects() {
             {filteredProjects.map((project) => (
               <div
                 key={project.id}
+                onClick={() => {
+                  setSelectedProject(project);
+                  setShowMembersModal(true);
+                }}
                 className="bg-white rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow cursor-pointer border border-transparent hover:border-[#204EA7]/20"
               >
                 {/* Header */}
@@ -330,6 +379,183 @@ export function Projects() {
           </div>
         )}
       </main>
+
+      {/* Create Project Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <h2 className="text-xl font-semibold mb-4" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+              Create New Project
+            </h2>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target as HTMLFormElement);
+                const name = formData.get('name') as string;
+                const description = formData.get('description') as string;
+                if (name.trim()) {
+                  handleCreateProject({ name: name.trim(), description: description.trim() || undefined });
+                }
+              }}
+            >
+              <div className="mb-4">
+                <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
+                  Project Name *
+                </label>
+                <input
+                  type="text"
+                  id="name"
+                  name="name"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#204EA7] focus:border-transparent"
+                  placeholder="Enter project name"
+                />
+              </div>
+              <div className="mb-6">
+                <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
+                  Description
+                </label>
+                <textarea
+                  id="description"
+                  name="description"
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#204EA7] focus:border-transparent"
+                  placeholder="Enter project description (optional)"
+                />
+              </div>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={creating}
+                  className="flex-1 px-4 py-2 bg-[#204EA7] text-white rounded-lg hover:bg-[#1a3d8a] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {creating && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Create Project
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Project Members Modal */}
+      {showMembersModal && selectedProject && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-2xl mx-4 max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-xl font-semibold" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+                  {selectedProject.name}
+                </h2>
+                <p className="text-gray-600 text-sm mt-1">{selectedProject.description}</p>
+              </div>
+              <button
+                onClick={() => setShowMembersModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold mb-4">Project Members</h3>
+              
+              {/* Add Member Form */}
+              <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+                <h4 className="text-sm font-medium mb-2">Add Member</h4>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const formData = new FormData(e.target as HTMLFormElement);
+                    const userId = formData.get('userId') as string;
+                    const role = formData.get('role') as string;
+                    if (userId.trim()) {
+                      addMember(userId.trim(), role as 'admin' | 'member' || 'member');
+                      (e.target as HTMLFormElement).reset();
+                    }
+                  }}
+                  className="flex gap-2"
+                >
+                  <input
+                    type="text"
+                    name="userId"
+                    placeholder="User ID (Auth0 ID)"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7] focus:border-transparent"
+                    required
+                  />
+                  <select
+                    name="role"
+                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7] focus:border-transparent"
+                  >
+                    <option value="member">Member</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-[#204EA7] text-white rounded-lg hover:bg-[#1a3d8a] transition-colors text-sm font-medium"
+                  >
+                    Add
+                  </button>
+                </form>
+              </div>
+
+              {membersLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin text-[#204EA7]" />
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {members.map((member) => (
+                    <div key={member.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-[#204EA7] flex items-center justify-center text-white font-semibold">
+                          {member.profiles?.full_name?.charAt(0) || member.user_id.charAt(0)}
+                        </div>
+                        <div>
+                          <p className="font-medium">{member.profiles?.full_name || 'Unknown User'}</p>
+                          <p className="text-sm text-gray-600">{member.profiles?.email || member.user_id}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          member.role === 'admin' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'
+                        }`}>
+                          {member.role}
+                        </span>
+                        <button
+                          onClick={() => removeMember(member.user_id)}
+                          className="p-1 hover:bg-red-100 rounded text-red-600"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {members.length === 0 && (
+                    <p className="text-gray-500 text-center py-8">No members yet</p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowMembersModal(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
