@@ -12,6 +12,7 @@ import { Projects } from './pages/Projects';
 import { ProjectsMobile } from './pages/ProjectsMobile';
 import { ProjectBoard } from './pages/ProjectBoard';
 import { ProjectBoardMobile } from './pages/ProjectBoardMobile';
+import { ProjectDetails } from './pages/ProjectDetails';
 import { MyTasks } from './pages/MyTasks';
 import { MyTasksMobile } from './pages/MyTasksMobile';
 import { Calendar } from './pages/CalendarPage';
@@ -72,6 +73,10 @@ export const router = createBrowserRouter([
       {
         path: '/projects',
         Component: Projects,
+      },
+      {
+        path: '/projects/:projectId',
+        Component: ProjectDetails,
       },
       {
         path: '/projects-mobile',
