@@ -8,8 +8,6 @@ import {
   List,
   Plus,
   Search,
-  Tag,
-  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Sidebar } from '../components/Sidebar';
@@ -24,13 +22,6 @@ import {
   DialogTitle,
 } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../components/ui/select';
 import { Textarea } from '../components/ui/textarea';
 import { useApiClient } from '../lib/api-client';
 import {
