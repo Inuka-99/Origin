@@ -1,3 +1,17 @@
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router';
+import {
+  Calendar,
+  ChevronDown,
+  Filter,
+  Grid3x3,
+  List,
+  Plus,
+  Search,
+  Tag,
+  X,
+} from 'lucide-react';
+import { toast } from 'sonner';
 import { Sidebar } from '../components/Sidebar';
 import { TopBar } from '../components/TopBar';
 import { useNavigate } from 'react-router';
@@ -203,9 +217,7 @@ export function Projects() {
       <Sidebar />
       <TopBar />
 
-      {/* Main Content */}
       <main className="ml-56 pt-16 p-8">
-        {/* Header */}
         <div className="flex items-start justify-between mb-8">
           <div>
             <h1 className="text-3xl font-semibold mb-2" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
@@ -222,42 +234,39 @@ export function Projects() {
           </button>
         </div>
 
-        {/* Controls Bar */}
         <div className="bg-white rounded-lg p-4 mb-6 flex items-center gap-4 shadow-sm">
-          {/* Search */}
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
               type="text"
               placeholder="Search projects..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(event) => setSearchQuery(event.target.value)}
               className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7] focus:border-transparent"
             />
           </div>
 
-          {/* Filter */}
-          <button className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium">
+          <button type="button" className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium text-gray-500 cursor-not-allowed">
             <Filter className="w-4 h-4" />
             Filter
             <ChevronDown className="w-4 h-4" />
           </button>
 
-          {/* Sort */}
-          <button className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium">
+          <button type="button" className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium text-gray-500 cursor-not-allowed">
             Sort
             <ChevronDown className="w-4 h-4" />
           </button>
 
-          {/* View Toggle */}
           <div className="flex items-center gap-1 bg-gray-50 rounded-lg p-1">
             <button
+              type="button"
               onClick={() => setViewMode('grid')}
               className={`p-2 rounded ${viewMode === 'grid' ? 'bg-white shadow-sm' : 'hover:bg-gray-100'}`}
             >
               <Grid3x3 className="w-4 h-4 text-gray-700" />
             </button>
             <button
+              type="button"
               onClick={() => setViewMode('list')}
               className={`p-2 rounded ${viewMode === 'list' ? 'bg-white shadow-sm' : 'hover:bg-gray-100'}`}
             >
@@ -291,7 +300,11 @@ export function Projects() {
               No projects found
             </h3>
             <p className="text-gray-600 mb-6">Create your first project to start tracking work</p>
-            <button className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#204EA7] text-white rounded-lg hover:bg-[#1a3d8a] transition-colors font-medium">
+            <button
+              type="button"
+              onClick={openCreateModal}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#204EA7] text-white rounded-lg hover:bg-[#1a3d8a] transition-colors font-medium"
+            >
               <Plus className="w-5 h-5" />
               Create Project
             </button>
@@ -299,7 +312,7 @@ export function Projects() {
         ) : viewMode === 'grid' ? (
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
             {filteredProjects.map((project) => (
-              <div
+              <button
                 key={project.id}
                 onClick={() => {
                   setSelectedProject(project);
@@ -307,10 +320,9 @@ export function Projects() {
                 }}
                 className="bg-white rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow cursor-pointer border border-transparent hover:border-[#204EA7]/20"
               >
-                {/* Header */}
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold mb-1" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
+                <div className="flex items-start justify-between gap-3 mb-4">
+                  <div>
+                    <h3 className="text-lg font-semibold mb-1 text-[#1a1a1a]" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
                       {project.name}
                     </h3>
                     <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(project.status)}`}>
@@ -377,37 +389,18 @@ export function Projects() {
                   </div>
                 </div>
 
-                {/* Stats */}
-                <div className="flex items-center gap-4 mb-4 text-sm text-gray-600">
-                  <div className="flex items-center gap-1.5">
-                    <CheckSquare className="w-4 h-4" />
-                    <span>{project.tasksCompleted}/{project.tasksTotal} tasks</span>
-                  </div>
-                </div>
+                <p className="text-sm text-gray-600 mb-4 min-h-10">
+                  {project.description || 'No description has been added yet.'}
+                </p>
 
-                {/* Footer */}
-                <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-                  <div className="flex items-center -space-x-2">
-                    {project.team.map((member, idx) => (
-                      <div
-                        key={idx}
-                        className="w-8 h-8 rounded-full bg-[#204EA7] flex items-center justify-center text-white text-xs font-semibold border-2 border-white"
-                      >
-                        {member}
-                      </div>
-                    ))}
-                    {project.team.length > 4 && (
-                      <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 text-xs font-semibold border-2 border-white">
-                        +{project.team.length - 4}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                <div className="flex items-center justify-between pt-4 border-t border-gray-100 text-xs text-gray-500">
+                  <span className="flex items-center gap-1.5">
                     <Calendar className="w-3.5 h-3.5" />
-                    {project.lastUpdated}
-                  </div>
+                    Updated {formatCreated(project.updated_at)}
+                  </span>
+                  <span>Created {formatCreated(project.created_at)}</span>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         ) : (
@@ -417,17 +410,19 @@ export function Projects() {
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
                     <th className="text-left px-6 py-3 text-sm font-semibold text-gray-900">Project</th>
-                    <th className="text-left px-6 py-3 text-sm font-semibold text-gray-900">Status</th>
-                    <th className="text-left px-6 py-3 text-sm font-semibold text-gray-900">Progress</th>
-                    <th className="text-left px-6 py-3 text-sm font-semibold text-gray-900">Tasks</th>
-                    <th className="text-left px-6 py-3 text-sm font-semibold text-gray-900">Team</th>
-                    <th className="text-left px-6 py-3 text-sm font-semibold text-gray-900">Last Updated</th>
-                    <th className="text-left px-6 py-3 text-sm font-semibold text-gray-900"></th>
+                    <th className="text-left px-6 py-3 text-sm font-semibold text-gray-900">Description</th>
+                    <th className="text-left px-6 py-3 text-sm font-semibold text-gray-900">Created By</th>
+                    <th className="text-left px-6 py-3 text-sm font-semibold text-gray-900">Created</th>
+                    <th className="text-left px-6 py-3 text-sm font-semibold text-gray-900">Updated</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {filteredProjects.map((project) => (
-                    <tr key={project.id} className="hover:bg-gray-50 cursor-pointer">
+                    <tr
+                      key={project.id}
+                      onClick={() => navigate(`/projects/${project.id}`)}
+                      className="hover:bg-gray-50 cursor-pointer"
+                    >
                       <td className="px-6 py-4">
                         <div>
                           <div className="font-semibold text-gray-900">{project.name}</div>
@@ -514,6 +509,10 @@ export function Projects() {
                           )}
                         </div>
                       </td>
+                      <td className="px-6 py-4 text-sm text-gray-700 max-w-sm truncate">{project.description || 'No description'}</td>
+                      <td className="px-6 py-4 text-sm text-gray-700">{project.created_by || 'Unknown'}</td>
+                      <td className="px-6 py-4 text-sm text-gray-700">{formatCreated(project.created_at)}</td>
+                      <td className="px-6 py-4 text-sm text-gray-700">{formatCreated(project.updated_at)}</td>
                     </tr>
                   ))}
                 </tbody>

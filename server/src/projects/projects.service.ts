@@ -52,13 +52,19 @@ export class ProjectsService {
   /** Create a new project. The creator becomes the project admin. */
   async create(dto: CreateProjectDto, userId: string): Promise<Project> {
     const client = this.supabase.getClient();
+    const name = dto.name?.trim();
+    const description = dto.description?.trim() || null;
+
+    if (!name) {
+      throw new BadRequestException('Project name is required');
+    }
 
     // Create the project
     const { data: project, error } = await client
       .from('projects')
       .insert({
-        name: dto.name,
-        description: dto.description ?? null,
+        name,
+        description,
         created_by: userId,
       })
       .select()
