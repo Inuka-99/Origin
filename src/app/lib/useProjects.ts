@@ -15,6 +15,7 @@ export interface Project {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  user_role?: 'admin' | 'member' | null;
 }
 
 export interface ProjectMember {

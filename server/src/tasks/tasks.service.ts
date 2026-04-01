@@ -14,6 +14,7 @@ export interface Task {
   status: string;
   priority: string;
   due_date: string | null;
+  assignee_id: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -26,6 +27,7 @@ export interface CreateTaskDto {
   status?: 'To Do' | 'In Progress' | 'In Review' | 'Done';
   priority?: 'High' | 'Medium' | 'Low';
   due_date?: string;
+  assignee_id?: string | null;
 }
 
 export interface UpdateTaskDto {
@@ -34,6 +36,7 @@ export interface UpdateTaskDto {
   status?: 'To Do' | 'In Progress' | 'In Review' | 'Done';
   priority?: 'High' | 'Medium' | 'Low';
   due_date?: string | null;
+  assignee_id?: string | null;
 }
 
 @Injectable()
@@ -47,6 +50,9 @@ export class TasksService {
   async create(dto: CreateTaskDto, userId: string): Promise<Task> {
     if (dto.project_id) {
       await this.assertProjectMember(dto.project_id, userId);
+      if (dto.assignee_id) {
+        await this.assertProjectMember(dto.project_id, dto.assignee_id);
+      }
     }
 
     const convertStatus = (status: string): string => {
@@ -78,6 +84,7 @@ export class TasksService {
         status: convertStatus(dto.status ?? 'To Do'),
         priority: (dto.priority ?? 'Medium').toLowerCase(),
         due_date: dto.due_date ?? null,
+        assignee_id: dto.assignee_id ?? null,
         created_by: userId,
       })
       .select('*')
@@ -177,6 +184,13 @@ export class TasksService {
         await this.assertProjectAdmin(task.project_id, userId);
       } else {
         throw new ForbiddenException('Not authorized to modify a standalone task');
+      }
+    }
+
+    // Validate assignee is a project member if assigning to a project task
+    if (dto.assignee_id !== undefined && task.project_id) {
+      if (dto.assignee_id) {
+        await this.assertProjectMember(task.project_id, dto.assignee_id);
       }
     }
 

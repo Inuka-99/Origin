@@ -1,8 +1,9 @@
 import { Sidebar } from '../components/Sidebar';
 import { TopBar } from '../components/TopBar';
-import { Search, Filter, ChevronDown, Plus, Grid3x3, List, Users, Calendar, MoreVertical, CheckSquare, Loader2 } from 'lucide-react';
-import { useState } from 'react';
+import { Search, Filter, ChevronDown, Plus, Grid3x3, List, Users, Calendar, MoreVertical, CheckSquare, Loader2, Trash2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { useProjects, useProjectMembers, type Project as ApiProject } from '../lib/useProjects';
+import { useAuthUser } from '../auth/useAuthUser';
 
 interface Project extends ApiProject {
   progress: number;
@@ -11,76 +12,9 @@ interface Project extends ApiProject {
   status: 'Active' | 'Completed' | 'On Hold';
   team: string[];
   lastUpdated: string;
+  user_role?: 'admin' | 'member' | null;
 }
 
-const mockProjects: Project[] = [
-  {
-    id: '1',
-    name: 'Website Redesign',
-    description: 'Complete overhaul of company website with new branding and improved UX',
-    progress: 65,
-    tasksTotal: 28,
-    tasksCompleted: 18,
-    status: 'Active',
-    team: ['SJ', 'AM', 'JL', 'SC'],
-    lastUpdated: '2 hours ago'
-  },
-  {
-    id: '2',
-    name: 'Mobile App Launch',
-    description: 'Development and launch of iOS and Android mobile applications',
-    progress: 45,
-    tasksTotal: 42,
-    tasksCompleted: 19,
-    status: 'Active',
-    team: ['AM', 'JL', 'MK'],
-    lastUpdated: '5 hours ago'
-  },
-  {
-    id: '3',
-    name: 'Q4 Marketing Campaign',
-    description: 'Strategic marketing initiatives for Q4 product launches',
-    progress: 100,
-    tasksTotal: 15,
-    tasksCompleted: 15,
-    status: 'Completed',
-    team: ['SC', 'EM', 'RH'],
-    lastUpdated: '1 day ago'
-  },
-  {
-    id: '4',
-    name: 'Customer Portal',
-    description: 'Self-service portal for customer account management',
-    progress: 30,
-    tasksTotal: 35,
-    tasksCompleted: 11,
-    status: 'Active',
-    team: ['JL', 'AM', 'PW', 'TB'],
-    lastUpdated: '3 hours ago'
-  },
-  {
-    id: '5',
-    name: 'Security Audit',
-    description: 'Comprehensive security review and implementation of improvements',
-    progress: 0,
-    tasksTotal: 12,
-    tasksCompleted: 0,
-    status: 'On Hold',
-    team: ['MK', 'TB'],
-    lastUpdated: '1 week ago'
-  },
-  {
-    id: '6',
-    name: 'API Documentation',
-    description: 'Complete API documentation and developer guides',
-    progress: 80,
-    tasksTotal: 10,
-    tasksCompleted: 8,
-    status: 'Active',
-    team: ['AM', 'PW'],
-    lastUpdated: '1 day ago'
-  }
-];
 
 export function Projects() {
   const { projects: apiProjects, loading, error, createProject, updateProject, deleteProject } = useProjects();
@@ -90,7 +24,22 @@ export function Projects() {
   const [creating, setCreating] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [showMembersModal, setShowMembersModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState<string | null>(null);
   const { members, loading: membersLoading, addMember, removeMember } = useProjectMembers(selectedProject?.id || '');
+  const { user } = useAuthUser();
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setDropdownOpen(null);
+    };
+    if (dropdownOpen) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [dropdownOpen]);
 
   // Convert API projects to display format with placeholder stats
   const projects: Project[] = apiProjects.map(apiProject => ({
@@ -118,6 +67,24 @@ export function Projects() {
     } finally {
       setCreating(false);
     }
+  };
+
+  const handleDeleteProject = async () => {
+    if (!selectedProject) return;
+    try {
+      setDeleting(true);
+      await deleteProject(selectedProject.id);
+      setShowDeleteModal(false);
+      setSelectedProject(null);
+    } catch (err) {
+      console.error('Failed to delete project:', err);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const isProjectAdmin = (project: Project) => {
+    return project.user_role === 'admin';
   };
 
   const getStatusColor = (status: Project['status']) => {
@@ -250,9 +217,47 @@ export function Projects() {
                       {project.status}
                     </span>
                   </div>
-                  <button className="p-1 hover:bg-gray-100 rounded">
-                    <MoreVertical className="w-5 h-5 text-gray-400" />
-                  </button>
+                  <div className="relative">
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDropdownOpen(dropdownOpen === project.id ? null : project.id);
+                      }}
+                      className="p-1 hover:bg-gray-100 rounded"
+                    >
+                      <MoreVertical className="w-5 h-5 text-gray-400" />
+                    </button>
+                    {dropdownOpen === project.id && (
+                      <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedProject(project);
+                            setShowMembersModal(true);
+                            setDropdownOpen(null);
+                          }}
+                          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-t-lg flex items-center gap-2"
+                        >
+                          <Users className="w-4 h-4" />
+                          Manage Members
+                        </button>
+                        {isProjectAdmin(project) && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedProject(project);
+                              setShowDeleteModal(true);
+                              setDropdownOpen(null);
+                            }}
+                            className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-b-lg flex items-center gap-2"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Delete Project
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Description */}
@@ -367,9 +372,47 @@ export function Projects() {
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-600">{project.lastUpdated}</td>
                       <td className="px-6 py-4">
-                        <button className="p-1 hover:bg-gray-100 rounded">
-                          <MoreVertical className="w-5 h-5 text-gray-400" />
-                        </button>
+                        <div className="relative">
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDropdownOpen(dropdownOpen === project.id ? null : project.id);
+                            }}
+                            className="p-1 hover:bg-gray-100 rounded"
+                          >
+                            <MoreVertical className="w-5 h-5 text-gray-400" />
+                          </button>
+                          {dropdownOpen === project.id && (
+                            <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedProject(project);
+                                  setShowMembersModal(true);
+                                  setDropdownOpen(null);
+                                }}
+                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-t-lg flex items-center gap-2"
+                              >
+                                <Users className="w-4 h-4" />
+                                Manage Members
+                              </button>
+                              {isProjectAdmin(project) && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedProject(project);
+                                    setShowDeleteModal(true);
+                                    setDropdownOpen(null);
+                                  }}
+                                  className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-b-lg flex items-center gap-2"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                  Delete Project
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -551,6 +594,52 @@ export function Projects() {
                 className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Project Confirmation Modal */}
+      {showDeleteModal && selectedProject && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                <Trash2 className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+                  Delete Project
+                </h2>
+                <p className="text-gray-600 text-sm">This action cannot be undone</p>
+              </div>
+            </div>
+            
+            <div className="mb-6">
+              <p className="text-gray-700 mb-2">
+                Are you sure you want to delete <span className="font-semibold">"{selectedProject.name}"</span>?
+              </p>
+              <p className="text-sm text-gray-600">
+                This will permanently delete the project and all associated tasks, members, and data. This action cannot be undone.
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                disabled={deleting}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteProject}
+                disabled={deleting}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {deleting && <Loader2 className="w-4 h-4 animate-spin" />}
+                Delete Project
               </button>
             </div>
           </div>

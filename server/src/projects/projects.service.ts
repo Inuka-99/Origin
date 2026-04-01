@@ -20,6 +20,7 @@ export interface Project {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  user_role?: 'admin' | 'member' | null; // User's role in this project
 }
 
 export interface ProjectMember {
@@ -83,13 +84,14 @@ export class ProjectsService {
         .order('created_at', { ascending: false });
 
       if (error) throw new BadRequestException(error.message);
-      return (data ?? []) as Project[];
+      // For global admins, they have admin role on all projects
+      return (data ?? []).map(project => ({ ...project, user_role: 'admin' })) as Project[];
     }
 
     // Regular members see only projects they belong to
     const { data: memberships } = await client
       .from('project_members')
-      .select('project_id')
+      .select('project_id, role')
       .eq('user_id', userId);
 
     const projectIds = (memberships ?? []).map((m) => m.project_id);
@@ -102,7 +104,14 @@ export class ProjectsService {
       .order('created_at', { ascending: false });
 
     if (error) throw new BadRequestException(error.message);
-    return (data ?? []) as Project[];
+
+    // Add user role to each project
+    const projectsWithRoles = (data ?? []).map(project => {
+      const membership = memberships?.find(m => m.project_id === project.id);
+      return { ...project, user_role: membership?.role || null };
+    });
+
+    return projectsWithRoles as Project[];
   }
 
   /** Get a single project by ID. */
