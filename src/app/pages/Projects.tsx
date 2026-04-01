@@ -8,8 +8,6 @@ import {
   List,
   Plus,
   Search,
-  Tag,
-  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Sidebar } from '../components/Sidebar';
