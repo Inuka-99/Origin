@@ -21,7 +21,7 @@ import {
   Delete,
   Param,
   Body,
-  Req,
+  Query,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
@@ -31,7 +31,12 @@ import {
   UserSyncInterceptor,
   type AuthenticatedUser,
 } from '../auth';
-import { ProjectsService, type CreateProjectDto, type UpdateProjectDto } from './projects.service';
+import {
+  ProjectsService,
+  type AddProjectMemberDto,
+  type CreateProjectDto,
+  type UpdateProjectDto,
+} from './projects.service';
 import { SupabaseService } from '../supabase';
 
 @Controller('projects')
@@ -97,6 +102,16 @@ export class ProjectsController {
   async listMembers(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
     const role = await this.getUserRole(user.userId);
     return this.projectsService.listMembers(id, user.userId, role);
+  }
+
+  @Get(':id/member-candidates')
+  async listMemberCandidates(
+    @Param('id') id: string,
+    @Query('q') query: string | undefined,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const role = await this.getUserRole(user.userId);
+    return this.projectsService.searchMemberCandidates(id, query, user.userId, role);
   }
 
   @Post(':id/members')
