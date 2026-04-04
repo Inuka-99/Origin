@@ -13,10 +13,30 @@ import {
 } from '@nestjs/common';
 import { SupabaseService } from '../supabase';
 
+const PROJECT_PRIORITIES = ['Low', 'Medium', 'High', 'Urgent'] as const;
+const PROJECT_STATUSES = [
+  'Planning',
+  'Active',
+  'In Progress',
+  'Review',
+  'On Hold',
+  'Completed',
+  'Archived',
+] as const;
+
+type ProjectPriority = (typeof PROJECT_PRIORITIES)[number];
+type ProjectStatus = (typeof PROJECT_STATUSES)[number];
+
 export interface Project {
   id: string;
   name: string;
   description: string | null;
+  start_date: string;
+  due_date: string | null;
+  priority: ProjectPriority;
+  status: ProjectStatus;
+  department: string;
+  tags: string[];
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -33,11 +53,23 @@ export interface ProjectMember {
 export interface CreateProjectDto {
   name: string;
   description?: string;
+  start_date?: string;
+  due_date?: string;
+  priority: ProjectPriority;
+  status?: ProjectStatus;
+  department: string;
+  tags?: string[];
 }
 
 export interface UpdateProjectDto {
   name?: string;
-  description?: string;
+  description?: string | null;
+  start_date?: string;
+  due_date?: string | null;
+  priority?: ProjectPriority;
+  status?: ProjectStatus;
+  department?: string;
+  tags?: string[];
 }
 
 @Injectable()
@@ -47,19 +79,13 @@ export class ProjectsService {
   /** Create a new project. The creator becomes the project admin. */
   async create(dto: CreateProjectDto, userId: string): Promise<Project> {
     const client = this.supabase.getClient();
-    const name = dto.name?.trim();
-    const description = dto.description?.trim() || null;
-
-    if (!name) {
-      throw new BadRequestException('Project name is required');
-    }
+    const payload = this.normalizeProjectPayload(dto, { requireName: true, requirePriority: true, requireDepartment: true });
 
     // Create the project
     const { data: project, error } = await client
       .from('projects')
       .insert({
-        name,
-        description,
+        ...payload,
         created_by: userId,
       })
       .select()
@@ -133,10 +159,16 @@ export class ProjectsService {
   ): Promise<Project> {
     await this.assertProjectAccess(id, userId, globalRole);
 
+    const updatePayload = this.normalizeProjectPayload(dto);
+
+    if (Object.keys(updatePayload).length === 0) {
+      throw new BadRequestException('No valid project fields were provided');
+    }
+
     const { data, error } = await this.supabase
       .getClient()
       .from('projects')
-      .update(dto)
+      .update(updatePayload)
       .eq('id', id)
       .select()
       .single();
@@ -219,5 +251,160 @@ export class ProjectsService {
     if (!data || data.role !== 'admin') {
       throw new ForbiddenException('Only project admins can perform this action');
     }
+  }
+
+  private normalizeProjectPayload(
+    dto: CreateProjectDto | UpdateProjectDto,
+    options: {
+      requireName?: boolean;
+      requirePriority?: boolean;
+      requireDepartment?: boolean;
+    } = {},
+  ): Record<string, unknown> {
+    const payload: Record<string, unknown> = {};
+
+    if ('name' in dto || options.requireName) {
+      const name = dto.name?.trim();
+      if (options.requireName && !name) {
+        throw new BadRequestException('Project name is required');
+      }
+      if (name) {
+        payload.name = name;
+      } else if ('name' in dto && dto.name !== undefined) {
+        throw new BadRequestException('Project name is required');
+      }
+    }
+
+    if ('description' in dto) {
+      const description = dto.description?.trim();
+      payload.description = description || null;
+    }
+
+    const startDate = this.normalizeDate(dto.start_date);
+    if (startDate) {
+      payload.start_date = startDate;
+    } else if (options.requireName && !('start_date' in dto)) {
+      payload.start_date = this.getTodayDateString();
+    }
+
+    if ('priority' in dto || options.requirePriority) {
+      const priority = this.normalizePriority(dto.priority);
+      if (!priority && options.requirePriority) {
+        throw new BadRequestException('Project priority is required');
+      }
+      if (priority) {
+        payload.priority = priority;
+      }
+    }
+
+    if ('status' in dto) {
+      const status = this.normalizeStatus(dto.status);
+      if (status) {
+        payload.status = status;
+      }
+    } else if (options.requireName) {
+      payload.status = 'Planning';
+    }
+
+    if ('department' in dto || options.requireDepartment) {
+      const department = dto.department?.trim();
+      if (!department && options.requireDepartment) {
+        throw new BadRequestException('Project department is required');
+      }
+      if (department) {
+        payload.department = department;
+      }
+    }
+
+    if ('tags' in dto) {
+      payload.tags = this.normalizeTags(dto.tags);
+    } else if (options.requireName) {
+      payload.tags = [];
+    }
+
+    if ('due_date' in dto) {
+      const dueDate = this.normalizeDate(dto.due_date ?? undefined);
+      payload.due_date = dueDate ?? null;
+    }
+
+    const effectiveStartDate = (payload.start_date as string | undefined)
+      ?? this.normalizeDate(dto.start_date)
+      ?? (options.requireName ? this.getTodayDateString() : undefined);
+    const effectiveDueDate = payload.due_date as string | null | undefined;
+
+    if (effectiveStartDate && effectiveDueDate && effectiveDueDate < effectiveStartDate) {
+      throw new BadRequestException('Due date cannot be earlier than start date');
+    }
+
+    return payload;
+  }
+
+  private normalizePriority(priority?: string): ProjectPriority | undefined {
+    if (priority === undefined) {
+      return undefined;
+    }
+
+    const normalized = priority.trim().toLowerCase();
+    const match = PROJECT_PRIORITIES.find(
+      (value) => value.toLowerCase() === normalized,
+    );
+
+    if (!match) {
+      throw new BadRequestException(`Invalid project priority: ${priority}`);
+    }
+
+    return match;
+  }
+
+  private normalizeStatus(status?: string): ProjectStatus | undefined {
+    if (status === undefined) {
+      return undefined;
+    }
+
+    const normalized = status.trim().toLowerCase();
+    const match = PROJECT_STATUSES.find(
+      (value) => value.toLowerCase() === normalized,
+    );
+
+    if (!match) {
+      throw new BadRequestException(`Invalid project status: ${status}`);
+    }
+
+    return match;
+  }
+
+  private normalizeTags(tags?: string[]): string[] {
+    if (!tags) {
+      return [];
+    }
+
+    return Array.from(
+      new Set(
+        tags
+          .map((tag) => tag.trim())
+          .filter(Boolean),
+      ),
+    );
+  }
+
+  private normalizeDate(value?: string): string | undefined {
+    if (!value) {
+      return undefined;
+    }
+
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return undefined;
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      throw new BadRequestException(`Invalid date value: ${value}`);
+    }
+
+    return trimmed;
+  }
+
+  private getTodayDateString(): string {
+    return new Date().toISOString().slice(0, 10);
   }
 }

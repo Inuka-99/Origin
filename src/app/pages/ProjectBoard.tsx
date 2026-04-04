@@ -335,10 +335,10 @@ function TaskCard({ task, columnId, onMoveTask, onDeleteTask, onEditTask }: Task
               e.stopPropagation();
               onDeleteTask(task.id);
             }}
-            className="p-1 hover:bg-red-100 rounded"
+            className="rounded border border-red-700 bg-white p-1 text-red-700 transition-all duration-200 hover:bg-red-700 hover:text-white hover:shadow-sm"
             title="Delete task"
           >
-            <Trash2 className="w-4 h-4 text-red-500" />
+            <Trash2 className="w-4 h-4" />
           </button>
         </div>
       </div>

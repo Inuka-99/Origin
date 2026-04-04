@@ -26,19 +26,42 @@ import {
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { useApiClient } from '../lib/api-client';
-import type { Project } from '../lib/projects';
+import type { Project, ProjectPriority, ProjectStatus } from '../lib/projects';
+
+const PROJECT_PRIORITIES: ProjectPriority[] = ['Low', 'Medium', 'High', 'Urgent'];
+const PROJECT_STATUSES: ProjectStatus[] = [
+  'Planning',
+  'Active',
+  'In Progress',
+  'Review',
+  'On Hold',
+  'Completed',
+  'Archived',
+];
 
 interface EditProjectFormState {
   name: string;
   description: string;
+  start_date: string;
+  due_date: string;
+  priority: ProjectPriority;
+  status: ProjectStatus;
+  department: string;
+  tags: string;
 }
 
-type EditProjectFormErrors = Partial<Record<'name', string>>;
+type EditProjectFormErrors = Partial<Record<'name' | 'priority' | 'department' | 'due_date', string>>;
 
 function createEditProjectForm(project: Project | null): EditProjectFormState {
   return {
     name: project?.name ?? '',
     description: project?.description ?? '',
+    start_date: project?.start_date ?? new Date().toISOString().slice(0, 10),
+    due_date: project?.due_date ?? '',
+    priority: project?.priority ?? 'Medium',
+    status: project?.status ?? 'Planning',
+    department: project?.department ?? '',
+    tags: project?.tags.join(', ') ?? '',
   };
 }
 
@@ -49,8 +72,26 @@ function validateEditProjectForm(form: EditProjectFormState): EditProjectFormErr
     errors.name = 'Project name is required.';
   }
 
+  if (!form.priority) {
+    errors.priority = 'Priority is required.';
+  }
+
+  if (!form.department.trim()) {
+    errors.department = 'Department is required.';
+  }
+
+  if (form.due_date && form.due_date < form.start_date) {
+    errors.due_date = 'Due date cannot be earlier than start date.';
+  }
+
   return errors;
 }
+
+const formControlClassName =
+  'flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm outline-none transition-[border-color,box-shadow] hover:border-gray-400 hover:shadow-md focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50';
+
+const textAreaClassName =
+  'min-h-24 rounded-md border border-gray-300 bg-white shadow-sm transition-[border-color,box-shadow] hover:border-gray-400 hover:shadow-md focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50';
 
 export function ProjectDetails() {
   const { projectId = '' } = useParams();
@@ -131,6 +172,15 @@ export function ProjectDetails() {
       const updatedProject = await api.patch<Project>(`/projects/${projectId}`, {
         name: editForm.name.trim(),
         description: editForm.description.trim() || null,
+        start_date: editForm.start_date,
+        due_date: editForm.due_date || null,
+        priority: editForm.priority,
+        status: editForm.status,
+        department: editForm.department.trim(),
+        tags: editForm.tags
+          .split(',')
+          .map((tag) => tag.trim())
+          .filter(Boolean),
       });
       setProject(updatedProject);
       setIsEditModalOpen(false);
@@ -228,6 +278,34 @@ export function ProjectDetails() {
                     <p className="font-medium text-gray-900">{project.created_by || 'Unknown'}</p>
                   </div>
                   <div>
+                    <p className="text-gray-500 mb-1">Start Date</p>
+                    <p className="font-medium text-gray-900">{new Date(project.start_date).toLocaleDateString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500 mb-1">Due Date</p>
+                    <p className="font-medium text-gray-900">
+                      {project.due_date ? new Date(project.due_date).toLocaleDateString() : 'Not set'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500 mb-1">Priority</p>
+                    <p className="font-medium text-gray-900">{project.priority}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500 mb-1">Status</p>
+                    <p className="font-medium text-gray-900">{project.status}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500 mb-1">Department</p>
+                    <p className="font-medium text-gray-900">{project.department}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500 mb-1">Tags</p>
+                    <p className="font-medium text-gray-900">
+                      {project.tags.length > 0 ? project.tags.join(', ') : 'No tags'}
+                    </p>
+                  </div>
+                  <div>
                     <p className="text-gray-500 mb-1">Created</p>
                     <p className="font-medium text-gray-900">{new Date(project.created_at).toLocaleString()}</p>
                   </div>
@@ -243,9 +321,9 @@ export function ProjectDetails() {
       </main>
 
       <Dialog open={isEditModalOpen} onOpenChange={(open) => (open ? openEditModal() : closeEditModal())}>
-        <DialogContent className="sm:max-w-2xl p-0 overflow-hidden border-0 shadow-2xl">
-          <div className="bg-white">
-            <DialogHeader className="px-6 pt-6 pb-4 border-b border-gray-100">
+        <DialogContent className="w-[min(92vw,58rem)] max-w-5xl max-h-[90vh] overflow-hidden border-0 p-0 shadow-2xl">
+          <div className="bg-white max-h-[90vh] overflow-y-auto">
+            <DialogHeader className="px-6 pt-5 pb-3 border-b border-gray-100">
               <DialogTitle style={{ fontFamily: 'Space Grotesk, sans-serif' }} className="text-2xl text-gray-950">
                 Edit Project
               </DialogTitle>
@@ -254,10 +332,10 @@ export function ProjectDetails() {
               </DialogDescription>
             </DialogHeader>
 
-            <form onSubmit={handleEditSubmit} className="px-6 py-6 space-y-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <form onSubmit={handleEditSubmit} className="px-6 py-5 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-900 mb-2">
+                  <label className="block text-sm font-medium text-gray-900 mb-1.5">
                     Project Name <span className="text-red-500">*</span>
                   </label>
                   <Input
@@ -265,23 +343,103 @@ export function ProjectDetails() {
                     onChange={(event) => setEditField('name', event.target.value)}
                     placeholder="Enter a clear project name"
                     aria-invalid={Boolean(editErrors.name)}
-                    className="h-11"
+                    className={formControlClassName}
                   />
                   {editErrors.name ? <p className="mt-1 text-sm text-red-600">{editErrors.name}</p> : null}
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-900 mb-2">Description</label>
+                  <label className="block text-sm font-medium text-gray-900 mb-1.5">Description</label>
                   <Textarea
                     value={editForm.description}
                     onChange={(event) => setEditField('description', event.target.value)}
                     placeholder="Add project context or a short summary"
-                    className="min-h-28"
+                    className={textAreaClassName}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-1.5">Start Date</label>
+                  <Input
+                    type="date"
+                    value={editForm.start_date}
+                    onChange={(event) => setEditField('start_date', event.target.value)}
+                    className={formControlClassName}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-1.5">Due Date</label>
+                  <Input
+                    type="date"
+                    value={editForm.due_date}
+                    onChange={(event) => setEditField('due_date', event.target.value)}
+                    aria-invalid={Boolean(editErrors.due_date)}
+                    className={formControlClassName}
+                  />
+                  {editErrors.due_date ? <p className="mt-1 text-sm text-red-600">{editErrors.due_date}</p> : null}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-1.5">
+                    Priority <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={editForm.priority}
+                    onChange={(event) => setEditField('priority', event.target.value as ProjectPriority)}
+                    aria-invalid={Boolean(editErrors.priority)}
+                    className={formControlClassName}
+                  >
+                    {PROJECT_PRIORITIES.map((priority) => (
+                      <option key={priority} value={priority}>
+                        {priority}
+                      </option>
+                    ))}
+                  </select>
+                  {editErrors.priority ? <p className="mt-1 text-sm text-red-600">{editErrors.priority}</p> : null}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-1.5">Status</label>
+                  <select
+                    value={editForm.status}
+                    onChange={(event) => setEditField('status', event.target.value as ProjectStatus)}
+                    className={formControlClassName}
+                  >
+                    {PROJECT_STATUSES.map((status) => (
+                      <option key={status} value={status}>
+                        {status}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-900 mb-1.5">
+                    Department <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    value={editForm.department}
+                    onChange={(event) => setEditField('department', event.target.value)}
+                    placeholder="Enter the owning team or department"
+                    aria-invalid={Boolean(editErrors.department)}
+                    className={formControlClassName}
+                  />
+                  {editErrors.department ? <p className="mt-1 text-sm text-red-600">{editErrors.department}</p> : null}
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-900 mb-1.5">Tags</label>
+                  <Input
+                    value={editForm.tags}
+                    onChange={(event) => setEditField('tags', event.target.value)}
+                    placeholder="Enter tags separated by commas"
+                    className={formControlClassName}
                   />
                 </div>
               </div>
 
-              <DialogFooter className="pt-4 border-t border-gray-100">
+              <DialogFooter className="pt-3 border-t border-gray-100">
                 <Button type="button" variant="outline" onClick={closeEditModal} disabled={isSaving}>
                   Cancel
                 </Button>
@@ -312,7 +470,7 @@ export function ProjectDetails() {
                 void handleDeleteProject();
               }}
               disabled={isDeleting}
-              className="bg-red-600 text-white hover:bg-red-700"
+              className="border border-red-700 bg-white text-red-700 hover:bg-red-700 hover:text-white hover:shadow-sm transition-all duration-200"
             >
               {isDeleting ? 'Deleting...' : 'Delete Project'}
             </AlertDialogAction>
