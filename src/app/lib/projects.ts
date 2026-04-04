@@ -34,3 +34,36 @@ export interface CreateProjectPayload {
   department: string;
   tags?: string[];
 }
+
+export type ProjectMemberRole =
+  | 'Admin'
+  | 'Project Manager'
+  | 'Team Lead'
+  | 'Developer'
+  | 'Designer'
+  | 'Tester';
+
+export interface ProjectMember {
+  id: string;
+  project_id: string;
+  user_id: string;
+  role: ProjectMemberRole;
+  joined_at: string;
+  full_name: string | null;
+  email: string | null;
+  avatar_url: string | null;
+  is_creator: boolean;
+}
+
+export interface ProjectMemberCandidate {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  avatar_url: string | null;
+}
+
+export interface AddProjectMemberPayload {
+  user_id?: string;
+  email?: string;
+  role: ProjectMemberRole;
+}

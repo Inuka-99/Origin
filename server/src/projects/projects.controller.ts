@@ -21,7 +21,7 @@ import {
   Delete,
   Param,
   Body,
-  Req,
+  Query,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
@@ -31,7 +31,12 @@ import {
   UserSyncInterceptor,
   type AuthenticatedUser,
 } from '../auth';
-import { ProjectsService, type CreateProjectDto, type UpdateProjectDto } from './projects.service';
+import {
+  ProjectsService,
+  type AddProjectMemberDto,
+  type CreateProjectDto,
+  type UpdateProjectDto,
+} from './projects.service';
 import { SupabaseService } from '../supabase';
 
 @Controller('projects')
@@ -98,20 +103,34 @@ export class ProjectsController {
     return this.projectsService.listMembers(id);
   }
 
+  @Get(':id/member-candidates')
+  async listMemberCandidates(
+    @Param('id') id: string,
+    @Query('q') query: string | undefined,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const role = await this.getUserRole(user.userId);
+    return this.projectsService.searchMemberCandidates(id, query, user.userId, role);
+  }
+
   @Post(':id/members')
   async addMember(
     @Param('id') id: string,
-    @Body() body: { user_id: string; role?: 'admin' | 'member' },
+    @Body() body: AddProjectMemberDto,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.projectsService.addMember(id, body.user_id, body.role);
+    const role = await this.getUserRole(user.userId);
+    return this.projectsService.addMember(id, body, user.userId, role);
   }
 
   @Delete(':id/members/:userId')
   async removeMember(
     @Param('id') id: string,
     @Param('userId') userId: string,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    await this.projectsService.removeMember(id, userId);
+    const role = await this.getUserRole(user.userId);
+    await this.projectsService.removeMember(id, userId, user.userId, role);
     return { removed: true };
   }
 }

@@ -23,9 +23,18 @@ const PROJECT_STATUSES = [
   'Completed',
   'Archived',
 ] as const;
+const PROJECT_MEMBER_ROLES = [
+  'Admin',
+  'Project Manager',
+  'Team Lead',
+  'Developer',
+  'Designer',
+  'Tester',
+] as const;
 
 type ProjectPriority = (typeof PROJECT_PRIORITIES)[number];
 type ProjectStatus = (typeof PROJECT_STATUSES)[number];
+type ProjectMemberRole = (typeof PROJECT_MEMBER_ROLES)[number];
 
 export interface Project {
   id: string;
@@ -46,8 +55,25 @@ export interface ProjectMember {
   id: string;
   project_id: string;
   user_id: string;
-  role: 'admin' | 'member';
+  role: ProjectMemberRole;
   joined_at: string;
+  full_name: string | null;
+  email: string | null;
+  avatar_url: string | null;
+  is_creator: boolean;
+}
+
+export interface ProjectMemberCandidate {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  avatar_url: string | null;
+}
+
+export interface AddProjectMemberDto {
+  user_id?: string;
+  email?: string;
+  role?: ProjectMemberRole;
 }
 
 export interface CreateProjectDto {
@@ -193,42 +219,137 @@ export class ProjectsService {
   /** Add a member to a project. */
   async addMember(
     projectId: string,
-    memberId: string,
-    role: 'admin' | 'member' = 'member',
+    dto: AddProjectMemberDto,
+    actingUserId: string,
+    globalRole: string,
   ): Promise<ProjectMember> {
-    const { data, error } = await this.supabase
-      .getClient()
+    await this.assertProjectAccess(projectId, actingUserId, globalRole);
+
+    const client = this.supabase.getClient();
+    const project = await this.getById(projectId);
+    const memberId = await this.resolveMemberId(dto);
+
+    const { data: existingMember } = await client
       .from('project_members')
-      .insert({ project_id: projectId, user_id: memberId, role })
-      .select()
-      .single();
+      .select('id')
+      .eq('project_id', projectId)
+      .eq('user_id', memberId)
+      .maybeSingle();
+
+    if (existingMember) {
+      throw new BadRequestException('This user is already a member of the project');
+    }
+
+    const role = memberId === project.created_by
+      ? 'Admin'
+      : this.normalizeMemberRole(dto.role);
+
+    const { error } = await client
+      .from('project_members')
+      .insert({ project_id: projectId, user_id: memberId, role });
 
     if (error) throw new BadRequestException(error.message);
-    return data as ProjectMember;
+
+    return this.getMemberByUserId(projectId, memberId, project.created_by);
   }
 
   /** List members of a project. */
   async listMembers(projectId: string): Promise<ProjectMember[]> {
-    const { data, error } = await this.supabase
-      .getClient()
+    const client = this.supabase.getClient();
+    const project = await this.getById(projectId);
+
+    const { data, error } = await client
       .from('project_members')
       .select('*, profiles(full_name, email, avatar_url)')
       .eq('project_id', projectId);
 
     if (error) throw new BadRequestException(error.message);
-    return (data ?? []) as ProjectMember[];
+    return this.mapMemberRows(data ?? [], project.created_by);
   }
 
   /** Remove a member from a project. */
-  async removeMember(projectId: string, memberId: string): Promise<void> {
-    const { error } = await this.supabase
-      .getClient()
+  async removeMember(
+    projectId: string,
+    memberId: string,
+    actingUserId: string,
+    globalRole: string,
+  ): Promise<void> {
+    await this.assertProjectAccess(projectId, actingUserId, globalRole);
+
+    const client = this.supabase.getClient();
+    const project = await this.getById(projectId);
+
+    if (project.created_by && memberId === project.created_by) {
+      throw new BadRequestException('The project creator cannot be removed');
+    }
+
+    const { data: existingMember } = await client
+      .from('project_members')
+      .select('id')
+      .eq('project_id', projectId)
+      .eq('user_id', memberId)
+      .maybeSingle();
+
+    if (!existingMember) {
+      throw new NotFoundException('Project member not found');
+    }
+
+    const { error } = await client
       .from('project_members')
       .delete()
       .eq('project_id', projectId)
       .eq('user_id', memberId);
 
     if (error) throw new BadRequestException(error.message);
+  }
+
+  async searchMemberCandidates(
+    projectId: string,
+    query: string | undefined,
+    actingUserId: string,
+    globalRole: string,
+  ): Promise<ProjectMemberCandidate[]> {
+    await this.assertProjectAccess(projectId, actingUserId, globalRole);
+
+    const client = this.supabase.getClient();
+    const search = query?.trim().toLowerCase();
+
+    const [{ data: members, error: membersError }, { data: profiles, error: profilesError }] = await Promise.all([
+      client
+        .from('project_members')
+        .select('user_id')
+        .eq('project_id', projectId),
+      client
+        .from('profiles')
+        .select('id, full_name, email, avatar_url')
+        .order('full_name', { ascending: true }),
+    ]);
+
+    if (membersError) throw new BadRequestException(membersError.message);
+    if (profilesError) throw new BadRequestException(profilesError.message);
+
+    const existingMemberIds = new Set((members ?? []).map((member) => member.user_id as string));
+
+    return (profiles ?? [])
+      .filter((profile) => !existingMemberIds.has(profile.id as string))
+      .filter((profile) => {
+        if (!search) {
+          return true;
+        }
+
+        const fullName = String(profile.full_name ?? '').toLowerCase();
+        const email = String(profile.email ?? '').toLowerCase();
+        const id = String(profile.id ?? '').toLowerCase();
+
+        return fullName.includes(search) || email.includes(search) || id.includes(search);
+      })
+      .slice(0, 20)
+      .map((profile) => ({
+        id: profile.id as string,
+        full_name: (profile.full_name as string | null) ?? null,
+        email: (profile.email as string | null) ?? null,
+        avatar_url: (profile.avatar_url as string | null) ?? null,
+      }));
   }
 
   /** Check if user has admin access to project. */
@@ -248,9 +369,115 @@ export class ProjectsService {
       .eq('user_id', userId)
       .single();
 
-    if (!data || data.role !== 'admin') {
+    const normalizedRole = String(data?.role ?? '').trim().toLowerCase();
+
+    if (!data || (normalizedRole !== 'admin')) {
       throw new ForbiddenException('Only project admins can perform this action');
     }
+  }
+
+  private async resolveMemberId(dto: AddProjectMemberDto): Promise<string> {
+    const userId = dto.user_id?.trim();
+    if (userId) {
+      return userId;
+    }
+
+    const email = dto.email?.trim();
+    if (!email) {
+      throw new BadRequestException('Select an existing user or enter an email address');
+    }
+
+    const { data, error } = await this.supabase
+      .getClient()
+      .from('profiles')
+      .select('id')
+      .ilike('email', email)
+      .limit(1);
+
+    if (error) {
+      throw new BadRequestException(error.message);
+    }
+
+    const match = data?.[0];
+    if (!match?.id) {
+      throw new BadRequestException(
+        'No existing user matches that email. Pending invitations are not available yet.',
+      );
+    }
+
+    return match.id as string;
+  }
+
+  private normalizeMemberRole(role?: string): ProjectMemberRole {
+    if (!role) {
+      return 'Developer';
+    }
+
+    const normalized = role.trim().toLowerCase();
+    if (normalized === 'admin') {
+      return 'Admin';
+    }
+
+    if (normalized === 'member') {
+      return 'Developer';
+    }
+
+    const match = PROJECT_MEMBER_ROLES.find(
+      (value) => value.toLowerCase() === normalized,
+    );
+
+    if (!match) {
+      throw new BadRequestException(`Invalid project member role: ${role}`);
+    }
+
+    return match;
+  }
+
+  private async getMemberByUserId(
+    projectId: string,
+    memberId: string,
+    createdBy: string | null,
+  ): Promise<ProjectMember> {
+    const { data, error } = await this.supabase
+      .getClient()
+      .from('project_members')
+      .select('*, profiles(full_name, email, avatar_url)')
+      .eq('project_id', projectId)
+      .eq('user_id', memberId)
+      .single();
+
+    if (error || !data) {
+      throw new NotFoundException('Project member not found');
+    }
+
+    return this.mapMemberRows([data], createdBy)[0];
+  }
+
+  private mapMemberRows(rows: any[], createdBy: string | null): ProjectMember[] {
+    return rows
+      .map((row) => {
+        const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+        const isCreator = Boolean(createdBy && row.user_id === createdBy);
+
+        return {
+          id: String(row.id),
+          project_id: String(row.project_id),
+          user_id: String(row.user_id),
+          role: isCreator ? 'Admin' : this.normalizeMemberRole(String(row.role ?? 'Developer')),
+          joined_at: String(row.joined_at),
+          full_name: (profile?.full_name as string | null) ?? null,
+          email: (profile?.email as string | null) ?? null,
+          avatar_url: (profile?.avatar_url as string | null) ?? null,
+          is_creator: isCreator,
+        };
+      })
+      .sort((left, right) => {
+        if (left.is_creator !== right.is_creator) {
+          return left.is_creator ? -1 : 1;
+        }
+
+        return left.full_name?.localeCompare(right.full_name ?? '') ?? 0;
+      });
   }
 
   private normalizeProjectPayload(
