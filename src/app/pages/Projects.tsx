@@ -30,6 +30,12 @@ interface Project extends ApiProject {
 }
 
 
+const formControlClassName =
+  'flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm outline-none transition-[border-color,box-shadow] hover:border-gray-400 hover:shadow-md focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50';
+
+const textAreaClassName =
+  'min-h-24 rounded-md border border-gray-300 bg-white shadow-sm transition-[border-color,box-shadow] hover:border-gray-400 hover:shadow-md focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50';
+
 export function Projects() {
   const navigate = useNavigate();
   const { projects: apiProjects, loading, error, createProject, updateProject, deleteProject, refetch } = useProjects();

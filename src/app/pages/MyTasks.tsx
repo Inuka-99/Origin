@@ -477,7 +477,10 @@ export function MyTasks() {
                       <button onClick={() => openEditTaskModal(task)} className="p-1 hover:bg-gray-100 rounded text-gray-500 hover:text-gray-900">
                         <Edit3 className="w-4 h-4" />
                       </button>
-                      <button onClick={() => deleteTask(task.id)} className="p-1 hover:bg-gray-100 rounded text-red-500 hover:text-red-700">
+                      <button
+                        onClick={() => deleteTask(task.id)}
+                        className="rounded border border-red-700 bg-white p-1 text-red-700 transition-all duration-200 hover:bg-red-700 hover:text-white hover:shadow-sm"
+                      >
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </td>
