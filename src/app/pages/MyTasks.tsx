@@ -203,6 +203,13 @@ export function MyTasks() {
     setIsModalOpen(true);
   };
 
+  const closeTaskModal = () => {
+    setIsModalOpen(false);
+    setFormError(null);
+    setIsEditMode(false);
+    setEditingTaskId(null);
+  };
+
   const openEditTaskModal = async (task: Task) => {
     setIsEditMode(true);
     setEditingTaskId(task.id);
@@ -217,10 +224,7 @@ export function MyTasks() {
       setTaskForm({
         title: fullTask.title,
         project_id: assignedProjectId,
-        status: (fullTask.status
-          ?.split('_')
-          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-          .join(' ') || 'To Do') as Task['status'],
+        status: getStatusEnumValue(fullTask.status),
         priority: (fullTask.priority?.charAt(0).toUpperCase() + fullTask.priority?.slice(1)) as Task['priority'] || 'Medium',
         due_date: fullTask.due_date ? new Date(fullTask.due_date).toISOString().slice(0, 10) : '',
         assignee_id: fullTask.assignee_id || '',

@@ -2,7 +2,7 @@ import { Sidebar } from '../components/Sidebar';
 import { TopBar } from '../components/TopBar';
 import { Search, Filter, ChevronDown, Plus, Grid3x3, List, Users, Calendar, MoreVertical, CheckSquare, Loader2, Trash2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { useProjects, useProjectMembers, type Project as ApiProject } from '../lib/useProjects';
+import { useProjects, useProjectMembers, type Project as ApiProject, type ProjectMember } from '../lib/useProjects';
 import { useAuthUser } from '../auth/useAuthUser';
 
 interface Project extends ApiProject {
@@ -17,10 +17,15 @@ interface Project extends ApiProject {
 
 
 export function Projects() {
-  const { projects: apiProjects, loading, error, createProject, updateProject, deleteProject } = useProjects();
+  const { projects: apiProjects, loading, error, createProject, updateProject, deleteProject, refetch } = useProjects();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [memberRemovalConfirmation, setMemberRemovalConfirmation] = useState<{
+    userId: string;
+    userName: string;
+    isLastMember: boolean;
+  } | null>(null);
   const [creating, setCreating] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [showMembersModal, setShowMembersModal] = useState(false);
@@ -86,6 +91,44 @@ export function Projects() {
   const isProjectAdmin = (project: Project) => {
     return project.user_role === 'admin';
   };
+
+  const performRemoveMember = async (memberId: string) => {
+    if (!selectedProject) return;
+
+    try {
+      await removeMember(memberId);
+      await refetch();
+
+      const removedSelf = memberId === user?.sub;
+      const wasLastMember = memberRemovalConfirmation?.isLastMember;
+      if (removedSelf || wasLastMember) {
+        setShowMembersModal(false);
+        setSelectedProject(null);
+      }
+    } catch (err) {
+      console.error('Failed to remove member:', err);
+    } finally {
+      setMemberRemovalConfirmation(null);
+    }
+  };
+
+  const handleRemoveMember = (member: ProjectMember) => {
+    if (!selectedProject) return;
+
+    const isLastMember = members.length === 1;
+    if (isLastMember) {
+      setMemberRemovalConfirmation({
+        userId: member.user_id,
+        userName: member.profiles?.full_name || member.user_id,
+        isLastMember: true,
+      });
+      return;
+    }
+
+    performRemoveMember(member.user_id);
+  };
+
+  const cancelMemberRemoval = () => setMemberRemovalConfirmation(null);
 
   const getStatusColor = (status: Project['status']) => {
     switch (status) {
@@ -573,7 +616,7 @@ export function Projects() {
                           {member.role}
                         </span>
                         <button
-                          onClick={() => removeMember(member.user_id)}
+                          onClick={() => handleRemoveMember(member)}
                           className="p-1 hover:bg-red-100 rounded text-red-600"
                         >
                           ✕
@@ -594,6 +637,50 @@ export function Projects() {
                 className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {memberRemovalConfirmation && selectedProject && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center">
+                <span className="text-yellow-700 font-bold">!</span>
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+                  Confirm Project Deletion
+                </h2>
+                <p className="text-gray-600 text-sm">
+                  Removing the last member will delete the project <span className="font-semibold">"{selectedProject.name}"</span> permanently.
+                </p>
+              </div>
+            </div>
+
+            <div className="mb-6 text-gray-700">
+              <p>
+                Are you sure you want to remove <span className="font-semibold">{memberRemovalConfirmation.userName}</span> from this project?
+              </p>
+              <p className="mt-2 text-sm text-gray-500">
+                This action cannot be undone and the project will be deleted if there are no remaining members.
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={cancelMemberRemoval}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => performRemoveMember(memberRemovalConfirmation.userId)}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Delete Project
               </button>
             </div>
           </div>

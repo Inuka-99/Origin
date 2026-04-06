@@ -58,15 +58,15 @@ export class TasksService {
     const convertStatus = (status: string): string => {
       const normalized = status.trim().toLowerCase();
       const statusMap: Record<string, string> = {
-        'to do': 'To Do',
-        'todo': 'To Do',
-        'in progress': 'In Progress',
-        'in_progress': 'In Progress',
-        'in-progress': 'In Progress',
-        'in review': 'In Review',
-        'in_review': 'In Review',
-        'review': 'In Review',
-        'done': 'Done',
+        'to do': 'todo',
+        'todo': 'todo',
+        'in progress': 'in_progress',
+        'in_progress': 'in_progress',
+        'in-progress': 'in_progress',
+        'in review': 'in_review',
+        'in_review': 'in_review',
+        'review': 'in_review',
+        'done': 'done',
       };
       const result = statusMap[normalized];
       if (!result) {
@@ -75,29 +75,48 @@ export class TasksService {
       return result;
     };
 
+    const insertPayload: Partial<Task> = {
+      project_id: dto.project_id ?? null,
+      title: dto.title,
+      description: dto.description ?? null,
+      status: convertStatus(dto.status ?? 'To Do'),
+      priority: (dto.priority ?? 'Medium').toLowerCase(),
+      due_date: dto.due_date ?? null,
+      created_by: userId,
+    };
+
     const { data, error } = await this.client
       .from('tasks')
-      .insert({
-        project_id: dto.project_id ?? null,
-        title: dto.title,
-        description: dto.description ?? null,
-        status: convertStatus(dto.status ?? 'To Do'),
-        priority: (dto.priority ?? 'Medium').toLowerCase(),
-        due_date: dto.due_date ?? null,
-        assignee_id: dto.assignee_id ?? null,
-        created_by: userId,
-      })
+      .insert(insertPayload)
       .select('*')
       .single();
 
-    if (error) {
-      throw new BadRequestException(error.message);
+    if (error || !data) {
+      throw new BadRequestException(error?.message ?? 'Unable to create task');
     }
 
-    return data as Task;
+    const task = data as Task;
+
+    if (dto.assignee_id) {
+      const { error: assignmentError } = await this.client
+        .from('task_assignments')
+        .insert({
+          task_id: task.id,
+          user_id: dto.assignee_id,
+        });
+
+      if (assignmentError) {
+        throw new BadRequestException(assignmentError.message);
+      }
+      task.assignee_id = dto.assignee_id;
+    }
+
+    return task;
   }
 
   async listForUser(userId: string, userRole: string): Promise<Task[]> {
+    let tasks: Task[] = [];
+
     if (userRole === 'admin') {
       const { data, error } = await this.client
         .from('tasks')
@@ -105,29 +124,57 @@ export class TasksService {
         .order('created_at', { ascending: false });
 
       if (error) throw new BadRequestException(error.message);
-      return (data ?? []) as Task[];
-    }
-
-    const { data: memberships, error: mError } = await this.client
-      .from('project_members')
-      .select('project_id')
-      .eq('user_id', userId);
-
-    if (mError) throw new BadRequestException(mError.message);
-
-    const projectIds = (memberships ?? []).map((m: any) => m.project_id);
-
-    let query = this.client.from('tasks').select('*').order('created_at', { ascending: false });
-
-    if (projectIds.length > 0) {
-      query = query.in('project_id', projectIds);
+      tasks = (data ?? []) as Task[];
     } else {
-      query = query.is('project_id', null);
+      const { data: memberships, error: mError } = await this.client
+        .from('project_members')
+        .select('project_id')
+        .eq('user_id', userId);
+
+      if (mError) throw new BadRequestException(mError.message);
+
+      const projectIds = (memberships ?? []).map((m: any) => m.project_id);
+
+      let query = this.client.from('tasks').select('*').order('created_at', { ascending: false });
+
+      if (projectIds.length > 0) {
+        query = query.in('project_id', projectIds);
+      } else {
+        query = query.is('project_id', null);
+      }
+
+      const { data, error } = await query;
+      if (error) throw new BadRequestException(error.message);
+      tasks = (data ?? []) as Task[];
     }
 
-    const { data, error } = await query;
-    if (error) throw new BadRequestException(error.message);
-    return (data ?? []) as Task[];
+    return this.attachTaskAssignees(tasks);
+  }
+
+  private async attachTaskAssignees(tasks: Task[]): Promise<Task[]> {
+    if (tasks.length === 0) return tasks;
+
+    const taskIds = tasks.map((task) => task.id);
+    const { data, error } = await this.client
+      .from('task_assignments')
+      .select('task_id, user_id')
+      .in('task_id', taskIds);
+
+    if (error) {
+      throw new BadRequestException(error.message);
+    }
+
+    const assignmentByTask = (data ?? []).reduce<Record<string, string>>((map, row: any) => {
+      if (row?.task_id && row?.user_id) {
+        map[row.task_id] = row.user_id;
+      }
+      return map;
+    }, {});
+
+    return tasks.map((task) => ({
+      ...task,
+      assignee_id: task.assignee_id ?? assignmentByTask[task.id] ?? null,
+    }));
   }
 
   async getById(id: string, userId: string, userRole: string): Promise<Task> {
@@ -143,7 +190,9 @@ export class TasksService {
 
     const task = data as Task;
 
-    if (userRole === 'admin') return task;
+    if (userRole === 'admin') {
+      return this.attachTaskAssignees([task]).then((tasks) => tasks[0]);
+    }
 
     if (!task.project_id) {
       throw new ForbiddenException('Not authorized to access this task');
@@ -156,7 +205,9 @@ export class TasksService {
       .eq('user_id', userId)
       .single();
 
-    if (membership) return task;
+    if (membership) {
+      return this.attachTaskAssignees([task]).then((tasks) => tasks[0]);
+    }
 
     throw new ForbiddenException('Not authorized to access this task');
   }
@@ -194,19 +245,21 @@ export class TasksService {
       }
     }
 
+    const assignmentUserId = dto.assignee_id;
     const updatePayload: any = { ...dto };
+    delete updatePayload.assignee_id;
     if (updatePayload.status) {
       const normalized = updatePayload.status.trim().toLowerCase();
       const statusMap: Record<string, string> = {
-        'to do': 'To Do',
-        'todo': 'To Do',
-        'in progress': 'In Progress',
-        'in_progress': 'In Progress',
-        'in-progress': 'In Progress',
-        'in review': 'In Review',
-        'in_review': 'In Review',
-        'review': 'In Review',
-        'done': 'Done',
+        'to do': 'todo',
+        'todo': 'todo',
+        'in progress': 'in_progress',
+        'in_progress': 'in_progress',
+        'in-progress': 'in_progress',
+        'in review': 'in_review',
+        'in_review': 'in_review',
+        'review': 'in_review',
+        'done': 'done',
       };
       if (!statusMap[normalized]) {
         throw new BadRequestException(`Invalid task status: ${updatePayload.status}`);
@@ -228,7 +281,31 @@ export class TasksService {
       throw new BadRequestException(error?.message ?? 'Update failed');
     }
 
-    return data as Task;
+    const updatedTask = data as Task;
+
+    if (assignmentUserId !== undefined && task.project_id) {
+      await this.syncTaskAssignment(updatedTask.id, assignmentUserId);
+      updatedTask.assignee_id = assignmentUserId ?? null;
+    }
+
+    return updatedTask;
+  }
+
+  private async syncTaskAssignment(taskId: string, userId: string | null): Promise<void> {
+    const { error: deletionError } = await this.client
+      .from('task_assignments')
+      .delete()
+      .eq('task_id', taskId);
+    if (deletionError) throw new BadRequestException(deletionError.message);
+
+    if (!userId) {
+      return;
+    }
+
+    const { error: insertionError } = await this.client
+      .from('task_assignments')
+      .insert({ task_id: taskId, user_id: userId });
+    if (insertionError) throw new BadRequestException(insertionError.message);
   }
 
   async delete(id: string, userId: string, userRole: string): Promise<void> {

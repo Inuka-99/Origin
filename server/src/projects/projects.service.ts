@@ -63,11 +63,16 @@ export class ProjectsService {
     if (error) throw new BadRequestException(error.message);
 
     // Add creator as project admin
-    await client.from('project_members').insert({
+    const { error: memberError } = await client.from('project_members').insert({
       project_id: project.id,
       user_id: userId,
       role: 'admin',
     });
+
+    if (memberError) {
+      await client.from('projects').delete().eq('id', project.id);
+      throw new BadRequestException(memberError.message);
+    }
 
     return project as Project;
   }
@@ -226,6 +231,23 @@ export class ProjectsService {
       .eq('user_id', memberId);
 
     if (error) throw new BadRequestException(error.message);
+
+    // If this was the last project member, delete the orphaned project too.
+    const { count, error: countError } = await this.supabase
+      .getClient()
+      .from('project_members')
+      .select('id', { count: 'exact', head: true })
+      .eq('project_id', projectId);
+
+    if (countError) throw new BadRequestException(countError.message);
+    if (!count) {
+      const { error: projectError } = await this.supabase
+        .getClient()
+        .from('projects')
+        .delete()
+        .eq('id', projectId);
+      if (projectError) throw new BadRequestException(projectError.message);
+    }
   }
 
   /** Check if user has admin access to project. */
