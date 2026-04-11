@@ -11,6 +11,7 @@ import {
 import { toast } from 'sonner';
 import { Sidebar } from '../components/Sidebar';
 import { TopBar } from '../components/TopBar';
+import { ProjectPrioritySelect } from '../components/ProjectPrioritySelect';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -41,6 +42,9 @@ import { Input } from '../components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import { Textarea } from '../components/ui/textarea';
 import { useApiClient } from '../lib/api-client';
+import {
+  getProjectPriorityBadgeClasses,
+} from '../lib/projects';
 import type {
   AddProjectMemberPayload,
   Project,
@@ -51,7 +55,6 @@ import type {
   ProjectStatus,
 } from '../lib/projects';
 
-const PROJECT_PRIORITIES: ProjectPriority[] = ['Low', 'Medium', 'High', 'Urgent'];
 const PROJECT_STATUSES: ProjectStatus[] = [
   'Planning',
   'Active',
@@ -687,7 +690,11 @@ export function ProjectDetails() {
                   </div>
                   <div>
                     <p className="mb-1 text-gray-500">Priority</p>
-                    <p className="font-medium text-gray-900">{project.priority}</p>
+                    <span
+                      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${getProjectPriorityBadgeClasses(project.priority)}`}
+                    >
+                      {project.priority}
+                    </span>
                   </div>
                   <div>
                     <p className="mb-1 text-gray-500">Status</p>
@@ -785,18 +792,11 @@ export function ProjectDetails() {
                   <label className="mb-1.5 block text-sm font-medium text-gray-900">
                     Priority <span className="text-red-500">*</span>
                   </label>
-                  <select
+                  <ProjectPrioritySelect
                     value={editForm.priority}
-                    onChange={(event) => setEditField('priority', event.target.value as ProjectPriority)}
-                    aria-invalid={Boolean(editErrors.priority)}
-                    className={formControlClassName}
-                  >
-                    {PROJECT_PRIORITIES.map((priority) => (
-                      <option key={priority} value={priority}>
-                        {priority}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(value) => setEditField('priority', value)}
+                    className={Boolean(editErrors.priority) ? 'border-red-500 ring-red-200' : undefined}
+                  />
                   {editErrors.priority ? <p className="mt-1 text-sm text-red-600">{editErrors.priority}</p> : null}
                 </div>
 
