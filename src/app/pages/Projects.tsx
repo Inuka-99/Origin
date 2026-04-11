@@ -221,10 +221,10 @@ export function Projects() {
       <Sidebar />
       <TopBar />
 
-      <main className="ml-56 pt-16 p-8">
-        <div className="flex items-start justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-semibold mb-2" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
+      <main className="ml-56 px-8 pt-20 pb-8">
+        <div className="mb-10 flex items-center justify-between gap-6">
+          <div className="pt-1">
+            <h1 className="mb-3 text-3xl font-semibold" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
               Projects
             </h1>
             <p className="text-gray-600">Manage and track all active projects</p>
@@ -391,6 +391,11 @@ export function Projects() {
                       style={{ width: `${project.progress}%` }}
                     ></div>
                   </div>
+                  <span
+                    className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${getProjectPriorityBadgeClasses(project.priority)}`}
+                  >
+                    {project.priority}
+                  </span>
                 </div>
 
                 <p className="text-sm text-gray-600 mb-4 min-h-10">
@@ -416,6 +421,7 @@ export function Projects() {
                     <th className="text-left px-6 py-3 text-sm font-semibold text-gray-900">Project</th>
                     <th className="text-left px-6 py-3 text-sm font-semibold text-gray-900">Description</th>
                     <th className="text-left px-6 py-3 text-sm font-semibold text-gray-900">Created By</th>
+                    <th className="text-left px-6 py-3 text-sm font-semibold text-gray-900">Priority</th>
                     <th className="text-left px-6 py-3 text-sm font-semibold text-gray-900">Created</th>
                     <th className="text-left px-6 py-3 text-sm font-semibold text-gray-900">Updated</th>
                   </tr>
@@ -515,6 +521,13 @@ export function Projects() {
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-700 max-w-sm truncate">{project.description || 'No description'}</td>
                       <td className="px-6 py-4 text-sm text-gray-700">{project.created_by || 'Unknown'}</td>
+                      <td className="px-6 py-4">
+                        <span
+                          className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${getProjectPriorityBadgeClasses(project.priority)}`}
+                        >
+                          {project.priority}
+                        </span>
+                      </td>
                       <td className="px-6 py-4 text-sm text-gray-700">{formatCreated(project.created_at)}</td>
                       <td className="px-6 py-4 text-sm text-gray-700">{formatCreated(project.updated_at)}</td>
                     </tr>
