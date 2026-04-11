@@ -12,6 +12,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { SupabaseService } from '../supabase';
+import { ActivityLogService, ActivityActions } from '../activity-log';
 
 export interface Project {
   id: string;
@@ -43,7 +44,10 @@ export interface UpdateProjectDto {
 
 @Injectable()
 export class ProjectsService {
-  constructor(private readonly supabase: SupabaseService) {}
+  constructor(
+    private readonly supabase: SupabaseService,
+    private readonly activityLog: ActivityLogService,
+  ) {}
 
   /** Create a new project. The creator becomes the project admin. */
   async create(dto: CreateProjectDto, userId: string): Promise<Project> {
@@ -150,12 +154,27 @@ export class ProjectsService {
       .single();
 
     if (error || !data) throw new NotFoundException('Project not found');
+
+    // Log activity
+    await this.activityLog.log({
+      user_id: userId,
+      action: ActivityActions.PROJECT_UPDATED,
+      entity_type: 'project',
+      entity_id: id,
+      description: `Updated project "${data.name}"`,
+      metadata: { name: data.name, changes: dto },
+      project_id: id,
+    });
+
     return data as Project;
   }
 
   /** Delete a project. Only project admins or global admins can delete. */
   async delete(id: string, userId: string, globalRole: string): Promise<void> {
     await this.assertProjectAccess(id, userId, globalRole);
+
+    // Fetch project name before deleting for the log
+    const project = await this.getById(id);
 
     const { error } = await this.supabase
       .getClient()
@@ -164,6 +183,16 @@ export class ProjectsService {
       .eq('id', id);
 
     if (error) throw new BadRequestException(error.message);
+
+    // Log activity
+    await this.activityLog.log({
+      user_id: userId,
+      action: ActivityActions.PROJECT_DELETED,
+      entity_type: 'project',
+      entity_id: id,
+      description: `Deleted project "${project.name}"`,
+      metadata: { name: project.name },
+    });
   }
 
   /** List members of a project. Only project members or admins can view. */
@@ -211,6 +240,18 @@ export class ProjectsService {
       .single();
 
     if (error) throw new BadRequestException(error.message);
+
+    // Log activity (we don't have the caller's userId here, so we use memberId)
+    await this.activityLog.log({
+      user_id: memberId,
+      action: ActivityActions.MEMBER_ADDED,
+      entity_type: 'member',
+      entity_id: memberId,
+      description: `Added to project as ${role}`,
+      metadata: { role },
+      project_id: projectId,
+    });
+
     return data as ProjectMember;
   }
 

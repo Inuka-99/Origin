@@ -23,6 +23,8 @@ import { ChatMobile } from './pages/ChatMobile';
 import { Settings } from './pages/Settings';
 import { SettingsMobile } from './pages/SettingsMobile';
 import { Admin } from './pages/Admin';
+import { ActivityLog } from './pages/ActivityLog';
+import { ActivityLogMobile } from './pages/ActivityLogMobile';
 
 export const router = createBrowserRouter([
   // ─── Public routes (no auth required) ────────────────────────────
@@ -120,6 +122,14 @@ export const router = createBrowserRouter([
       {
         path: '/settings',
         Component: Settings,
+      },
+      {
+        path: '/activity-log',
+        Component: ActivityLog,
+      },
+      {
+        path: '/activity-log-mobile',
+        Component: ActivityLogMobile,
       },
       {
         path: '/admin',
