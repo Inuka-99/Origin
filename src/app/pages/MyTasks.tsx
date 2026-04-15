@@ -18,14 +18,13 @@ interface Task {
 type ApiTask = {
   id: string;
   title: string;
+  description: string | null;
   project_id: string | null;
-  status: 'To Do' | 'In Progress' | 'In Review' | 'Done';
-  priority: 'High' | 'Medium' | 'Low';
+  status: 'todo' | 'in_progress' | 'In Review' | 'Done';
+  priority: string;
   due_date: string | null;
-
+  assigned_to: string | null;
 };
-
-const [initial] = [] as Task[]; // placeholder
 
 export function MyTasks() {
   const api = useApiClient();
@@ -59,10 +58,7 @@ export function MyTasks() {
     projectId: task.project_id ?? null,
     priority: (task.priority?.charAt(0).toUpperCase() + task.priority?.slice(1)) as Task['priority'] || 'Medium',
     dueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No due date',
-    status: (task.status
-      ?.split('_')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ') || 'To Do') as Task['status'],
+    status: ({ todo: 'To Do', in_progress: 'In Progress', 'In Review': 'In Review', 'Done': 'Done' } as Record<string, Task['status']>)[task.status] ?? 'To Do',
     assignee: 'Unassigned',
   });
 

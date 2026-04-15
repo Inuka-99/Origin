@@ -2,6 +2,7 @@ import { Sidebar } from '../components/Sidebar';
 import { TopBar } from '../components/TopBar';
 import { Search, Filter, ChevronDown, Plus, Grid3x3, List, Users, Calendar, MoreVertical, CheckSquare } from 'lucide-react';
 import { useState } from 'react';
+import { useNavigate } from 'react-router';
 
 interface Project {
   id: string;
@@ -85,6 +86,7 @@ const mockProjects: Project[] = [
 ];
 
 export function Projects() {
+  const navigate = useNavigate();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -189,6 +191,7 @@ export function Projects() {
             {filteredProjects.map((project) => (
               <div
                 key={project.id}
+                onClick={() => navigate('/project-board')}
                 className="bg-white rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow cursor-pointer border border-transparent hover:border-[#204EA7]/20"
               >
                 {/* Header */}

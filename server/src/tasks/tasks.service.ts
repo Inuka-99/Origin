@@ -55,11 +55,12 @@ export class TasksService {
     const convertStatus = (status: string): string => {
       const normalized = status.trim().toLowerCase();
       const statusMap: Record<string, string> = {
-        'to do': 'To Do',
-        'todo': 'To Do',
-        'in progress': 'In Progress',
-        'in_progress': 'In Progress',
-        'in-progress': 'In Progress',
+        'to do': 'todo',
+        'todo': 'todo',
+        'to_do': 'todo',
+        'in progress': 'in_progress',
+        'in_progress': 'in_progress',
+        'in-progress': 'in_progress',
         'in review': 'In Review',
         'in_review': 'In Review',
         'review': 'In Review',
@@ -188,11 +189,12 @@ export class TasksService {
     if (updatePayload.status) {
       const normalized = updatePayload.status.trim().toLowerCase();
       const statusMap: Record<string, string> = {
-        'to do': 'To Do',
-        'todo': 'To Do',
-        'in progress': 'In Progress',
-        'in_progress': 'In Progress',
-        'in-progress': 'In Progress',
+        'to do': 'todo',
+        'todo': 'todo',
+        'to_do': 'todo',
+        'in progress': 'in_progress',
+        'in_progress': 'in_progress',
+        'in-progress': 'in_progress',
         'in review': 'In Review',
         'in_review': 'In Review',
         'review': 'In Review',

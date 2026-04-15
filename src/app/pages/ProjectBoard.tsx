@@ -8,16 +8,21 @@ import { useApiClient } from '../lib/api-client';
 
 interface ApiTask {
   id: string;
-  project_id: string;
+  project_id: string | null;
   title: string;
   description: string | null;
-  status: 'To Do' | 'In Progress' | 'In Review' | 'Done';
-  priority: 'Low' | 'Medium' | 'High';
+  status: 'todo' | 'in_progress' | 'In Review' | 'Done';
+  priority: string;
   due_date: string | null;
-  assignee_id: string | null;
+  assigned_to: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
+}
+
+interface ApiProject {
+  id: string;
+  name: string;
 }
 
 interface Task {
@@ -58,168 +63,7 @@ const statusMap: Record<string, Task['status']> = {
   done: 'Done',
 };
 
-const mockColumns: Column[] = [
-  {
-    id: 'backlog',
-    title: 'Backlog',
-    tasks: [
-      {
-        id: '1',
-        title: 'Create user authentication flow',
-        project: 'Backend',
-        projectColor: '#16A34A',
-        priority: 'Medium',
-        dueDate: 'Mar 15',
-        assignees: ['AM', 'JL'],
-        comments: 3,
-        subtasks: { completed: 2, total: 5 }
-      },
-      {
-        id: '2',
-        title: 'Design mobile app wireframes',
-        project: 'Design',
-        projectColor: '#9333EA',
-        priority: 'Low',
-        dueDate: 'Mar 20',
-        assignees: ['SC'],
-        comments: 1,
-        subtasks: { completed: 0, total: 3 }
-      }
-    ]
-  },
-  {
-    id: 'todo',
-    title: 'To Do',
-    tasks: [
-      {
-        id: '3',
-        title: 'Update homepage banner images',
-        project: 'Frontend',
-        projectColor: '#204EA7',
-        priority: 'High',
-        dueDate: 'Mar 6',
-        assignees: ['SJ'],
-        comments: 5,
-        subtasks: { completed: 1, total: 2 }
-      },
-      {
-        id: '4',
-        title: 'Review API documentation',
-        project: 'Backend',
-        projectColor: '#16A34A',
-        priority: 'Medium',
-        dueDate: 'Mar 8',
-        assignees: ['AM', 'PW'],
-        comments: 2,
-        subtasks: { completed: 3, total: 4 }
-      },
-      {
-        id: '5',
-        title: 'Set up analytics tracking',
-        project: 'Frontend',
-        projectColor: '#204EA7',
-        priority: 'High',
-        dueDate: 'Mar 7',
-        assignees: ['JL', 'MK', 'TB'],
-        comments: 7,
-        subtasks: { completed: 0, total: 6 }
-      }
-    ]
-  },
-  {
-    id: 'in-progress',
-    title: 'In Progress',
-    tasks: [
-      {
-        id: '6',
-        title: 'Implement payment gateway integration',
-        project: 'Backend',
-        projectColor: '#16A34A',
-        priority: 'High',
-        dueDate: 'Mar 5',
-        assignees: ['AM'],
-        comments: 12,
-        subtasks: { completed: 4, total: 8 }
-      },
-      {
-        id: '7',
-        title: 'Create responsive navigation menu',
-        project: 'Frontend',
-        projectColor: '#204EA7',
-        priority: 'Medium',
-        dueDate: 'Mar 6',
-        assignees: ['SJ', 'SC'],
-        comments: 4,
-        subtasks: { completed: 2, total: 3 }
-      }
-    ]
-  },
-  {
-    id: 'review',
-    title: 'Review',
-    tasks: [
-      {
-        id: '8',
-        title: 'User dashboard layout refinements',
-        project: 'Design',
-        projectColor: '#9333EA',
-        priority: 'Medium',
-        dueDate: 'Mar 4',
-        assignees: ['SC', 'EM'],
-        comments: 8,
-        subtasks: { completed: 5, total: 5 }
-      },
-      {
-        id: '9',
-        title: 'Database optimization queries',
-        project: 'Backend',
-        projectColor: '#16A34A',
-        priority: 'High',
-        dueDate: 'Mar 5',
-        assignees: ['PW'],
-        comments: 3,
-        subtasks: { completed: 1, total: 4 }
-      }
-    ]
-  },
-  {
-    id: 'done',
-    title: 'Done',
-    tasks: [
-      {
-        id: '10',
-        title: 'Initial project setup and configuration',
-        project: 'Backend',
-        projectColor: '#16A34A',
-        priority: 'High',
-        dueDate: 'Mar 1',
-        assignees: ['AM', 'PW'],
-        comments: 15,
-        subtasks: { completed: 8, total: 8 },
-        completed: true
-      },
-      {
-        id: '11',
-        title: 'Design system color palette',
-        project: 'Design',
-        projectColor: '#9333EA',
-        priority: 'Medium',
-        dueDate: 'Feb 28',
-        assignees: ['SC'],
-        comments: 6,
-        subtasks: { completed: 4, total: 4 },
-        completed: true
-      }
-    ]
-  }
-];
-
-const teamMembers = [
-  { initials: 'SJ', name: 'Sarah Johnson' },
-  { initials: 'AM', name: 'Alex Morgan' },
-  { initials: 'JL', name: 'Jordan Lee' },
-  { initials: 'SC', name: 'Sam Chen' }
-];
+const PROJECT_COLORS = ['#204EA7', '#16A34A', '#9333EA', '#DC2626', '#D97706', '#0891B2', '#DB2777', '#059669'];
 
 interface TaskCardProps {
   task: Task;
@@ -437,24 +281,25 @@ export function ProjectBoard() {
     { id: 'done', title: 'Done', tasks: [] },
   ]);
   const [isLoading, setIsLoading] = useState(false);
+  const [projects, setProjects] = useState<ApiProject[]>([]);
+  const projectColorMap = new Map<string, string>(projects.map((p, i) => [p.id, PROJECT_COLORS[i % PROJECT_COLORS.length]]));
 
-  const normalizeTask = (task: ApiTask): Task => ({
-    id: task.id,
-    title: task.title,
-    project: 'Client Website Redesign', // optionally dynamic if you have project data
-    projectColor: '#204EA7',
-    priority: task.priority,
-    dueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : 'N/A',
-    assignees: task.assignee_id ? [task.assignee_id] : [],
-    comments: 0,
-    subtasks: undefined,
-    completed: task.status === 'Done',
-    status: task.status,
-  });
+  const loadProjects = async () => {
+    try {
+      const data = await api.get<ApiProject[]>('/projects');
+      setProjects(data ?? []);
+      return data ?? [];
+    } catch (err) {
+      console.error('Failed to load projects', err);
+      return [];
+    }
+  };
 
-  const loadTasks = async () => {
+  const loadTasks = async (loadedProjects?: ApiProject[]) => {
     try {
       setIsLoading(true);
+      const resolvedProjects = loadedProjects ?? projects;
+      const resolvedColorMap = new Map<string, string>(resolvedProjects.map((p, i) => [p.id, PROJECT_COLORS[i % PROJECT_COLORS.length]]));
       const tasks = await api.get<ApiTask[]>('/tasks');
       const columnTasks: Record<string, Task[]> = {
         todo: [],
@@ -463,20 +308,43 @@ export function ProjectBoard() {
         done: [],
       };
       tasks.forEach((task) => {
-        const statusKey = task.status === 'To Do' ? 'todo'
-          : task.status === 'In Progress' ? 'in-progress'
+        const projectName = task.project_id ? (resolvedProjects.find((p) => p.id === task.project_id)?.name ?? 'Unknown') : 'Standalone';
+        const projectColor = task.project_id ? (resolvedColorMap.get(task.project_id) ?? '#204EA7') : '#6B7280';
+        const priority = (task.priority ? task.priority.charAt(0).toUpperCase() + task.priority.slice(1) : 'Medium') as Task['priority'];
+        const dbToDisplay: Record<string, Task['status']> = {
+          todo: 'To Do',
+          in_progress: 'In Progress',
+          'In Review': 'In Review',
+          'Done': 'Done',
+        };
+        const displayStatus = dbToDisplay[task.status] ?? 'To Do';
+        const normalized: Task = {
+          id: task.id,
+          title: task.title,
+          project: projectName,
+          projectColor,
+          priority,
+          dueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : 'N/A',
+          assignees: task.assigned_to ? [task.assigned_to.slice(0, 2).toUpperCase()] : [],
+          comments: 0,
+          subtasks: undefined,
+          completed: task.status === 'Done',
+          status: displayStatus,
+        };
+        const statusKey = task.status === 'todo' ? 'todo'
+          : task.status === 'in_progress' ? 'in-progress'
           : task.status === 'In Review' ? 'review'
           : 'done';
-        columnTasks[statusKey].push(normalizeTask(task));
+        columnTasks[statusKey].push(normalized);
       });
-      setColumns((prev) => prev.map((col) => ({ ...col, tasks: columnTasks[col.id] || [] })));
+      setColumns((prev) => prev.map((col) => ({ ...col, tasks: columnTasks[col.id] ?? [] })));
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    void loadTasks();
+    void loadProjects().then((loaded) => loadTasks(loaded));
   }, []);
 
   const [isTaskFormOpen, setIsTaskFormOpen] = useState(false);
@@ -484,12 +352,14 @@ export function ProjectBoard() {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [taskForm, setTaskForm] = useState<{
     title: string;
+    project_id: string;
     status: Task['status'];
     priority: Task['priority'];
     dueDate: string;
     assigneeId: string;
   }>({
     title: '',
+    project_id: '',
     status: 'To Do',
     priority: 'Medium',
     dueDate: '',
@@ -497,11 +367,11 @@ export function ProjectBoard() {
   });
 
   const openCreateForm = () => {
-    console.log('Opening create form');
     setTaskFormMode('create');
     setEditingTask(null);
     setTaskForm({
       title: '',
+      project_id: projects[0]?.id ?? '',
       status: 'To Do',
       priority: 'Medium',
       dueDate: '',
@@ -511,10 +381,12 @@ export function ProjectBoard() {
   };
 
   const openEditForm = (task: Task) => {
+    const matchedProject = projects.find((p) => p.name === task.project);
     setTaskFormMode('edit');
     setEditingTask(task);
     setTaskForm({
       title: task.title,
+      project_id: matchedProject?.id ?? projects[0]?.id ?? '',
       status: task.status ?? 'To Do',
       priority: task.priority,
       dueDate: task.dueDate === 'N/A' ? '' : task.dueDate,
@@ -534,23 +406,38 @@ export function ProjectBoard() {
     }
 
     const requestBody = {
-      project_id: 'YOUR_PROJECT_ID',
+      project_id: taskForm.project_id || null,
       title: taskForm.title,
       status: taskForm.status,
       priority: taskForm.priority,
       due_date: taskForm.dueDate ? new Date(taskForm.dueDate).toISOString() : null,
-      assignee_id: taskForm.assigneeId || null,
+      assigned_to: taskForm.assigneeId || null,
     };
 
     try {
       if (taskFormMode === 'create') {
         const created = await api.post<ApiTask>('/tasks', requestBody);
-        const statusKey = created.status === 'To Do' ? 'todo' : created.status === 'In Progress' ? 'in-progress' : created.status === 'In Review' ? 'review' : 'done';
+        const statusKey = created.status === 'todo' ? 'todo' : created.status === 'in_progress' ? 'in-progress' : created.status === 'In Review' ? 'review' : 'done';
+        const projectName = created.project_id ? (projects.find((p) => p.id === created.project_id)?.name ?? 'Unknown') : 'Standalone';
+        const projectColor = created.project_id ? (projectColorMap.get(created.project_id) ?? '#204EA7') : '#6B7280';
+        const priority = (created.priority ? created.priority.charAt(0).toUpperCase() + created.priority.slice(1) : 'Medium') as Task['priority'];
+        const newTask: Task = {
+          id: created.id,
+          title: created.title,
+          project: projectName,
+          projectColor,
+          priority,
+          dueDate: created.due_date ? new Date(created.due_date).toLocaleDateString() : 'N/A',
+          assignees: created.assigned_to ? [created.assigned_to.slice(0, 2).toUpperCase()] : [],
+          comments: 0,
+          completed: created.status === 'Done',
+          status: ({ todo: 'To Do', in_progress: 'In Progress', 'In Review': 'In Review', 'Done': 'Done' } as Record<string, Task['status']>)[created.status] ?? 'To Do',
+        };
         setColumns((prev) => prev.map((col) =>
-          col.id === statusKey ? { ...col, tasks: [...col.tasks, normalizeTask(created)] } : col,
+          col.id === statusKey ? { ...col, tasks: [...col.tasks, newTask] } : col,
         ));
       } else if (editingTask) {
-        const updated = await api.patch<ApiTask>(`/tasks/${editingTask.id}`, requestBody);
+        await api.patch<ApiTask>(`/tasks/${editingTask.id}`, requestBody);
         await loadTasks();
       }
       closeTaskForm();
@@ -601,25 +488,6 @@ export function ProjectBoard() {
     }
   };
 
-  const handleAddTask = async () => {
-    const title = prompt('Task title');
-    if (!title) return;
-
-    try {
-      const newTask = await api.post<ApiTask>('/tasks', {
-        project_id: '<<your-project-id>>',
-        title,
-        status: 'To Do',
-        priority: 'Medium',
-      });
-      setColumns((prev) => prev.map((col) =>
-        col.id === 'todo' ? { ...col, tasks: [...col.tasks, normalizeTask(newTask)] } : col
-      ));
-    } catch (error) {
-      console.error('Create task failed:', error);
-    }
-  };
-
   return (
     <DndProvider backend={HTML5Backend}>
       <div className="min-h-screen bg-[#F7F8FA]">
@@ -632,33 +500,16 @@ export function ProjectBoard() {
           <div className="flex items-center gap-2 text-sm text-gray-600 mb-4">
             <a href="/projects" className="hover:text-[#204EA7] transition-colors">Projects</a>
             <ChevronRight className="w-4 h-4" />
-            <span className="text-gray-900 font-medium">Client Website Redesign</span>
+            <span className="text-gray-900 font-medium">Task Board</span>
           </div>
 
-          {/* Project Header */}
+          {/* Board Header */}
           <div className="flex items-start justify-between mb-6">
-            <div className="flex items-start gap-4">
-              <div>
-                <h1 className="text-3xl font-semibold mb-2" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
-                  Client Website Redesign
-                </h1>
-                <div className="flex items-center gap-3">
-                  <span className="inline-block px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                    Active
-                  </span>
-                  <div className="flex items-center -space-x-2">
-                    {teamMembers.map((member, idx) => (
-                      <div
-                        key={idx}
-                        className="w-8 h-8 rounded-full bg-[#204EA7] flex items-center justify-center text-white text-xs font-semibold border-2 border-white"
-                        title={member.name}
-                      >
-                        {member.initials}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
+            <div>
+              <h1 className="text-3xl font-semibold mb-2" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
+                Task Board
+              </h1>
+              <p className="text-sm text-gray-500">{isLoading ? 'Loading...' : `${columns.reduce((sum, c) => sum + c.tasks.length, 0)} tasks across ${columns.length} columns`}</p>
             </div>
             <button
               onClick={openCreateForm}
@@ -699,48 +550,70 @@ export function ProjectBoard() {
                   <button onClick={closeTaskForm} className="text-gray-400 hover:text-gray-600">X</button>
                 </div>
                 <div className="space-y-3">
-                  <input
-                    name="title"
-                    value={taskForm.title}
-                    onChange={(e) => setTaskForm((prev) => ({ ...prev, title: e.target.value }))}
-                    placeholder="Task title"
-                    className="w-full border border-gray-300 rounded p-2"
-                  />
-                  <select
-                    name="status"
-                    value={taskForm.status}
-                    onChange={(e) => setTaskForm((prev) => ({ ...prev, status: e.target.value as Task['status'] }))}
-                    className="w-full border border-gray-300 rounded p-2"
-                  >
-                    <option value="To Do">To Do</option>
-                    <option value="In Progress">In Progress</option>
-                    <option value="In Review">In Review</option>
-                    <option value="Done">Done</option>
-                  </select>
-                  <select
-                    name="priority"
-                    value={taskForm.priority}
-                    onChange={(e) => setTaskForm((prev) => ({ ...prev, priority: e.target.value as Task['priority'] }))}
-                    className="w-full border border-gray-300 rounded p-2"
-                  >
-                    <option value="High">High</option>
-                    <option value="Medium">Medium</option>
-                    <option value="Low">Low</option>
-                  </select>
-                  <input
-                    name="dueDate"
-                    type="date"
-                    value={taskForm.dueDate}
-                    onChange={(e) => setTaskForm((prev) => ({ ...prev, dueDate: e.target.value }))}
-                    className="w-full border border-gray-300 rounded p-2"
-                  />
-                  <input
-                    name="assigneeId"
-                    value={taskForm.assigneeId}
-                    onChange={(e) => setTaskForm((prev) => ({ ...prev, assigneeId: e.target.value }))}
-                    placeholder="Assignee user id"
-                    className="w-full border border-gray-300 rounded p-2"
-                  />
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Title</label>
+                    <input
+                      name="title"
+                      value={taskForm.title}
+                      onChange={(e) => setTaskForm((prev) => ({ ...prev, title: e.target.value }))}
+                      placeholder="Task title"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7]"
+                    />
+                  </div>
+                  {projects.length > 0 && (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Project</label>
+                      <select
+                        name="project_id"
+                        value={taskForm.project_id}
+                        onChange={(e) => setTaskForm((prev) => ({ ...prev, project_id: e.target.value }))}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7]"
+                      >
+                        {projects.map((p) => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
+                      <select
+                        name="status"
+                        value={taskForm.status}
+                        onChange={(e) => setTaskForm((prev) => ({ ...prev, status: e.target.value as Task['status'] }))}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7]"
+                      >
+                        <option value="To Do">To Do</option>
+                        <option value="In Progress">In Progress</option>
+                        <option value="In Review">In Review</option>
+                        <option value="Done">Done</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Priority</label>
+                      <select
+                        name="priority"
+                        value={taskForm.priority}
+                        onChange={(e) => setTaskForm((prev) => ({ ...prev, priority: e.target.value as Task['priority'] }))}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7]"
+                      >
+                        <option value="High">High</option>
+                        <option value="Medium">Medium</option>
+                        <option value="Low">Low</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Due Date</label>
+                    <input
+                      name="dueDate"
+                      type="date"
+                      value={taskForm.dueDate}
+                      onChange={(e) => setTaskForm((prev) => ({ ...prev, dueDate: e.target.value }))}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7]"
+                    />
+                  </div>
                 </div>
                 <div className="mt-4 flex justify-end gap-2">
                   <button
