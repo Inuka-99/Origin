@@ -1,10 +1,11 @@
 import { Sidebar } from '../components/Sidebar';
 import { TopBar } from '../components/TopBar';
 import { ChevronRight, Plus, MoreVertical, GripVertical, MessageSquare, Calendar as CalendarIcon, CheckSquare, Trash2 } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { useApiClient } from '../lib/api-client';
+import { useTaskRealtime } from '../lib/use-task-realtime';
 
 interface ApiTask {
   id: string;
@@ -284,7 +285,7 @@ export function ProjectBoard() {
   const [projects, setProjects] = useState<ApiProject[]>([]);
   const projectColorMap = new Map<string, string>(projects.map((p, i) => [p.id, PROJECT_COLORS[i % PROJECT_COLORS.length]]));
 
-  const loadProjects = async () => {
+  const loadProjects = useCallback(async () => {
     try {
       const data = await api.get<ApiProject[]>('/projects');
       setProjects(data ?? []);
@@ -293,9 +294,9 @@ export function ProjectBoard() {
       console.error('Failed to load projects', err);
       return [];
     }
-  };
+  }, [api]);
 
-  const loadTasks = async (loadedProjects?: ApiProject[]) => {
+  const loadTasks = useCallback(async (loadedProjects?: ApiProject[]) => {
     try {
       setIsLoading(true);
       const resolvedProjects = loadedProjects ?? projects;
@@ -341,11 +342,21 @@ export function ProjectBoard() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [api, projects]);
 
   useEffect(() => {
-    void loadProjects().then((loaded) => loadTasks(loaded));
-  }, []);
+    void loadProjects().then((loaded) => void loadTasks(loaded));
+  }, [loadProjects, loadTasks]);
+
+  const refreshTasks = useCallback(() => {
+    void loadTasks();
+  }, [loadTasks]);
+
+  useTaskRealtime({
+    onCreated: refreshTasks,
+    onUpdated: refreshTasks,
+    onDeleted: refreshTasks,
+  });
 
   const [isTaskFormOpen, setIsTaskFormOpen] = useState(false);
   const [taskFormMode, setTaskFormMode] = useState<'create' | 'edit'>('create');

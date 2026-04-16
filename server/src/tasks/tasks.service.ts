@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import { SupabaseService } from '../supabase';
 
@@ -41,10 +42,21 @@ export interface UpdateTaskDto {
 
 @Injectable()
 export class TasksService {
+  private readonly logger = new Logger(TasksService.name);
+
   constructor(private readonly supabase: SupabaseService) {}
 
   private get client() {
     return this.supabase.getClient();
+  }
+
+  private async broadcastTaskEvent(event: string, payload: unknown): Promise<void> {
+    try {
+      const channel = this.client.channel('tasks');
+      await channel.send({ type: 'broadcast', event, payload });
+    } catch (error) {
+      this.logger.warn(`Realtime broadcast failed for ${event}: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   async create(dto: CreateTaskDto, userId: string): Promise<Task> {
@@ -92,6 +104,7 @@ export class TasksService {
       throw new BadRequestException(error.message);
     }
 
+    await this.broadcastTaskEvent('task:created', data);
     return data as Task;
   }
 
@@ -220,6 +233,7 @@ export class TasksService {
       throw new BadRequestException(error?.message ?? 'Update failed');
     }
 
+    await this.broadcastTaskEvent('task:updated', data);
     return data as Task;
   }
 
@@ -252,6 +266,8 @@ export class TasksService {
     if (error) {
       throw new BadRequestException(error.message);
     }
+
+    await this.broadcastTaskEvent('task:deleted', { id });
   }
 
   /**
