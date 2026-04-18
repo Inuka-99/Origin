@@ -1,91 +1,43 @@
-﻿import {
-  Controller,
-  Get,
-  Post,
-  Patch,
-  Delete,
-  Param,
-  Body,
-  UseGuards,
-  UseInterceptors,
-} from '@nestjs/common';
-import {
-  JwtAuthGuard,
-  CurrentUser,
-  UserSyncInterceptor,
-  type AuthenticatedUser,
-} from '../auth';
-import { TasksService, type CreateTaskDto, type UpdateTaskDto } from './tasks.service';
-import { SupabaseService } from '../supabase';
+// Controller for handling task-related HTTP requests
+import { Controller, Patch, Param, Body, NotFoundException } from '@nestjs/common';
+import { TasksService } from './tasks.service';
 
 @Controller('tasks')
-@UseGuards(JwtAuthGuard)
-@UseInterceptors(UserSyncInterceptor)
 export class TasksController {
-  constructor(
-    private readonly tasksService: TasksService,
-    private readonly supabase: SupabaseService,
-  ) {}
+  // Inject the TasksService
+  constructor(private readonly tasksService: TasksService) {}
 
-  private async getUserRole(userId: string): Promise<string> {
-    const { data } = await this.supabase
-      .getClient()
-      .from('profiles')
-      .select('role')
-      .eq('id', userId)
-      .single();
-    return data?.role ?? 'member';
-  }
-
-  @Get()
-  async list(@CurrentUser() user: AuthenticatedUser) {
-    const role = await this.getUserRole(user.userId);
-    return this.tasksService.listForUser(user.userId, role);
-  }
-
-  @Get('project/:projectId')
-  async listByProject(
-    @Param('projectId') projectId: string,
-    @CurrentUser() user: AuthenticatedUser,
-  ) {
-    const role = await this.getUserRole(user.userId);
-    return this.tasksService.listByProject(projectId, user.userId, role);
-  }
-
-  @Post()
-  async create(
-    @CurrentUser() user: AuthenticatedUser,
-    @Body() dto: CreateTaskDto,
-  ) {
-    return this.tasksService.create(dto, user.userId);
-  }
-
-  @Get(':id')
-  async getOne(
+  /**
+   * Update the status of a task
+   * PATCH /tasks/:id/status
+   * Body: { status: 'todo' | 'in_progress' | 'done' }
+   */
+  @Patch(':id/status')
+  updateStatus(
     @Param('id') id: string,
-    @CurrentUser() user: AuthenticatedUser,
+    @Body('status') status: string,
   ) {
-    const role = await this.getUserRole(user.userId);
-    return this.tasksService.getById(id, user.userId, role);
+    const updated = this.tasksService.updateTaskStatus(id, status as any);
+    if (!updated) {
+      throw new NotFoundException('Task not found');
+    }
+    return updated;
   }
 
-  @Patch(':id')
-  async update(
+  /**
+   * Assign a task to a user
+   * PATCH /tasks/:id/assign
+   * Body: { userId: string }
+   */
+  @Patch(':id/assign')
+  assignTask(
     @Param('id') id: string,
-    @Body() dto: UpdateTaskDto,
-    @CurrentUser() user: AuthenticatedUser,
+    @Body('userId') userId: string,
   ) {
-    const role = await this.getUserRole(user.userId);
-    return this.tasksService.update(id, dto, user.userId, role);
-  }
-
-  @Delete(':id')
-  async remove(
-    @Param('id') id: string,
-    @CurrentUser() user: AuthenticatedUser,
-  ) {
-    const role = await this.getUserRole(user.userId);
-    await this.tasksService.delete(id, user.userId, role);
-    return { deleted: true };
+    const updated = this.tasksService.assignTask(id, userId);
+    if (!updated) {
+      throw new NotFoundException('Task not found');
+    }
+    return updated;
   }
 }
