@@ -4,6 +4,7 @@ import { Search, Filter, ChevronDown, Plus, Grid3x3, List, Users, Calendar, More
 import { useState, useEffect } from 'react';
 import { useProjects, useProjectMembers, type Project as ApiProject, type ProjectMember } from '../lib/useProjects';
 import { useAuthUser } from '../auth/useAuthUser';
+import { useApiClient } from '../lib/api-client';
 
 interface Project extends ApiProject {
   progress: number;
@@ -34,6 +35,9 @@ export function Projects() {
   const [dropdownOpen, setDropdownOpen] = useState<string | null>(null);
   const { members, loading: membersLoading, addMember, removeMember } = useProjectMembers(selectedProject?.id || '');
   const { user } = useAuthUser();
+  const api = useApiClient();
+  const [projectTasks, setProjectTasks] = useState<Record<string, any[]>>({});
+  const [tasksLoading, setTasksLoading] = useState(false);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -46,16 +50,60 @@ export function Projects() {
     }
   }, [dropdownOpen]);
 
-  // Convert API projects to display format with placeholder stats
-  const projects: Project[] = apiProjects.map(apiProject => ({
-    ...apiProject,
-    progress: 0, // TODO: Calculate from tasks
-    tasksTotal: 0, // TODO: Fetch from tasks API
-    tasksCompleted: 0, // TODO: Fetch from tasks API
-    status: 'Active' as const, // TODO: Determine from project state
-    team: [], // TODO: Get from members
-    lastUpdated: new Date(apiProject.updated_at).toLocaleDateString(),
-  }));
+  // Fetch tasks for all projects
+  useEffect(() => {
+    const fetchProjectTasks = async () => {
+      if (apiProjects.length === 0) return;
+
+      setTasksLoading(true);
+      try {
+        const tasksMap: Record<string, any[]> = {};
+
+        // Fetch tasks for each project in parallel
+        const taskPromises = apiProjects.map(async (project) => {
+          try {
+            const tasks = await api.get(`/tasks/project/${project.id}`);
+            return { projectId: project.id, tasks };
+          } catch (err) {
+            console.error(`Failed to fetch tasks for project ${project.id}:`, err);
+            return { projectId: project.id, tasks: [] };
+          }
+        });
+
+        const results = await Promise.all(taskPromises);
+
+        results.forEach(({ projectId, tasks }) => {
+          tasksMap[projectId] = tasks;
+        });
+
+        setProjectTasks(tasksMap);
+      } catch (err) {
+        console.error('Failed to fetch project tasks:', err);
+      } finally {
+        setTasksLoading(false);
+      }
+    };
+
+    fetchProjectTasks();
+  }, [apiProjects, api]);
+
+  // Convert API projects to display format with calculated stats
+  const projects: Project[] = apiProjects.map(apiProject => {
+    const tasks = projectTasks[apiProject.id] || [];
+    const tasksTotal = tasks.length;
+    const tasksCompleted = tasks.filter(task => task.status === 'Done').length;
+    const progress = tasksTotal > 0 ? Math.round((tasksCompleted / tasksTotal) * 100) : 0;
+
+    return {
+      ...apiProject,
+      progress,
+      tasksTotal,
+      tasksCompleted,
+      status: 'Active' as const, // TODO: Determine from project state
+      team: [], // TODO: Get from members
+      lastUpdated: new Date(apiProject.updated_at).toLocaleDateString(),
+    };
+  });
 
   const filteredProjects = projects.filter(project =>
     project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -98,6 +146,13 @@ export function Projects() {
     try {
       await removeMember(memberId);
       await refetch();
+
+      // Refresh tasks after member removal
+      const updatedTasks = await api.get(`/tasks/project/${selectedProject.id}`);
+      setProjectTasks(prev => ({
+        ...prev,
+        [selectedProject.id]: updatedTasks
+      }));
 
       const removedSelf = memberId === user?.sub;
       const wasLastMember = memberRemovalConfirmation?.isLastMember;

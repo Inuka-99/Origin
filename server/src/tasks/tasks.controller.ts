@@ -43,6 +43,15 @@ export class TasksController {
     return this.tasksService.listForUser(user.userId, role);
   }
 
+  @Get('project/:projectId')
+  async listByProject(
+    @Param('projectId') projectId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const role = await this.getUserRole(user.userId);
+    return this.tasksService.listByProject(projectId, user.userId, role);
+  }
+
   @Post()
   async create(
     @CurrentUser() user: AuthenticatedUser,

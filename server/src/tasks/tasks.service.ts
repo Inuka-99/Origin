@@ -24,7 +24,7 @@ export interface CreateTaskDto {
   project_id?: string | null;
   title: string;
   description?: string;
-  status?: 'To Do' | 'In Progress' | 'In Review' | 'Done';
+  status?: 'todo' | 'in_progress' | 'In Review' | 'Done' | 'completed';
   priority?: 'High' | 'Medium' | 'Low';
   due_date?: string;
   assignee_id?: string | null;
@@ -33,7 +33,7 @@ export interface CreateTaskDto {
 export interface UpdateTaskDto {
   title?: string;
   description?: string | null;
-  status?: 'To Do' | 'In Progress' | 'In Review' | 'Done';
+  status?: 'todo' | 'in_progress' | 'In Review' | 'Done' | 'completed';
   priority?: 'High' | 'Medium' | 'Low';
   due_date?: string | null;
   assignee_id?: string | null;
@@ -55,31 +55,11 @@ export class TasksService {
       }
     }
 
-    const convertStatus = (status: string): string => {
-      const normalized = status.trim().toLowerCase();
-      const statusMap: Record<string, string> = {
-        'to do': 'todo',
-        'todo': 'todo',
-        'in progress': 'in_progress',
-        'in_progress': 'in_progress',
-        'in-progress': 'in_progress',
-        'in review': 'in_review',
-        'in_review': 'in_review',
-        'review': 'in_review',
-        'done': 'done',
-      };
-      const result = statusMap[normalized];
-      if (!result) {
-        throw new BadRequestException(`Invalid task status: ${status}`);
-      }
-      return result;
-    };
-
     const insertPayload: Partial<Task> = {
       project_id: dto.project_id ?? null,
       title: dto.title,
       description: dto.description ?? null,
-      status: convertStatus(dto.status ?? 'To Do'),
+      status: dto.status ?? 'todo',
       priority: (dto.priority ?? 'Medium').toLowerCase(),
       due_date: dto.due_date ?? null,
       created_by: userId,
@@ -147,6 +127,23 @@ export class TasksService {
       if (error) throw new BadRequestException(error.message);
       tasks = (data ?? []) as Task[];
     }
+
+    return this.attachTaskAssignees(tasks);
+  }
+
+  async listByProject(projectId: string, userId: string, userRole: string): Promise<Task[]> {
+    if (userRole !== 'admin') {
+      await this.assertProjectMember(projectId, userId);
+    }
+
+    const { data, error } = await this.client
+      .from('tasks')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw new BadRequestException(error.message);
+    const tasks = (data ?? []) as Task[];
 
     return this.attachTaskAssignees(tasks);
   }
@@ -231,11 +228,10 @@ export class TasksService {
     const task = existing as Task;
 
     if (userRole !== 'admin') {
-      if (task.project_id) {
-        await this.assertProjectAdmin(task.project_id, userId);
-      } else {
-        throw new ForbiddenException('Not authorized to modify a standalone task');
+      if (!task.project_id) {
+        throw new BadRequestException('Task must have an associated project');
       }
+      await this.assertProjectAdmin(task.project_id, userId);
     }
 
     // Validate assignee is a project member if assigning to a project task
@@ -248,24 +244,6 @@ export class TasksService {
     const assignmentUserId = dto.assignee_id;
     const updatePayload: any = { ...dto };
     delete updatePayload.assignee_id;
-    if (updatePayload.status) {
-      const normalized = updatePayload.status.trim().toLowerCase();
-      const statusMap: Record<string, string> = {
-        'to do': 'todo',
-        'todo': 'todo',
-        'in progress': 'in_progress',
-        'in_progress': 'in_progress',
-        'in-progress': 'in_progress',
-        'in review': 'in_review',
-        'in_review': 'in_review',
-        'review': 'in_review',
-        'done': 'done',
-      };
-      if (!statusMap[normalized]) {
-        throw new BadRequestException(`Invalid task status: ${updatePayload.status}`);
-      }
-      updatePayload.status = statusMap[normalized];
-    }
     if (updatePayload.priority) {
       updatePayload.priority = updatePayload.priority.toLowerCase();
     }
@@ -322,11 +300,10 @@ export class TasksService {
     const task = existing as Task;
 
     if (userRole !== 'admin') {
-      if (task.project_id) {
-        await this.assertProjectAdmin(task.project_id, userId);
-      } else {
-        throw new ForbiddenException('Not authorized to delete this standalone task');
+      if (!task.project_id) {
+        throw new BadRequestException('Task must have an associated project');
       }
+      await this.assertProjectAdmin(task.project_id, userId);
     }
 
     const { error } = await this.client

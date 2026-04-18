@@ -19,7 +19,7 @@ type ApiTask = {
   id: string;
   title: string;
   project_id: string | null;
-  status: 'To Do' | 'In Progress' | 'In Review' | 'Done';
+  status: 'todo' | 'in_progress' | 'In Review' | 'Done' | 'completed' | null;
   priority: 'High' | 'Medium' | 'Low';
   due_date: string | null;
   assignee_id: string | null;
@@ -61,39 +61,52 @@ export function MyTasks() {
     return {
       id: task.id,
       title: task.title,
-      project: task.project_id ? task.project_id : 'Standalone',
+      project: task.project_id || 'Unknown Project',
       projectId: task.project_id ?? null,
       priority: (task.priority?.charAt(0).toUpperCase() + task.priority?.slice(1)) as Task['priority'] || 'Medium',
       dueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No due date',
       status: (task.status
-        ?.split('_')
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(' ') || 'To Do') as Task['status'],
+        ? ((() => {
+            const map: Record<string, string> = {
+              'todo': 'To Do',
+              'in_progress': 'In Progress',
+              'In Review': 'In Review',
+              'Done': 'Done',
+              'completed': 'Done',
+            };
+            return (map[task.status] || task.status) as Task['status'];
+          })())
+        : 'To Do') as Task['status'],
       assignee: assignee ? (assignee.profiles?.full_name || assignee.profiles?.email || assignee.user_id) : 'Unassigned',
     };
   };
 
   const getTaskProjectName = (task: Task): string => {
-    if (!task.projectId) return 'Standalone';
+    if (!task.projectId) return 'Unknown Project';
     const match = projects.find((project) => project.id === task.projectId);
     return match?.name ?? task.project;
   };
 
-  const getStatusEnumValue = (status: string): string => {
+  const databaseToDisplayStatus = (status: string): string => {
+    if (!status) return 'To Do';
     const map: Record<string, string> = {
       'todo': 'To Do',
-      'to do': 'To Do',
-      'in progress': 'In Progress',
       'in_progress': 'In Progress',
-      'in-progress': 'In Progress',
-      'in review': 'In Review',
-      'in_review': 'In Review',
-      'review': 'In Review',
-      'done': 'Done',
+      'In Review': 'In Review',
+      'Done': 'Done',
+      'completed': 'Done',
     };
+    return map[status] || status;
+  };
 
-    const normalized = status.trim().toLowerCase();
-    return map[normalized] ?? status;
+  const displayToDatabaseStatus = (status: Task['status']): string => {
+    const map: Record<Task['status'], string> = {
+      'To Do': 'todo',
+      'In Progress': 'in_progress',
+      'In Review': 'In Review',
+      'Done': 'Done',
+    };
+    return map[status] || status;
   };
 
   const getPriorityEnumValue = (priority: string): string => {
@@ -115,15 +128,7 @@ export function MyTasks() {
 
   const loadProjects = async () => {
     try {
-      let data = await api.get<{id:string;name:string}[]>('/projects');
-
-      // Ensure a fallback project named Standalone exists so tasks never save without a valid project_id.
-      const standaloneProject = data?.find((p) => p.name === 'Standalone');
-      if (!standaloneProject) {
-        const createdStandalone = await api.post<{id:string;name:string}>('/projects', { name: 'Standalone' });
-        data = [createdStandalone, ...(data ?? [])];
-      }
-
+      const data = await api.get<{id:string;name:string}[]>('/projects');
       setProjects(data ?? []);
 
       if (!taskForm.project_id && (data?.length ?? 0) > 0) {
@@ -219,12 +224,12 @@ export function MyTasks() {
       // Fetch the full task data to get assignee_id
       const fullTask = await api.get<ApiTask>(`/tasks/${task.id}`);
       
-      const assignedProjectId = fullTask.project_id ? fullTask.project_id : projects.find((p) => p.name === 'Standalone')?.id ?? '';
+      const assignedProjectId = fullTask.project_id ?? '';
 
       setTaskForm({
         title: fullTask.title,
         project_id: assignedProjectId,
-        status: getStatusEnumValue(fullTask.status),
+        status: databaseToDisplayStatus(fullTask.status),
         priority: (fullTask.priority?.charAt(0).toUpperCase() + fullTask.priority?.slice(1)) as Task['priority'] || 'Medium',
         due_date: fullTask.due_date ? new Date(fullTask.due_date).toISOString().slice(0, 10) : '',
         assignee_id: fullTask.assignee_id || '',
@@ -250,8 +255,7 @@ export function MyTasks() {
       return;
     }
 
-    const standaloneProject = projects.find((p) => p.name === 'Standalone');
-    const projectId = taskForm.project_id || standaloneProject?.id || projects[0]?.id;
+    const projectId = taskForm.project_id || projects[0]?.id;
     if (!projectId) {
       setFormError('A project is required. Select a project or create one first.');
       return;
@@ -260,7 +264,7 @@ export function MyTasks() {
     const payload = {
       project_id: projectId,
       title: taskForm.title,
-      status: getStatusEnumValue(taskForm.status),
+      status: displayToDatabaseStatus(taskForm.status),
       priority: getPriorityEnumValue(taskForm.priority),
       due_date: taskForm.due_date || null,
       assignee_id: taskForm.assignee_id || null,
@@ -416,13 +420,7 @@ export function MyTasks() {
                       <div className="font-medium text-gray-900">{task.title}</div>
                     </td>
                     <td className="px-6 py-4">
-                      {getTaskProjectName(task) === 'Standalone' ? (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium text-gray-500 bg-gray-100">
-                          Standalone
-                        </span>
-                      ) : (
-                        <span className="text-sm text-gray-600">{getTaskProjectName(task)}</span>
-                      )}
+                      <span className="text-sm text-gray-600">{getTaskProjectName(task)}</span>
                     </td>
                     <td className="px-6 py-4">
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${getPriorityColor(task.priority)}`}>
@@ -500,10 +498,7 @@ export function MyTasks() {
                     className="w-full mt-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7]"
                     name="project_id"
                   >
-                    {/* single standalone option + rest of user projects */}
-                    <option value={projects.find((p) => p.name === 'Standalone')?.id ?? ''}>Standalone</option>
                     {projects
-                      .filter((project) => project.name !== 'Standalone')
                       .map((project) => (
                         <option key={project.id} value={project.id}>{project.name}</option>
                       ))}
