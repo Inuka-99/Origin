@@ -89,6 +89,11 @@ export function useProjects(): UseProjectsReturn {
 
   useEffect(() => {
     fetchProjects();
+
+    // Set up polling for real-time updates every 30 seconds
+    const interval = setInterval(fetchProjects, 30000);
+
+    return () => clearInterval(interval);
   }, [fetchProjects]);
 
   return {
