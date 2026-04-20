@@ -1,9 +1,24 @@
 import { Sidebar } from '../components/Sidebar';
 import { TopBar } from '../components/TopBar';
-import { ChevronRight, Plus, MoreVertical, GripVertical, MessageSquare, Calendar as CalendarIcon, CheckSquare } from 'lucide-react';
-import { useState } from 'react';
+import { ChevronRight, Plus, MoreVertical, GripVertical, MessageSquare, Calendar as CalendarIcon, CheckSquare, Trash2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
+import { useApiClient } from '../lib/api-client';
+
+interface ApiTask {
+  id: string;
+  project_id: string;
+  title: string;
+  description: string | null;
+  status: 'todo' | 'in_progress' | 'In Review' | 'Done' | 'completed' | null;
+  priority: 'Low' | 'Medium' | 'High';
+  due_date: string | null;
+  assignee_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
 
 interface Task {
   id: string;
@@ -16,6 +31,7 @@ interface Task {
   comments: number;
   subtasks?: { completed: number; total: number };
   completed?: boolean;
+  status?: 'To Do' | 'In Progress' | 'In Review' | 'Done';
 }
 
 interface Column {
@@ -26,6 +42,20 @@ interface Column {
 
 const ItemTypes = {
   CARD: 'card',
+};
+
+const statusColumns: { id: Column['id']; title: string }[] = [
+  { id: 'todo', title: 'To Do' },
+  { id: 'in-progress', title: 'In Progress' },
+  { id: 'review', title: 'In Review' },
+  { id: 'done', title: 'Done' },
+];
+
+const statusMap: Record<string, Task['status']> = {
+  todo: 'To Do',
+  'in-progress': 'In Progress',
+  review: 'In Review',
+  done: 'Done',
 };
 
 const mockColumns: Column[] = [
@@ -195,9 +225,12 @@ interface TaskCardProps {
   task: Task;
   columnId: string;
   onMoveTask: (taskId: string, fromColumn: string, toColumn: string) => void;
+  onDeleteTask: (taskId: string) => void;
+  onEditTask: (task: Task) => void;
 }
 
-function TaskCard({ task, columnId, onMoveTask }: TaskCardProps) {
+function TaskCard({ task, columnId, onMoveTask, onDeleteTask, onEditTask }: TaskCardProps) {
+  const dragRef = useRef<HTMLDivElement | null>(null);
   const [{ isDragging }, drag] = useDrag(() => ({
     type: ItemTypes.CARD,
     item: { id: task.id, columnId },
@@ -205,6 +238,12 @@ function TaskCard({ task, columnId, onMoveTask }: TaskCardProps) {
       isDragging: monitor.isDragging(),
     }),
   }));
+
+  useEffect(() => {
+    if (dragRef.current) {
+      drag(dragRef.current);
+    }
+  }, [drag]);
 
   const getPriorityColor = (priority: Task['priority']) => {
     switch (priority) {
@@ -219,7 +258,7 @@ function TaskCard({ task, columnId, onMoveTask }: TaskCardProps) {
 
   return (
     <div
-      ref={drag}
+      ref={dragRef}
       className={`bg-white rounded-lg p-4 shadow-sm border border-gray-200 hover:shadow-md transition-all cursor-grab active:cursor-grabbing group ${
         task.completed ? 'opacity-60' : ''
       } ${isDragging ? 'opacity-50 shadow-xl scale-105' : ''}`}
@@ -280,9 +319,28 @@ function TaskCard({ task, columnId, onMoveTask }: TaskCardProps) {
             </div>
           </div>
         </div>
-        <button className="p-1 hover:bg-gray-100 rounded opacity-0 group-hover:opacity-100 transition-opacity">
-          <MoreVertical className="w-4 h-4 text-gray-400" />
-        </button>
+        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onEditTask(task);
+            }}
+            className="p-1 hover:bg-blue-100 rounded"
+            title="Edit task"
+          >
+            <MoreVertical className="w-4 h-4 text-blue-500" />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDeleteTask(task.id);
+            }}
+            className="p-1 hover:bg-red-100 rounded"
+            title="Delete task"
+          >
+            <Trash2 className="w-4 h-4 text-red-500" />
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -291,9 +349,12 @@ function TaskCard({ task, columnId, onMoveTask }: TaskCardProps) {
 interface KanbanColumnProps {
   column: Column;
   onMoveTask: (taskId: string, fromColumn: string, toColumn: string) => void;
+  onDeleteTask: (taskId: string) => void;
+  onEditTask: (task: Task) => void;
 }
 
-function KanbanColumn({ column, onMoveTask }: KanbanColumnProps) {
+function KanbanColumn({ column, onMoveTask, onDeleteTask, onEditTask }: KanbanColumnProps) {
+  const dropRef = useRef<HTMLDivElement | null>(null);
   const [{ isOver, canDrop }, drop] = useDrop(() => ({
     accept: ItemTypes.CARD,
     drop: (item: { id: string; columnId: string }) => {
@@ -307,11 +368,17 @@ function KanbanColumn({ column, onMoveTask }: KanbanColumnProps) {
     }),
   }));
 
+  useEffect(() => {
+    if (dropRef.current) {
+      drop(dropRef.current);
+    }
+  }, [drop]);
+
   const isActive = isOver && canDrop;
 
   return (
     <div
-      ref={drop}
+      ref={dropRef}
       className={`w-80 bg-gray-50 rounded-lg p-4 flex flex-col transition-all ${
         isActive ? 'ring-2 ring-[#204EA7] ring-opacity-50 bg-[#204EA7]/5' : ''
       }`}
@@ -349,6 +416,10 @@ function KanbanColumn({ column, onMoveTask }: KanbanColumnProps) {
               task={task}
               columnId={column.id}
               onMoveTask={onMoveTask}
+              onDeleteTask={(taskId) => {
+                onDeleteTask(taskId);
+              }}
+              onEditTask={onEditTask}
             />
           ))
         )}
@@ -358,24 +429,222 @@ function KanbanColumn({ column, onMoveTask }: KanbanColumnProps) {
 }
 
 export function ProjectBoard() {
-  const [columns, setColumns] = useState(mockColumns);
+  const api = useApiClient();
+  const [columns, setColumns] = useState<Column[]>([
+    { id: 'todo', title: 'To Do', tasks: [] },
+    { id: 'in-progress', title: 'In Progress', tasks: [] },
+    { id: 'review', title: 'In Review', tasks: [] },
+    { id: 'done', title: 'Done', tasks: [] },
+  ]);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleMoveTask = (taskId: string, fromColumnId: string, toColumnId: string) => {
-    setColumns((prevColumns) => {
-      const newColumns = [...prevColumns];
-      const fromColumn = newColumns.find((col) => col.id === fromColumnId);
-      const toColumn = newColumns.find((col) => col.id === toColumnId);
+  const databaseToDisplayStatus = (status: string | null): 'To Do' | 'In Progress' | 'In Review' | 'Done' => {
+    if (!status) return 'To Do';
+    const map: Record<string, 'To Do' | 'In Progress' | 'In Review' | 'Done'> = {
+      'todo': 'To Do',
+      'in_progress': 'In Progress',
+      'In Review': 'In Review',
+      'Done': 'Done',
+      'completed': 'Done',
+    };
+    return map[status] || ('To Do' as const);
+  };
 
-      if (fromColumn && toColumn) {
-        const taskIndex = fromColumn.tasks.findIndex((task) => task.id === taskId);
-        if (taskIndex !== -1) {
-          const [task] = fromColumn.tasks.splice(taskIndex, 1);
-          toColumn.tasks.push(task);
-        }
-      }
+  const displayToDatabaseStatus = (status: Task['status']): string => {
+    const map: Record<string, string> = {
+      'To Do': 'todo',
+      'In Progress': 'in_progress',
+      'In Review': 'In Review',
+      'Done': 'Done',
+    };
+    return map[status] || status;
+  };
 
-      return newColumns;
+  const normalizeTask = (task: ApiTask): Task => {
+    const displayStatus = databaseToDisplayStatus(task.status);
+    return {
+      id: task.id,
+      title: task.title,
+      project: 'Client Website Redesign', // optionally dynamic if you have project data
+      projectColor: '#204EA7',
+      priority: task.priority,
+      dueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : 'N/A',
+      assignees: task.assignee_id ? [task.assignee_id] : [],
+      comments: 0,
+      subtasks: undefined,
+      completed: displayStatus === 'Done',
+      status: displayStatus,
+    };
+  };
+
+  const loadTasks = async () => {
+    try {
+      setIsLoading(true);
+      const tasks = await api.get<ApiTask[]>('/tasks');
+      const columnTasks: Record<string, Task[]> = {
+        todo: [],
+        'in-progress': [],
+        review: [],
+        done: [],
+      };
+      tasks.forEach((task) => {
+        const displayStatus = databaseToDisplayStatus(task.status);
+        const statusKey = displayStatus === 'To Do' ? 'todo'
+          : displayStatus === 'In Progress' ? 'in-progress'
+          : displayStatus === 'In Review' ? 'review'
+          : 'done';
+        columnTasks[statusKey].push(normalizeTask(task));
+      });
+      setColumns((prev) => prev.map((col) => ({ ...col, tasks: columnTasks[col.id] || [] })));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadTasks();
+  }, []);
+
+  const [isTaskFormOpen, setIsTaskFormOpen] = useState(false);
+  const [taskFormMode, setTaskFormMode] = useState<'create' | 'edit'>('create');
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [taskForm, setTaskForm] = useState<{
+    title: string;
+    status: Task['status'];
+    priority: Task['priority'];
+    dueDate: string;
+    assigneeId: string;
+  }>({
+    title: '',
+    status: 'To Do',
+    priority: 'Medium',
+    dueDate: '',
+    assigneeId: '',
+  });
+
+  const openCreateForm = () => {
+    console.log('Opening create form');
+    setTaskFormMode('create');
+    setEditingTask(null);
+    setTaskForm({
+      title: '',
+      status: 'To Do',
+      priority: 'Medium',
+      dueDate: '',
+      assigneeId: '',
     });
+    setIsTaskFormOpen(true);
+  };
+
+  const openEditForm = (task: Task) => {
+    setTaskFormMode('edit');
+    setEditingTask(task);
+    setTaskForm({
+      title: task.title,
+      status: task.status ?? 'To Do',
+      priority: task.priority,
+      dueDate: task.dueDate === 'N/A' ? '' : task.dueDate,
+      assigneeId: task.assignees[0] ?? '',
+    });
+    setIsTaskFormOpen(true);
+  };
+
+  const closeTaskForm = () => {
+    setIsTaskFormOpen(false);
+  };
+
+  const submitTaskForm = async () => {
+    if (!taskForm.title.trim()) {
+      alert('Please enter a task title.');
+      return;
+    }
+
+    const requestBody = {
+      project_id: 'YOUR_PROJECT_ID',
+      title: taskForm.title,
+      status: displayToDatabaseStatus(taskForm.status),
+      priority: taskForm.priority,
+      due_date: taskForm.dueDate ? new Date(taskForm.dueDate).toISOString() : null,
+      assignee_id: taskForm.assigneeId || null,
+    };
+
+    try {
+      if (taskFormMode === 'create') {
+        const created = await api.post<ApiTask>('/tasks', requestBody);
+        const displayStatus = databaseToDisplayStatus(created.status);
+        const statusKey = displayStatus === 'To Do' ? 'todo' : displayStatus === 'In Progress' ? 'in-progress' : displayStatus === 'In Review' ? 'review' : 'done';
+        setColumns((prev) => prev.map((col) =>
+          col.id === statusKey ? { ...col, tasks: [...col.tasks, normalizeTask(created)] } : col,
+        ));
+      } else if (editingTask) {
+        const updated = await api.patch<ApiTask>(`/tasks/${editingTask.id}`, requestBody);
+        await loadTasks();
+      }
+      closeTaskForm();
+    } catch (err) {
+      console.error('Failed to save task', err);
+      alert('Could not save task. Check console.');
+    }
+  };
+
+  const handleMoveTask = async (taskId: string, fromColumnId: string, toColumnId: string) => {
+    const status = statusMap[toColumnId];
+    if (!status) return;
+
+    setColumns((prevColumns) => {
+      const updated = prevColumns.map((col) => ({ ...col, tasks: [...col.tasks] }));
+      const from = updated.find((c) => c.id === fromColumnId);
+      const to = updated.find((c) => c.id === toColumnId);
+      if (!from || !to) return updated;
+
+      const idx = from.tasks.findIndex((task) => task.id === taskId);
+      if (idx === -1) return updated;
+
+      const [task] = from.tasks.splice(idx, 1);
+      task.completed = status === 'Done';
+      task.status = status;
+      to.tasks.push(task);
+      return updated;
+    });
+
+    try {
+      await api.patch(`/tasks/${taskId}`, { status: displayToDatabaseStatus(status) });
+    } catch (error) {
+      console.error('Failed to update task status:', error);
+      void loadTasks();
+    }
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+    if (!confirm('Delete task?')) return;
+    try {
+      await api.delete(`/tasks/${taskId}`);
+      setColumns((prev) => prev.map((col) => ({
+        ...col,
+        tasks: col.tasks.filter((task) => task.id !== taskId),
+      })));
+    } catch (error) {
+      console.error('Delete task failed:', error);
+    }
+  };
+
+  const handleAddTask = async () => {
+    const title = prompt('Task title');
+    if (!title) return;
+
+    try {
+      const newTask = await api.post<ApiTask>('/tasks', {
+        project_id: '<<your-project-id>>',
+        title,
+        status: 'todo',
+        priority: 'Medium',
+      });
+      setColumns((prev) => prev.map((col) =>
+        col.id === 'todo' ? { ...col, tasks: [...col.tasks, normalizeTask(newTask)] } : col
+      ));
+    } catch (error) {
+      console.error('Create task failed:', error);
+    }
   };
 
   return (
@@ -418,7 +687,10 @@ export function ProjectBoard() {
                 </div>
               </div>
             </div>
-            <button className="flex items-center gap-2 px-4 py-2.5 bg-[#204EA7] text-white rounded-lg hover:bg-[#1a3d8a] transition-colors font-medium">
+            <button
+              onClick={openCreateForm}
+              className="flex items-center gap-2 px-4 py-2.5 bg-[#204EA7] text-white rounded-lg hover:bg-[#1a3d8a] transition-colors font-medium"
+            >
               <Plus className="w-5 h-5" />
               Add Task
             </button>
@@ -443,6 +715,78 @@ export function ProjectBoard() {
             </button>
           </div>
 
+          {/* Task form modal */}
+          {isTaskFormOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+              <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold">
+                    {taskFormMode === 'create' ? 'Create Task' : 'Edit Task'}
+                  </h2>
+                  <button onClick={closeTaskForm} className="text-gray-400 hover:text-gray-600">X</button>
+                </div>
+                <div className="space-y-3">
+                  <input
+                    name="title"
+                    value={taskForm.title}
+                    onChange={(e) => setTaskForm((prev) => ({ ...prev, title: e.target.value }))}
+                    placeholder="Task title"
+                    className="w-full border border-gray-300 rounded p-2"
+                  />
+                  <select
+                    name="status"
+                    value={taskForm.status}
+                    onChange={(e) => setTaskForm((prev) => ({ ...prev, status: e.target.value as Task['status'] }))}
+                    className="w-full border border-gray-300 rounded p-2"
+                  >
+                    <option value="To Do">To Do</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="In Review">In Review</option>
+                    <option value="Done">Done</option>
+                  </select>
+                  <select
+                    name="priority"
+                    value={taskForm.priority}
+                    onChange={(e) => setTaskForm((prev) => ({ ...prev, priority: e.target.value as Task['priority'] }))}
+                    className="w-full border border-gray-300 rounded p-2"
+                  >
+                    <option value="High">High</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Low">Low</option>
+                  </select>
+                  <input
+                    name="dueDate"
+                    type="date"
+                    value={taskForm.dueDate}
+                    onChange={(e) => setTaskForm((prev) => ({ ...prev, dueDate: e.target.value }))}
+                    className="w-full border border-gray-300 rounded p-2"
+                  />
+                  <input
+                    name="assigneeId"
+                    value={taskForm.assigneeId}
+                    onChange={(e) => setTaskForm((prev) => ({ ...prev, assigneeId: e.target.value }))}
+                    placeholder="Assignee user id"
+                    className="w-full border border-gray-300 rounded p-2"
+                  />
+                </div>
+                <div className="mt-4 flex justify-end gap-2">
+                  <button
+                    onClick={closeTaskForm}
+                    className="px-4 py-2 text-sm bg-gray-100 rounded hover:bg-gray-200"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={submitTaskForm}
+                    className="px-4 py-2 text-sm bg-[#204EA7] text-white rounded hover:bg-[#163b74]"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Kanban Board */}
           <div className="overflow-x-auto pb-4 kanban-horizontal-scroll">
             <div className="flex gap-4 min-w-max">
@@ -451,6 +795,8 @@ export function ProjectBoard() {
                   key={column.id}
                   column={column}
                   onMoveTask={handleMoveTask}
+                  onDeleteTask={handleDeleteTask}
+                  onEditTask={openEditForm}
                 />
               ))}
             </div>
