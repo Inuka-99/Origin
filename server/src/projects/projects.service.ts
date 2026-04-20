@@ -20,6 +20,7 @@ export interface Project {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  user_role?: 'admin' | 'member' | null; // User's role in this project
 }
 
 export interface ProjectMember {
@@ -62,11 +63,16 @@ export class ProjectsService {
     if (error) throw new BadRequestException(error.message);
 
     // Add creator as project admin
-    await client.from('project_members').insert({
+    const { error: memberError } = await client.from('project_members').insert({
       project_id: project.id,
       user_id: userId,
       role: 'admin',
     });
+
+    if (memberError) {
+      await client.from('projects').delete().eq('id', project.id);
+      throw new BadRequestException(memberError.message);
+    }
 
     return project as Project;
   }
@@ -83,13 +89,14 @@ export class ProjectsService {
         .order('created_at', { ascending: false });
 
       if (error) throw new BadRequestException(error.message);
-      return (data ?? []) as Project[];
+      // For global admins, they have admin role on all projects
+      return (data ?? []).map(project => ({ ...project, user_role: 'admin' })) as Project[];
     }
 
     // Regular members see only projects they belong to
     const { data: memberships } = await client
       .from('project_members')
-      .select('project_id')
+      .select('project_id, role')
       .eq('user_id', userId);
 
     const projectIds = (memberships ?? []).map((m) => m.project_id);
@@ -102,7 +109,14 @@ export class ProjectsService {
       .order('created_at', { ascending: false });
 
     if (error) throw new BadRequestException(error.message);
-    return (data ?? []) as Project[];
+
+    // Add user role to each project
+    const projectsWithRoles = (data ?? []).map(project => {
+      const membership = memberships?.find(m => m.project_id === project.id);
+      return { ...project, user_role: membership?.role || null };
+    });
+
+    return projectsWithRoles as Project[];
   }
 
   /** Get a single project by ID. */
@@ -152,12 +166,43 @@ export class ProjectsService {
     if (error) throw new BadRequestException(error.message);
   }
 
-  /** Add a member to a project. */
+  /** List members of a project. Only project members or admins can view. */
+  async listMembers(projectId: string, userId: string, globalRole: string): Promise<ProjectMember[]> {
+    // Check if user is a member or admin
+    if (globalRole !== 'admin') {
+      const { data: membership } = await this.supabase
+        .getClient()
+        .from('project_members')
+        .select('user_id')
+        .eq('project_id', projectId)
+        .eq('user_id', userId)
+        .single();
+
+      if (!membership) {
+        throw new ForbiddenException('You are not a member of this project');
+      }
+    }
+
+    const { data, error } = await this.supabase
+      .getClient()
+      .from('project_members')
+      .select('*, profiles(full_name, email, avatar_url)')
+      .eq('project_id', projectId);
+
+    if (error) throw new BadRequestException(error.message);
+    return (data ?? []) as ProjectMember[];
+  }
+
+  /** Add a member to a project. Only project admins or global admins can add members. */
   async addMember(
     projectId: string,
     memberId: string,
     role: 'admin' | 'member' = 'member',
+    userId: string,
+    globalRole: string,
   ): Promise<ProjectMember> {
+    await this.assertProjectAccess(projectId, userId, globalRole);
+
     const { data, error } = await this.supabase
       .getClient()
       .from('project_members')
@@ -169,20 +214,15 @@ export class ProjectsService {
     return data as ProjectMember;
   }
 
-  /** List members of a project. */
-  async listMembers(projectId: string): Promise<ProjectMember[]> {
-    const { data, error } = await this.supabase
-      .getClient()
-      .from('project_members')
-      .select('*, profiles(full_name, email, avatar_url)')
-      .eq('project_id', projectId);
+  /** Remove a member from a project. Only project admins or global admins can remove members. */
+  async removeMember(
+    projectId: string,
+    memberId: string,
+    userId: string,
+    globalRole: string,
+  ): Promise<void> {
+    await this.assertProjectAccess(projectId, userId, globalRole);
 
-    if (error) throw new BadRequestException(error.message);
-    return (data ?? []) as ProjectMember[];
-  }
-
-  /** Remove a member from a project. */
-  async removeMember(projectId: string, memberId: string): Promise<void> {
     const { error } = await this.supabase
       .getClient()
       .from('project_members')
@@ -191,6 +231,23 @@ export class ProjectsService {
       .eq('user_id', memberId);
 
     if (error) throw new BadRequestException(error.message);
+
+    // If this was the last project member, delete the orphaned project too.
+    const { count, error: countError } = await this.supabase
+      .getClient()
+      .from('project_members')
+      .select('id', { count: 'exact', head: true })
+      .eq('project_id', projectId);
+
+    if (countError) throw new BadRequestException(countError.message);
+    if (!count) {
+      const { error: projectError } = await this.supabase
+        .getClient()
+        .from('projects')
+        .delete()
+        .eq('id', projectId);
+      if (projectError) throw new BadRequestException(projectError.message);
+    }
   }
 
   /** Check if user has admin access to project. */
