@@ -8,13 +8,15 @@ import {
   List,
   Plus,
   Search,
+  Users,
+  MoreVertical,
+  CheckSquare,
+  Loader2,
+  Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Sidebar } from '../components/Sidebar';
 import { TopBar } from '../components/TopBar';
-import { useNavigate } from 'react-router';
-import { Search, Filter, ChevronDown, Plus, Grid3x3, List, Users, Calendar, MoreVertical, CheckSquare, Loader2, Trash2 } from 'lucide-react';
-import { useState, useEffect } from 'react';
 import { useProjects, useProjectMembers, type Project as ApiProject, type ProjectMember } from '../lib/useProjects';
 import { useAuthUser } from '../auth/useAuthUser';
 import { useApiClient } from '../lib/api-client';
