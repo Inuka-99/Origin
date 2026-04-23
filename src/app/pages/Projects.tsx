@@ -1,7 +1,9 @@
 import { Sidebar } from '../components/Sidebar';
 import { TopBar } from '../components/TopBar';
-import { Search, Filter, ChevronDown, Plus, Grid3x3, List, Users, Calendar, MoreVertical, CheckSquare } from 'lucide-react';
-import { useState } from 'react';
+import { Search, Filter, ChevronDown, Plus, Grid3x3, List, Calendar, MoreVertical, CheckSquare } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation } from 'react-router';
+import { useClickOutside } from '../lib/useClickOutside';
 
 interface Project {
   id: string;
@@ -25,7 +27,7 @@ const mockProjects: Project[] = [
     tasksCompleted: 18,
     status: 'Active',
     team: ['SJ', 'AM', 'JL', 'SC'],
-    lastUpdated: '2 hours ago'
+    lastUpdated: '2 hours ago',
   },
   {
     id: '2',
@@ -36,7 +38,7 @@ const mockProjects: Project[] = [
     tasksCompleted: 19,
     status: 'Active',
     team: ['AM', 'JL', 'MK'],
-    lastUpdated: '5 hours ago'
+    lastUpdated: '5 hours ago',
   },
   {
     id: '3',
@@ -47,7 +49,7 @@ const mockProjects: Project[] = [
     tasksCompleted: 15,
     status: 'Completed',
     team: ['SC', 'EM', 'RH'],
-    lastUpdated: '1 day ago'
+    lastUpdated: '1 day ago',
   },
   {
     id: '4',
@@ -58,7 +60,7 @@ const mockProjects: Project[] = [
     tasksCompleted: 11,
     status: 'Active',
     team: ['JL', 'AM', 'PW', 'TB'],
-    lastUpdated: '3 hours ago'
+    lastUpdated: '3 hours ago',
   },
   {
     id: '5',
@@ -69,7 +71,7 @@ const mockProjects: Project[] = [
     tasksCompleted: 0,
     status: 'On Hold',
     team: ['MK', 'TB'],
-    lastUpdated: '1 week ago'
+    lastUpdated: '1 week ago',
   },
   {
     id: '6',
@@ -80,18 +82,78 @@ const mockProjects: Project[] = [
     tasksCompleted: 8,
     status: 'Active',
     team: ['AM', 'PW'],
-    lastUpdated: '1 day ago'
-  }
+    lastUpdated: '1 day ago',
+  },
 ];
 
+type SortOption = 'default' | 'name-asc' | 'progress-desc' | 'tasks-desc';
+type StatusFilter = 'all' | Project['status'];
+
+const filterLabels: Record<StatusFilter, string> = {
+  all: 'All Status',
+  Active: 'Active',
+  Completed: 'Completed',
+  'On Hold': 'On Hold',
+};
+
+const sortLabels: Record<SortOption, string> = {
+  default: 'Default Order',
+  'name-asc': 'Name A-Z',
+  'progress-desc': 'Progress High-Low',
+  'tasks-desc': 'Most Tasks',
+};
+
 export function Projects() {
+  const location = useLocation();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [sortBy, setSortBy] = useState<SortOption>('default');
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [isSortOpen, setIsSortOpen] = useState(false);
+  const filterRef = useRef<HTMLDivElement | null>(null);
+  const sortRef = useRef<HTMLDivElement | null>(null);
 
-  const filteredProjects = mockProjects.filter(project =>
-    project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    project.description.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  useClickOutside(filterRef, () => setIsFilterOpen(false));
+  useClickOutside(sortRef, () => setIsSortOpen(false));
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    setSearchQuery(params.get('search') ?? '');
+  }, [location.search]);
+
+  const filteredProjects = useMemo(() => {
+    const normalizedSearch = searchQuery.trim().toLowerCase();
+
+    const matchingProjects = mockProjects.filter((project) => {
+      const matchesSearch =
+        !normalizedSearch ||
+        project.name.toLowerCase().includes(normalizedSearch) ||
+        project.description.toLowerCase().includes(normalizedSearch);
+      const matchesStatus =
+        statusFilter === 'all' || project.status === statusFilter;
+
+      return matchesSearch && matchesStatus;
+    });
+
+    const sortedProjects = [...matchingProjects];
+
+    switch (sortBy) {
+      case 'name-asc':
+        sortedProjects.sort((left, right) => left.name.localeCompare(right.name));
+        break;
+      case 'progress-desc':
+        sortedProjects.sort((left, right) => right.progress - left.progress);
+        break;
+      case 'tasks-desc':
+        sortedProjects.sort((left, right) => right.tasksTotal - left.tasksTotal);
+        break;
+      default:
+        break;
+    }
+
+    return sortedProjects;
+  }, [searchQuery, sortBy, statusFilter]);
 
   const getStatusColor = (status: Project['status']) => {
     switch (status) {
@@ -109,9 +171,7 @@ export function Projects() {
       <Sidebar />
       <TopBar />
 
-      {/* Main Content */}
       <main className="ml-56 pt-16 p-8">
-        {/* Header */}
         <div className="flex items-start justify-between mb-8">
           <div>
             <h1 className="text-3xl font-semibold mb-2" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
@@ -125,34 +185,83 @@ export function Projects() {
           </button>
         </div>
 
-        {/* Controls Bar */}
         <div className="bg-white rounded-lg p-4 mb-6 flex items-center gap-4 shadow-sm">
-          {/* Search */}
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
               type="text"
               placeholder="Search projects..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(event) => setSearchQuery(event.target.value)}
               className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7] focus:border-transparent"
             />
           </div>
 
-          {/* Filter */}
-          <button className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium">
-            <Filter className="w-4 h-4" />
-            Filter
-            <ChevronDown className="w-4 h-4" />
-          </button>
+          <div ref={filterRef} className="relative">
+            <button
+              onClick={() => {
+                setIsFilterOpen((previous) => !previous);
+                setIsSortOpen(false);
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium"
+            >
+              <Filter className="w-4 h-4" />
+              {filterLabels[statusFilter]}
+              <ChevronDown className={`w-4 h-4 transition-transform ${isFilterOpen ? 'rotate-180' : ''}`} />
+            </button>
 
-          {/* Sort */}
-          <button className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium">
-            Sort
-            <ChevronDown className="w-4 h-4" />
-          </button>
+            {isFilterOpen && (
+              <div className="absolute right-0 mt-2 w-44 rounded-lg border border-gray-200 bg-white py-2 shadow-lg z-20">
+                {(['all', 'Active', 'Completed', 'On Hold'] as StatusFilter[]).map((option) => (
+                  <button
+                    key={option}
+                    onClick={() => {
+                      setStatusFilter(option);
+                      setIsFilterOpen(false);
+                    }}
+                    className={`w-full px-4 py-2 text-left text-sm transition-colors ${
+                      statusFilter === option ? 'bg-[#204EA7]/10 text-[#204EA7]' : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    {filterLabels[option]}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
-          {/* View Toggle */}
+          <div ref={sortRef} className="relative">
+            <button
+              onClick={() => {
+                setIsSortOpen((previous) => !previous);
+                setIsFilterOpen(false);
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium"
+            >
+              {sortLabels[sortBy]}
+              <ChevronDown className={`w-4 h-4 transition-transform ${isSortOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {isSortOpen && (
+              <div className="absolute right-0 mt-2 w-48 rounded-lg border border-gray-200 bg-white py-2 shadow-lg z-20">
+                {(['default', 'name-asc', 'progress-desc', 'tasks-desc'] as SortOption[]).map((option) => (
+                  <button
+                    key={option}
+                    onClick={() => {
+                      setSortBy(option);
+                      setIsSortOpen(false);
+                    }}
+                    className={`w-full px-4 py-2 text-left text-sm transition-colors ${
+                      sortBy === option ? 'bg-[#204EA7]/10 text-[#204EA7]' : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    {sortLabels[option]}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="flex items-center gap-1 bg-gray-50 rounded-lg p-1">
             <button
               onClick={() => setViewMode('grid')}
@@ -169,7 +278,6 @@ export function Projects() {
           </div>
         </div>
 
-        {/* Projects Grid/List */}
         {filteredProjects.length === 0 ? (
           <div className="bg-white rounded-lg p-12 text-center shadow-sm">
             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -178,7 +286,7 @@ export function Projects() {
             <h3 className="text-lg font-semibold text-gray-900 mb-2" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
               No projects found
             </h3>
-            <p className="text-gray-600 mb-6">Create your first project to start tracking work</p>
+            <p className="text-gray-600 mb-6">Try adjusting your search, filter, or sort options.</p>
             <button className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#204EA7] text-white rounded-lg hover:bg-[#1a3d8a] transition-colors font-medium">
               <Plus className="w-5 h-5" />
               Create Project
@@ -191,7 +299,6 @@ export function Projects() {
                 key={project.id}
                 className="bg-white rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow cursor-pointer border border-transparent hover:border-[#204EA7]/20"
               >
-                {/* Header */}
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
                     <h3 className="text-lg font-semibold mb-1" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
@@ -206,10 +313,8 @@ export function Projects() {
                   </button>
                 </div>
 
-                {/* Description */}
                 <p className="text-sm text-gray-600 mb-4 line-clamp-2">{project.description}</p>
 
-                {/* Progress */}
                 <div className="mb-4">
                   <div className="flex items-center justify-between text-sm mb-2">
                     <span className="text-gray-600">Progress</span>
@@ -223,7 +328,6 @@ export function Projects() {
                   </div>
                 </div>
 
-                {/* Stats */}
                 <div className="flex items-center gap-4 mb-4 text-sm text-gray-600">
                   <div className="flex items-center gap-1.5">
                     <CheckSquare className="w-4 h-4" />
@@ -231,12 +335,11 @@ export function Projects() {
                   </div>
                 </div>
 
-                {/* Footer */}
                 <div className="flex items-center justify-between pt-4 border-t border-gray-100">
                   <div className="flex items-center -space-x-2">
-                    {project.team.map((member, idx) => (
+                    {project.team.map((member, index) => (
                       <div
-                        key={idx}
+                        key={index}
                         className="w-8 h-8 rounded-full bg-[#204EA7] flex items-center justify-center text-white text-xs font-semibold border-2 border-white"
                       >
                         {member}
@@ -301,9 +404,9 @@ export function Projects() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center -space-x-2">
-                          {project.team.slice(0, 3).map((member, idx) => (
+                          {project.team.slice(0, 3).map((member, index) => (
                             <div
-                              key={idx}
+                              key={index}
                               className="w-8 h-8 rounded-full bg-[#204EA7] flex items-center justify-center text-white text-xs font-semibold border-2 border-white"
                             >
                               {member}

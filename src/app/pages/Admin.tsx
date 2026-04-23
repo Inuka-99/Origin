@@ -9,7 +9,22 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Sidebar } from '../components/Sidebar';
 import { TopBar } from '../components/TopBar';
-import { Shield, Users, UserCheck, UserX, Search, RefreshCw } from 'lucide-react';
+import {
+  Shield,
+  Users,
+  UserCheck,
+  UserX,
+  Search,
+  RefreshCw,
+  Database,
+  ShieldCheck,
+  HardDriveDownload,
+  AlertTriangle,
+  Activity,
+  ArchiveRestore,
+  Clock3,
+  CheckCircle2,
+} from 'lucide-react';
 import { useApiClient } from '../lib/api-client';
 
 interface UserProfile {
@@ -20,6 +35,77 @@ interface UserProfile {
   role: 'admin' | 'member';
   created_at: string;
 }
+
+const integrityOverview = [
+  {
+    label: 'Backup Coverage',
+    value: '99.98%',
+    detail: 'Nightly snapshots and hourly incrementals are healthy.',
+    icon: HardDriveDownload,
+    tone: 'bg-blue-100 text-blue-700',
+  },
+  {
+    label: 'Consistency Checks',
+    value: '12/12',
+    detail: 'Schema, foreign key, and orphan record checks passed.',
+    icon: ShieldCheck,
+    tone: 'bg-emerald-100 text-emerald-700',
+  },
+  {
+    label: 'Replication Lag',
+    value: '1.2s',
+    detail: 'Replica sync remains within the recovery target window.',
+    icon: Activity,
+    tone: 'bg-amber-100 text-amber-700',
+  },
+  {
+    label: 'Open Anomalies',
+    value: '2',
+    detail: 'Two low-risk integrity warnings are queued for review.',
+    icon: AlertTriangle,
+    tone: 'bg-rose-100 text-rose-700',
+  },
+];
+
+const protectionControls = [
+  {
+    title: 'Automated Backups',
+    description: 'Protect against accidental deletes and incomplete writes.',
+    items: ['Hourly incremental snapshots', 'Nightly full backup retention for 30 days', 'Weekly cold storage archive'],
+  },
+  {
+    title: 'Consistency Rules',
+    description: 'Catch broken relationships before they impact live workflows.',
+    items: ['Foreign key drift validation', 'Duplicate record detection', 'Task/project membership reconciliation'],
+  },
+];
+
+const restorePoints = [
+  { label: 'Latest Snapshot', timestamp: 'Today, 7:10 PM', status: 'Ready' },
+  { label: 'Pre-deploy Restore Point', timestamp: 'Today, 5:30 PM', status: 'Ready' },
+  { label: 'Daily Archive', timestamp: 'April 16, 2026 11:59 PM', status: 'Stored' },
+];
+
+const integrityEvents = [
+  {
+    title: 'Orphan task references detected',
+    meta: 'Project membership validator • 18 minutes ago',
+    severity: 'Medium',
+    status: 'Needs review',
+  },
+  {
+    title: 'Backup verification completed',
+    meta: 'Snapshot checksum job • 42 minutes ago',
+    severity: 'Low',
+    status: 'Resolved',
+  },
+  {
+    title: 'Schema drift audit passed',
+    meta: 'Deployment gatekeeper • 2 hours ago',
+    severity: 'Low',
+    status: 'Resolved',
+  },
+];
 
 export function Admin() {
   const api = useApiClient();
@@ -124,6 +210,170 @@ export function Admin() {
             </div>
           </div>
         </div>
+
+        <section className="mb-6 overflow-hidden rounded-2xl border border-[#204EA7]/10 bg-gradient-to-r from-[#203D70] via-[#204EA7] to-[#2E6BE6] p-6 text-white shadow-sm">
+          <div className="flex items-start justify-between gap-6">
+            <div className="max-w-2xl">
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-medium uppercase tracking-[0.2em] text-white/90">
+                <Database className="w-3.5 h-3.5" />
+                System Integrity
+              </div>
+              <h2
+                className="mb-2 text-2xl font-semibold"
+                style={{ fontFamily: 'Space Grotesk, sans-serif' }}
+              >
+                Prevent data loss and keep database state consistent
+              </h2>
+              <p className="max-w-xl text-sm leading-6 text-white/80">
+                Monitor backup health, identify integrity drift, and prepare recovery workflows before issues reach production data.
+              </p>
+            </div>
+
+            <div className="grid min-w-[260px] grid-cols-2 gap-3">
+              <div className="rounded-xl border border-white/15 bg-white/10 p-4 backdrop-blur-sm">
+                <div className="mb-1 text-xs uppercase tracking-wide text-white/60">Recovery Target</div>
+                <div className="text-2xl font-semibold">15 min</div>
+                <div className="text-xs text-white/70">Maximum acceptable point-in-time loss</div>
+              </div>
+              <div className="rounded-xl border border-white/15 bg-white/10 p-4 backdrop-blur-sm">
+                <div className="mb-1 text-xs uppercase tracking-wide text-white/60">Last Audit</div>
+                <div className="text-2xl font-semibold">7:12 PM</div>
+                <div className="text-xs text-white/70">Integrity monitor completed successfully</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="mb-6">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+                Data Integrity
+              </h2>
+              <p className="text-sm text-gray-500">Early-warning signals and protection controls for workspace data.</p>
+            </div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Monitoring Active
+            </div>
+          </div>
+
+          <div className="grid grid-cols-4 gap-4 mb-6">
+            {integrityOverview.map((item) => (
+              <div key={item.label} className="rounded-xl bg-white p-5 shadow-sm border border-gray-100">
+                <div className="mb-4 flex items-center justify-between">
+                  <div className={`rounded-lg p-2.5 ${item.tone}`}>
+                    <item.icon className="w-5 h-5" />
+                  </div>
+                  <span className="text-[11px] font-medium uppercase tracking-wide text-gray-400">Live</span>
+                </div>
+                <div className="mb-1 text-sm text-gray-500">{item.label}</div>
+                <div className="mb-2 text-2xl font-semibold text-gray-900" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+                  {item.value}
+                </div>
+                <p className="text-sm leading-5 text-gray-500">{item.detail}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-[1.15fr_0.85fr] gap-6">
+            <div className="rounded-xl bg-white p-6 shadow-sm border border-gray-100">
+              <div className="mb-5 flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+                    Protection Controls
+                  </h3>
+                  <p className="text-sm text-gray-500">Core safeguards that preserve data integrity across the workspace.</p>
+                </div>
+                <button className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+                  Review Policies
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {protectionControls.map((control) => (
+                  <div key={control.title} className="rounded-xl border border-gray-100 bg-gray-50/80 p-4">
+                    <div className="mb-1 text-base font-semibold text-gray-900">{control.title}</div>
+                    <div className="mb-3 text-sm text-gray-500">{control.description}</div>
+                    <div className="flex flex-wrap gap-2">
+                      {control.items.map((item) => (
+                        <span
+                          key={item}
+                          className="inline-flex items-center rounded-full bg-white px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200"
+                        >
+                          {item}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <div className="rounded-xl bg-white p-6 shadow-sm border border-gray-100">
+                <div className="mb-4 flex items-center gap-2">
+                  <ArchiveRestore className="w-5 h-5 text-[#204EA7]" />
+                  <h3 className="text-lg font-semibold text-gray-900" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+                    Recovery Readiness
+                  </h3>
+                </div>
+                <div className="space-y-3">
+                  {restorePoints.map((point) => (
+                    <div key={point.label} className="flex items-center justify-between rounded-lg border border-gray-100 px-4 py-3">
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">{point.label}</div>
+                        <div className="text-xs text-gray-500">{point.timestamp}</div>
+                      </div>
+                      <span className="rounded-full bg-[#204EA7]/10 px-2.5 py-1 text-[11px] font-medium text-[#204EA7]">
+                        {point.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 flex gap-3">
+                  <button className="flex-1 rounded-lg bg-[#204EA7] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#1a3d8a] transition-colors">
+                    Run Restore Drill
+                  </button>
+                  <button className="flex-1 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+                    Export Audit Log
+                  </button>
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-white p-6 shadow-sm border border-gray-100">
+                <div className="mb-4 flex items-center gap-2">
+                  <Clock3 className="w-5 h-5 text-[#204EA7]" />
+                  <h3 className="text-lg font-semibold text-gray-900" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+                    Recent Integrity Events
+                  </h3>
+                </div>
+                <div className="space-y-3">
+                  {integrityEvents.map((event) => (
+                    <div key={event.title} className="rounded-lg border border-gray-100 px-4 py-3">
+                      <div className="mb-1 flex items-center justify-between gap-3">
+                        <div className="text-sm font-medium text-gray-900">{event.title}</div>
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                            event.status === 'Needs review'
+                              ? 'bg-amber-100 text-amber-700'
+                              : 'bg-emerald-100 text-emerald-700'
+                          }`}
+                        >
+                          {event.status}
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-500">{event.meta}</div>
+                      <div className="mt-2 text-xs font-medium uppercase tracking-wide text-gray-400">
+                        Severity: {event.severity}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
 
         {/* User Management Table */}
         <div className="bg-white rounded-lg shadow-sm">

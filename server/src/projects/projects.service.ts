@@ -72,8 +72,13 @@ export class ProjectsService {
   }
 
   /** List all projects the user is a member of. Admins see all projects. */
-  async listForUser(userId: string, userRole: string): Promise<Project[]> {
+  async listForUser(
+    userId: string,
+    userRole: string,
+    search?: string,
+  ): Promise<Project[]> {
     const client = this.supabase.getClient();
+    const normalizedSearch = search?.trim().toLowerCase();
 
     if (userRole === 'admin') {
       // Global admins see all projects
@@ -83,7 +88,7 @@ export class ProjectsService {
         .order('created_at', { ascending: false });
 
       if (error) throw new BadRequestException(error.message);
-      return (data ?? []) as Project[];
+      return this.filterProjectsBySearch((data ?? []) as Project[], normalizedSearch);
     }
 
     // Regular members see only projects they belong to
@@ -102,7 +107,7 @@ export class ProjectsService {
       .order('created_at', { ascending: false });
 
     if (error) throw new BadRequestException(error.message);
-    return (data ?? []) as Project[];
+    return this.filterProjectsBySearch((data ?? []) as Project[], normalizedSearch);
   }
 
   /** Get a single project by ID. */
@@ -213,5 +218,17 @@ export class ProjectsService {
     if (!data || data.role !== 'admin') {
       throw new ForbiddenException('Only project admins can perform this action');
     }
+  }
+
+  private filterProjectsBySearch(projects: Project[], search?: string): Project[] {
+    if (!search) {
+      return projects;
+    }
+
+    return projects.filter((project) => {
+      const name = project.name.toLowerCase();
+      const description = project.description?.toLowerCase() ?? '';
+      return name.includes(search) || description.includes(search);
+    });
   }
 }

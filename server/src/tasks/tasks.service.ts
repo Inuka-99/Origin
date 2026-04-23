@@ -36,6 +36,11 @@ export interface UpdateTaskDto {
   due_date?: string | null;
 }
 
+export type TaskSortOption = 'default' | 'title-asc' | 'due-asc' | 'priority-desc';
+export type TaskStatusFilter = 'all' | 'To Do' | 'In Progress' | 'In Review' | 'Done';
+export type TaskPriorityFilter = 'all' | 'High' | 'Medium' | 'Low';
+export type TaskDueDateFilter = 'all' | 'today' | 'upcoming' | 'overdue' | 'no-date';
+
 @Injectable()
 export class TasksService {
   constructor(private readonly supabase: SupabaseService) {}
@@ -90,7 +95,21 @@ export class TasksService {
     return data as Task;
   }
 
-  async listForUser(userId: string, userRole: string): Promise<Task[]> {
+  async listForUser(
+    userId: string,
+    userRole: string,
+    search?: string,
+    status: TaskStatusFilter = 'all',
+    priority: TaskPriorityFilter = 'all',
+    dueDate: TaskDueDateFilter = 'all',
+    sortBy: TaskSortOption = 'default',
+  ): Promise<Task[]> {
+    const normalizedSearch = search?.trim().toLowerCase();
+    const normalizedStatus = this.normalizeStatusFilter(status);
+    const normalizedPriority = this.normalizePriorityFilter(priority);
+    const normalizedDueDate = this.normalizeDueDateFilter(dueDate);
+    const normalizedSort = this.normalizeSortOption(sortBy);
+
     if (userRole === 'admin') {
       const { data, error } = await this.client
         .from('tasks')
@@ -98,7 +117,14 @@ export class TasksService {
         .order('created_at', { ascending: false });
 
       if (error) throw new BadRequestException(error.message);
-      return (data ?? []) as Task[];
+      const filteredTasks = this.filterTasks(
+        (data ?? []) as Task[],
+        normalizedSearch,
+        normalizedStatus,
+        normalizedPriority,
+        normalizedDueDate,
+      );
+      return this.sortTasks(filteredTasks, normalizedSort);
     }
 
     const { data: memberships, error: mError } = await this.client
@@ -120,7 +146,14 @@ export class TasksService {
 
     const { data, error } = await query;
     if (error) throw new BadRequestException(error.message);
-    return (data ?? []) as Task[];
+    const filteredTasks = this.filterTasks(
+      (data ?? []) as Task[],
+      normalizedSearch,
+      normalizedStatus,
+      normalizedPriority,
+      normalizedDueDate,
+    );
+    return this.sortTasks(filteredTasks, normalizedSort);
   }
 
   async getById(id: string, userId: string, userRole: string): Promise<Task> {
@@ -272,5 +305,171 @@ export class TasksService {
     if (!data || data.role !== 'admin') {
       throw new ForbiddenException('Only project admins can perform this action');
     }
+  }
+
+  private filterTasks(
+    tasks: Task[],
+    search?: string,
+    status: TaskStatusFilter = 'all',
+    priority: TaskPriorityFilter = 'all',
+    dueDate: TaskDueDateFilter = 'all',
+  ): Task[] {
+    return tasks.filter((task) => {
+      const title = task.title.toLowerCase();
+      const description = task.description?.toLowerCase() ?? '';
+      const matchesSearch = !search || title.includes(search) || description.includes(search);
+      const matchesStatus = status === 'all' || task.status === status;
+      const matchesPriority =
+        priority === 'all' || this.normalizePriorityValue(task.priority) === priority.toLowerCase();
+      const matchesDueDate = this.matchesDueDateFilter(task.due_date, dueDate);
+
+      return matchesSearch && matchesStatus && matchesPriority && matchesDueDate;
+    });
+  }
+
+  private normalizeStatusFilter(status?: string): TaskStatusFilter {
+    if (!status) {
+      return 'all';
+    }
+
+    const supportedStatusFilters: TaskStatusFilter[] = [
+      'all',
+      'To Do',
+      'In Progress',
+      'In Review',
+      'Done',
+    ];
+
+    if (!supportedStatusFilters.includes(status as TaskStatusFilter)) {
+      throw new BadRequestException(`Invalid task status filter: ${status}`);
+    }
+
+    return status as TaskStatusFilter;
+  }
+
+  private normalizePriorityFilter(priority?: string): TaskPriorityFilter {
+    if (!priority) {
+      return 'all';
+    }
+
+    const supportedPriorityFilters: TaskPriorityFilter[] = [
+      'all',
+      'High',
+      'Medium',
+      'Low',
+    ];
+
+    if (!supportedPriorityFilters.includes(priority as TaskPriorityFilter)) {
+      throw new BadRequestException(`Invalid task priority filter: ${priority}`);
+    }
+
+    return priority as TaskPriorityFilter;
+  }
+
+  private normalizeDueDateFilter(dueDate?: string): TaskDueDateFilter {
+    if (!dueDate) {
+      return 'all';
+    }
+
+    const supportedDueDateFilters: TaskDueDateFilter[] = [
+      'all',
+      'today',
+      'upcoming',
+      'overdue',
+      'no-date',
+    ];
+
+    if (!supportedDueDateFilters.includes(dueDate as TaskDueDateFilter)) {
+      throw new BadRequestException(`Invalid task due date filter: ${dueDate}`);
+    }
+
+    return dueDate as TaskDueDateFilter;
+  }
+
+  private normalizeSortOption(sortBy?: string): TaskSortOption {
+    if (!sortBy) {
+      return 'default';
+    }
+
+    const supportedSortOptions: TaskSortOption[] = [
+      'default',
+      'title-asc',
+      'due-asc',
+      'priority-desc',
+    ];
+
+    if (!supportedSortOptions.includes(sortBy as TaskSortOption)) {
+      throw new BadRequestException(`Invalid task sort option: ${sortBy}`);
+    }
+
+    return sortBy as TaskSortOption;
+  }
+
+  private normalizePriorityValue(priority?: string): string {
+    return priority?.trim().toLowerCase() ?? '';
+  }
+
+  private matchesDueDateFilter(dueDate: string | null, filter: TaskDueDateFilter): boolean {
+    if (filter === 'all') {
+      return true;
+    }
+
+    if (filter === 'no-date') {
+      return !dueDate;
+    }
+
+    if (!dueDate) {
+      return false;
+    }
+
+    const dueDateKey = dueDate.slice(0, 10);
+    const today = new Date();
+    const todayKey = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+      .toISOString()
+      .slice(0, 10);
+
+    if (filter === 'today') {
+      return dueDateKey === todayKey;
+    }
+
+    if (filter === 'upcoming') {
+      return dueDateKey > todayKey;
+    }
+
+    if (filter === 'overdue') {
+      return dueDateKey < todayKey;
+    }
+
+    return true;
+  }
+
+  private sortTasks(tasks: Task[], sortBy: TaskSortOption): Task[] {
+    if (sortBy === 'default') {
+      return tasks;
+    }
+
+    const priorityRank: Record<string, number> = {
+      high: 0,
+      medium: 1,
+      low: 2,
+    };
+
+    return [...tasks].sort((left, right) => {
+      switch (sortBy) {
+        case 'title-asc':
+          return left.title.localeCompare(right.title);
+        case 'due-asc': {
+          if (!left.due_date && !right.due_date) return 0;
+          if (!left.due_date) return 1;
+          if (!right.due_date) return -1;
+          return new Date(left.due_date).getTime() - new Date(right.due_date).getTime();
+        }
+        case 'priority-desc':
+          return (priorityRank[left.priority] ?? Number.MAX_SAFE_INTEGER)
+            - (priorityRank[right.priority] ?? Number.MAX_SAFE_INTEGER);
+        default:
+          return 0;
+      }
+    });
   }
 }
