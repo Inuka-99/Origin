@@ -88,4 +88,19 @@ export class TasksController {
     await this.tasksService.delete(id, user.userId, role);
     return { deleted: true };
   }
+
+  /**
+   * Assign a task to a team member
+   * PATCH /tasks/:id/assign
+   * Body: { userId: string | null }  — pass null to unassign
+   */
+  @Patch(':id/assign')
+  async assign(
+    @Param('id') id: string,
+    @Body('userId') assigneeId: string | null,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const role = await this.getUserRole(user.userId);
+    return this.tasksService.assignTask(id, assigneeId, user.userId, role);
+  }
 }

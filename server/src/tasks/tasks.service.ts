@@ -1,8 +1,9 @@
-﻿import {
+import {
   Injectable,
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import { SupabaseService } from '../supabase';
 
@@ -14,6 +15,7 @@ export interface Task {
   status: string;
   priority: string;
   due_date: string | null;
+  assigned_to: string | null; // User ID of the assigned team member
   assignee_id: string | null;
   created_by: string | null;
   created_at: string;
@@ -27,6 +29,7 @@ export interface CreateTaskDto {
   status?: 'todo' | 'in_progress' | 'In Review' | 'Done' | 'completed';
   priority?: 'High' | 'Medium' | 'Low';
   due_date?: string;
+  assigned_to?: string | null; // User ID to assign the task to on creation
   assignee_id?: string | null;
 }
 
@@ -36,15 +39,27 @@ export interface UpdateTaskDto {
   status?: 'todo' | 'in_progress' | 'In Review' | 'Done' | 'completed';
   priority?: 'High' | 'Medium' | 'Low';
   due_date?: string | null;
+  assigned_to?: string | null; // User ID to assign (or null to unassign)
   assignee_id?: string | null;
 }
 
 @Injectable()
 export class TasksService {
+  private readonly logger = new Logger(TasksService.name);
+
   constructor(private readonly supabase: SupabaseService) {}
 
   private get client() {
     return this.supabase.getClient();
+  }
+
+  private async broadcastTaskEvent(event: string, payload: unknown): Promise<void> {
+    try {
+      const channel = this.client.channel('tasks');
+      await channel.send({ type: 'broadcast', event, payload });
+    } catch (error) {
+      this.logger.warn(`Realtime broadcast failed for ${event}: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   async create(dto: CreateTaskDto, userId: string): Promise<Task> {
@@ -55,6 +70,25 @@ export class TasksService {
       }
     }
 
+    const convertStatus = (status: string): string => {
+      const normalized = status.trim().toLowerCase();
+      const statusMap: Record<string, string> = {
+        'to do': 'todo',
+        'todo': 'todo',
+        'to_do': 'todo',
+        'in progress': 'in_progress',
+        'in_progress': 'in_progress',
+        'in-progress': 'in_progress',
+        'in review': 'In Review',
+        'in_review': 'In Review',
+        'review': 'In Review',
+        'done': 'Done',
+      };
+      const result = statusMap[normalized];
+      if (!result) {
+        throw new BadRequestException(`Invalid task status: ${status}`);
+      }
+      return result;
     const insertPayload: Partial<Task> = {
       project_id: dto.project_id ?? null,
       title: dto.title,
@@ -67,6 +101,16 @@ export class TasksService {
 
     const { data, error } = await this.client
       .from('tasks')
+      .insert({
+        project_id: dto.project_id ?? null,
+        title: dto.title,
+        description: dto.description ?? null,
+        status: convertStatus(dto.status ?? 'To Do'),
+        priority: (dto.priority ?? 'Medium').toLowerCase(),
+        due_date: dto.due_date ?? null,
+        assigned_to: dto.assigned_to ?? null,
+        created_by: userId,
+      })
       .insert(insertPayload)
       .select('*')
       .single();
@@ -75,6 +119,8 @@ export class TasksService {
       throw new BadRequestException(error?.message ?? 'Unable to create task');
     }
 
+    await this.broadcastTaskEvent('task:created', data);
+    return data as Task;
     const task = data as Task;
 
     if (dto.assignee_id) {
@@ -234,6 +280,23 @@ export class TasksService {
       await this.assertProjectAdmin(task.project_id, userId);
     }
 
+    const updatePayload: any = { ...dto };
+    if (updatePayload.status) {
+      const normalized = updatePayload.status.trim().toLowerCase();
+      const statusMap: Record<string, string> = {
+        'to do': 'todo',
+        'todo': 'todo',
+        'to_do': 'todo',
+        'in progress': 'in_progress',
+        'in_progress': 'in_progress',
+        'in-progress': 'in_progress',
+        'in review': 'In Review',
+        'in_review': 'In Review',
+        'review': 'In Review',
+        'done': 'Done',
+      };
+      if (!statusMap[normalized]) {
+        throw new BadRequestException(`Invalid task status: ${updatePayload.status}`);
     // Validate assignee is a project member if assigning to a project task
     if (dto.assignee_id !== undefined && task.project_id) {
       if (dto.assignee_id) {
@@ -259,6 +322,8 @@ export class TasksService {
       throw new BadRequestException(error?.message ?? 'Update failed');
     }
 
+    await this.broadcastTaskEvent('task:updated', data);
+    return data as Task;
     const updatedTask = data as Task;
 
     if (assignmentUserId !== undefined && task.project_id) {
@@ -314,6 +379,20 @@ export class TasksService {
     if (error) {
       throw new BadRequestException(error.message);
     }
+
+    await this.broadcastTaskEvent('task:deleted', { id });
+  }
+
+  /**
+   * Assign a task to a team member (or unassign by passing null)
+   */
+  async assignTask(
+    id: string,
+    assigneeId: string | null,
+    userId: string,
+    userRole: string,
+  ): Promise<Task> {
+    return this.update(id, { assigned_to: assigneeId }, userId, userRole);
   }
 
   private async assertProjectMember(projectId: string, userId: string): Promise<void> {

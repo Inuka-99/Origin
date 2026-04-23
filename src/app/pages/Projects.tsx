@@ -1,5 +1,6 @@
 import { Sidebar } from '../components/Sidebar';
 import { TopBar } from '../components/TopBar';
+import { useNavigate } from 'react-router';
 import { Search, Filter, ChevronDown, Plus, Grid3x3, List, Users, Calendar, MoreVertical, CheckSquare, Loader2, Trash2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useProjects, useProjectMembers, type Project as ApiProject, type ProjectMember } from '../lib/useProjects';
@@ -18,6 +19,7 @@ interface Project extends ApiProject {
 
 
 export function Projects() {
+  const navigate = useNavigate();
   const { projects: apiProjects, loading, error, createProject, updateProject, deleteProject, refetch } = useProjects();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
@@ -299,6 +301,7 @@ export function Projects() {
             {filteredProjects.map((project) => (
               <div
                 key={project.id}
+                onClick={() => navigate('/project-board')}
                 onClick={() => {
                   setSelectedProject(project);
                   setShowMembersModal(true);

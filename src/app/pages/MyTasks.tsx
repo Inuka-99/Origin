@@ -1,8 +1,9 @@
 import { Sidebar } from '../components/Sidebar';
 import { TopBar } from '../components/TopBar';
 import { Search, Filter, ChevronDown, Plus, Calendar, AlertCircle, CheckCircle2, Circle, Trash2, Edit3 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useApiClient } from '../lib/api-client';
+import { useTaskRealtime } from '../lib/use-task-realtime';
 
 interface Task {
   id: string;
@@ -18,14 +19,14 @@ interface Task {
 type ApiTask = {
   id: string;
   title: string;
+  description: string | null;
   project_id: string | null;
   status: 'todo' | 'in_progress' | 'In Review' | 'Done' | 'completed' | null;
   priority: 'High' | 'Medium' | 'Low';
   due_date: string | null;
   assignee_id: string | null;
+  assigned_to: string | null;
 };
-
-const [initial] = [] as Task[]; // placeholder
 
 export function MyTasks() {
   const api = useApiClient();
@@ -140,6 +141,37 @@ export function MyTasks() {
     }
   };
 
+  const handleTaskCreated = useCallback((task: ApiTask) => {
+    setTasks((prev) => {
+      if (prev.some((item) => item.id === task.id)) return prev;
+      return [...prev, normalizeTask(task)];
+    });
+  }, [projects]);
+
+  const handleTaskUpdated = useCallback((task: ApiTask) => {
+    setTasks((prev) => {
+      const normalizedTask = normalizeTask(task);
+      let found = false;
+      const updatedTasks = prev.map((item) => {
+        if (item.id === task.id) {
+          found = true;
+          return normalizedTask;
+        }
+        return item;
+      });
+      return found ? updatedTasks : [...updatedTasks, normalizedTask];
+    });
+  }, [projects]);
+
+  const handleTaskDeleted = useCallback((payload: { id: string }) => {
+    setTasks((prev) => prev.filter((task) => task.id !== payload.id));
+  }, []);
+
+  useTaskRealtime({
+    onCreated: handleTaskCreated,
+    onUpdated: handleTaskUpdated,
+    onDeleted: handleTaskDeleted,
+  });
   const loadProjectMembers = async (projectId: string) => {
     if (!projectId || projectMembers[projectId]) return;
     try {
