@@ -30,4 +30,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // refreshes, you can switch to `cacheLocation="localstorage"`.
     >
       {children}
+    </Auth0Provider>
+  );
+}
    

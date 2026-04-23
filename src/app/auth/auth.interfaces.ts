@@ -45,4 +45,13 @@ export function getAuth0Config(): Auth0Config {
         'are set in your .env file at the project root.'
     );
   }
-
+
+  return {
+    domain,
+    clientId,
+    audience,
+    apiUrl: apiUrl || 'http://localhost:3000',
+    redirectUri,
+  };
+}
+
