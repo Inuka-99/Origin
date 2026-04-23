@@ -1,13 +1,35 @@
 import { Sidebar } from '../components/Sidebar';
 import { TopBar } from '../components/TopBar';
-import { User, Building2, Bell, Palette, Shield, Key, Globe, Mail, Moon, Sun } from 'lucide-react';
+import { GoogleCalendarCard } from '../components/GoogleCalendarCard';
+import { User, Building2, Bell, Palette, Shield, Key, Globe, Mail, Moon, Sun, Plug } from 'lucide-react';
 import { useState } from 'react';
+
+type TabKey = 'profile' | 'workspace' | 'notifications' | 'appearance' | 'security' | 'integrations';
+
+const TABS: { key: TabKey; label: string; Icon: typeof User }[] = [
+  { key: 'profile',       label: 'Profile Settings',    Icon: User },
+  { key: 'workspace',     label: 'Workspace Settings',  Icon: Building2 },
+  { key: 'notifications', label: 'Notifications',       Icon: Bell },
+  { key: 'appearance',    label: 'Appearance',          Icon: Palette },
+  { key: 'security',      label: 'Security & Privacy',  Icon: Shield },
+  { key: 'integrations',  label: 'Integrations',        Icon: Plug },
+];
 
 export function Settings() {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [pushNotifications, setPushNotifications] = useState(true);
   const [taskReminders, setTaskReminders] = useState(true);
+
+  // Read ?tab= from URL on mount so the backend can deep-link (e.g. after
+  // OAuth redirect) straight to the Integrations tab.
+  const initialTab: TabKey = (() => {
+    const t = new URLSearchParams(window.location.search).get('tab') as TabKey | null;
+    if (t && TABS.some((x) => x.key === t)) return t;
+    if (new URLSearchParams(window.location.search).get('google')) return 'integrations';
+    return 'profile';
+  })();
+  const [activeTab, setActiveTab] = useState<TabKey>(initialTab);
 
   return (
     <div className="min-h-screen bg-[#F7F8FA]">
@@ -28,32 +50,32 @@ export function Settings() {
           {/* Sidebar Navigation */}
           <div className="lg:col-span-1">
             <div className="bg-white rounded-lg shadow-sm p-2">
-              <button className="w-full flex items-center gap-3 px-4 py-3 text-left bg-[#204EA7]/10 text-[#204EA7] rounded-lg font-medium mb-1">
-                <User className="w-5 h-5" />
-                Profile Settings
-              </button>
-              <button className="w-full flex items-center gap-3 px-4 py-3 text-left text-gray-700 hover:bg-gray-50 rounded-lg font-medium mb-1">
-                <Building2 className="w-5 h-5" />
-                Workspace Settings
-              </button>
-              <button className="w-full flex items-center gap-3 px-4 py-3 text-left text-gray-700 hover:bg-gray-50 rounded-lg font-medium mb-1">
-                <Bell className="w-5 h-5" />
-                Notifications
-              </button>
-              <button className="w-full flex items-center gap-3 px-4 py-3 text-left text-gray-700 hover:bg-gray-50 rounded-lg font-medium mb-1">
-                <Palette className="w-5 h-5" />
-                Appearance
-              </button>
-              <button className="w-full flex items-center gap-3 px-4 py-3 text-left text-gray-700 hover:bg-gray-50 rounded-lg font-medium">
-                <Shield className="w-5 h-5" />
-                Security & Privacy
-              </button>
+              {TABS.map(({ key, label, Icon }, i) => {
+                const isActive = activeTab === key;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => setActiveTab(key)}
+                    className={[
+                      'w-full flex items-center gap-3 px-4 py-3 text-left rounded-lg font-medium',
+                      i < TABS.length - 1 ? 'mb-1' : '',
+                      isActive
+                        ? 'bg-[#204EA7]/10 text-[#204EA7]'
+                        : 'text-gray-700 hover:bg-gray-50',
+                    ].join(' ')}
+                  >
+                    <Icon className="w-5 h-5" />
+                    {label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           {/* Main Settings Content */}
           <div className="lg:col-span-2 space-y-6">
             {/* Profile Settings */}
+            {activeTab === 'profile' && (
             <div className="bg-white rounded-lg shadow-sm p-6">
               <div className="flex items-center gap-4 mb-6">
                 <User className="w-6 h-6 text-[#204EA7]" />
@@ -132,8 +154,10 @@ export function Settings() {
                 Save Changes
               </button>
             </div>
+            )}
 
             {/* Workspace Settings */}
+            {activeTab === 'workspace' && (
             <div className="bg-white rounded-lg shadow-sm p-6">
               <div className="flex items-center gap-4 mb-6">
                 <Building2 className="w-6 h-6 text-[#204EA7]" />
@@ -192,8 +216,10 @@ export function Settings() {
                 Update Workspace
               </button>
             </div>
+            )}
 
             {/* Notifications */}
+            {activeTab === 'notifications' && (
             <div className="bg-white rounded-lg shadow-sm p-6">
               <div className="flex items-center gap-4 mb-6">
                 <Bell className="w-6 h-6 text-[#204EA7]" />
@@ -264,8 +290,10 @@ export function Settings() {
                 </div>
               </div>
             </div>
+            )}
 
             {/* Appearance */}
+            {activeTab === 'appearance' && (
             <div className="bg-white rounded-lg shadow-sm p-6">
               <div className="flex items-center gap-4 mb-6">
                 <Palette className="w-6 h-6 text-[#204EA7]" />
@@ -308,8 +336,10 @@ export function Settings() {
                 </div>
               </div>
             </div>
+            )}
 
             {/* Security & Privacy */}
+            {activeTab === 'security' && (
             <div className="bg-white rounded-lg shadow-sm p-6">
               <div className="flex items-center gap-4 mb-6">
                 <Shield className="w-6 h-6 text-[#204EA7]" />
@@ -359,6 +389,25 @@ export function Settings() {
                 </div>
               </div>
             </div>
+            )}
+
+            {/* Integrations */}
+            {activeTab === 'integrations' && (
+            <div id="integrations" className="space-y-6">
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <div className="flex items-center gap-4 mb-4">
+                  <Plug className="w-6 h-6 text-[#204EA7]" />
+                  <h2 className="text-xl font-semibold" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
+                    Integrations
+                  </h2>
+                </div>
+                <p className="text-sm text-gray-600">
+                  Connect Origin to your external tools. Only Google Calendar is available right now.
+                </p>
+              </div>
+              <GoogleCalendarCard />
+            </div>
+            )}
           </div>
         </div>
       </main>

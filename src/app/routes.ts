@@ -12,6 +12,7 @@ import { Projects } from './pages/Projects';
 import { ProjectsMobile } from './pages/ProjectsMobile';
 import { ProjectBoard } from './pages/ProjectBoard';
 import { ProjectBoardMobile } from './pages/ProjectBoardMobile';
+import { ProjectDetails } from './pages/ProjectDetails';
 import { MyTasks } from './pages/MyTasks';
 import { MyTasksMobile } from './pages/MyTasksMobile';
 import { Calendar } from './pages/CalendarPage';
@@ -23,6 +24,8 @@ import { ChatMobile } from './pages/ChatMobile';
 import { Settings } from './pages/Settings';
 import { SettingsMobile } from './pages/SettingsMobile';
 import { Admin } from './pages/Admin';
+import { ActivityLog } from './pages/ActivityLog';
+import { ActivityLogMobile } from './pages/ActivityLogMobile';
 
 export const router = createBrowserRouter([
   // ─── Public routes (no auth required) ────────────────────────────
@@ -74,6 +77,10 @@ export const router = createBrowserRouter([
         Component: Projects,
       },
       {
+        path: '/projects/:projectId',
+        Component: ProjectDetails,
+      },
+      {
         path: '/projects-mobile',
         Component: ProjectsMobile,
       },
@@ -120,6 +127,14 @@ export const router = createBrowserRouter([
       {
         path: '/settings',
         Component: Settings,
+      },
+      {
+        path: '/activity-log',
+        Component: ActivityLog,
+      },
+      {
+        path: '/activity-log-mobile',
+        Component: ActivityLogMobile,
       },
       {
         path: '/admin',

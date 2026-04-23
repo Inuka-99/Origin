@@ -19,6 +19,7 @@ const menuItems: MenuItem[] = [
   { icon: MessageSquare, label: 'Messages', path: '/messages', badge: 3 },
   { icon: Calendar, label: 'Calendar', path: '/calendar' },
   { icon: Users, label: 'Team', path: '/team' },
+  { icon: Activity, label: 'Activity Log', path: '/activity-log' },
   { icon: Shield, label: 'Admin', path: '/admin', adminOnly: true },
   { icon: Settings, label: 'Settings', path: '/settings' },
 ];
