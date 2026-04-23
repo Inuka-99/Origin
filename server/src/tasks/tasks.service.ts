@@ -16,6 +16,7 @@ export interface Task {
   priority: string;
   due_date: string | null;
   assigned_to: string | null; // User ID of the assigned team member
+  assignee_id: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -25,19 +26,21 @@ export interface CreateTaskDto {
   project_id?: string | null;
   title: string;
   description?: string;
-  status?: 'To Do' | 'In Progress' | 'In Review' | 'Done';
+  status?: 'todo' | 'in_progress' | 'In Review' | 'Done' | 'completed';
   priority?: 'High' | 'Medium' | 'Low';
   due_date?: string;
   assigned_to?: string | null; // User ID to assign the task to on creation
+  assignee_id?: string | null;
 }
 
 export interface UpdateTaskDto {
   title?: string;
   description?: string | null;
-  status?: 'To Do' | 'In Progress' | 'In Review' | 'Done';
+  status?: 'todo' | 'in_progress' | 'In Review' | 'Done' | 'completed';
   priority?: 'High' | 'Medium' | 'Low';
   due_date?: string | null;
   assigned_to?: string | null; // User ID to assign (or null to unassign)
+  assignee_id?: string | null;
 }
 
 @Injectable()
@@ -62,6 +65,9 @@ export class TasksService {
   async create(dto: CreateTaskDto, userId: string): Promise<Task> {
     if (dto.project_id) {
       await this.assertProjectMember(dto.project_id, userId);
+      if (dto.assignee_id) {
+        await this.assertProjectMember(dto.project_id, dto.assignee_id);
+      }
     }
 
     const convertStatus = (status: string): string => {
@@ -83,6 +89,14 @@ export class TasksService {
         throw new BadRequestException(`Invalid task status: ${status}`);
       }
       return result;
+    const insertPayload: Partial<Task> = {
+      project_id: dto.project_id ?? null,
+      title: dto.title,
+      description: dto.description ?? null,
+      status: dto.status ?? 'todo',
+      priority: (dto.priority ?? 'Medium').toLowerCase(),
+      due_date: dto.due_date ?? null,
+      created_by: userId,
     };
 
     const { data, error } = await this.client
@@ -97,18 +111,38 @@ export class TasksService {
         assigned_to: dto.assigned_to ?? null,
         created_by: userId,
       })
+      .insert(insertPayload)
       .select('*')
       .single();
 
-    if (error) {
-      throw new BadRequestException(error.message);
+    if (error || !data) {
+      throw new BadRequestException(error?.message ?? 'Unable to create task');
     }
 
     await this.broadcastTaskEvent('task:created', data);
     return data as Task;
+    const task = data as Task;
+
+    if (dto.assignee_id) {
+      const { error: assignmentError } = await this.client
+        .from('task_assignments')
+        .insert({
+          task_id: task.id,
+          user_id: dto.assignee_id,
+        });
+
+      if (assignmentError) {
+        throw new BadRequestException(assignmentError.message);
+      }
+      task.assignee_id = dto.assignee_id;
+    }
+
+    return task;
   }
 
   async listForUser(userId: string, userRole: string): Promise<Task[]> {
+    let tasks: Task[] = [];
+
     if (userRole === 'admin') {
       const { data, error } = await this.client
         .from('tasks')
@@ -116,29 +150,74 @@ export class TasksService {
         .order('created_at', { ascending: false });
 
       if (error) throw new BadRequestException(error.message);
-      return (data ?? []) as Task[];
-    }
-
-    const { data: memberships, error: mError } = await this.client
-      .from('project_members')
-      .select('project_id')
-      .eq('user_id', userId);
-
-    if (mError) throw new BadRequestException(mError.message);
-
-    const projectIds = (memberships ?? []).map((m: any) => m.project_id);
-
-    let query = this.client.from('tasks').select('*').order('created_at', { ascending: false });
-
-    if (projectIds.length > 0) {
-      query = query.in('project_id', projectIds);
+      tasks = (data ?? []) as Task[];
     } else {
-      query = query.is('project_id', null);
+      const { data: memberships, error: mError } = await this.client
+        .from('project_members')
+        .select('project_id')
+        .eq('user_id', userId);
+
+      if (mError) throw new BadRequestException(mError.message);
+
+      const projectIds = (memberships ?? []).map((m: any) => m.project_id);
+
+      let query = this.client.from('tasks').select('*').order('created_at', { ascending: false });
+
+      if (projectIds.length > 0) {
+        query = query.in('project_id', projectIds);
+      } else {
+        query = query.is('project_id', null);
+      }
+
+      const { data, error } = await query;
+      if (error) throw new BadRequestException(error.message);
+      tasks = (data ?? []) as Task[];
     }
 
-    const { data, error } = await query;
+    return this.attachTaskAssignees(tasks);
+  }
+
+  async listByProject(projectId: string, userId: string, userRole: string): Promise<Task[]> {
+    if (userRole !== 'admin') {
+      await this.assertProjectMember(projectId, userId);
+    }
+
+    const { data, error } = await this.client
+      .from('tasks')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: false });
+
     if (error) throw new BadRequestException(error.message);
-    return (data ?? []) as Task[];
+    const tasks = (data ?? []) as Task[];
+
+    return this.attachTaskAssignees(tasks);
+  }
+
+  private async attachTaskAssignees(tasks: Task[]): Promise<Task[]> {
+    if (tasks.length === 0) return tasks;
+
+    const taskIds = tasks.map((task) => task.id);
+    const { data, error } = await this.client
+      .from('task_assignments')
+      .select('task_id, user_id')
+      .in('task_id', taskIds);
+
+    if (error) {
+      throw new BadRequestException(error.message);
+    }
+
+    const assignmentByTask = (data ?? []).reduce<Record<string, string>>((map, row: any) => {
+      if (row?.task_id && row?.user_id) {
+        map[row.task_id] = row.user_id;
+      }
+      return map;
+    }, {});
+
+    return tasks.map((task) => ({
+      ...task,
+      assignee_id: task.assignee_id ?? assignmentByTask[task.id] ?? null,
+    }));
   }
 
   async getById(id: string, userId: string, userRole: string): Promise<Task> {
@@ -154,7 +233,9 @@ export class TasksService {
 
     const task = data as Task;
 
-    if (userRole === 'admin') return task;
+    if (userRole === 'admin') {
+      return this.attachTaskAssignees([task]).then((tasks) => tasks[0]);
+    }
 
     if (!task.project_id) {
       throw new ForbiddenException('Not authorized to access this task');
@@ -167,7 +248,9 @@ export class TasksService {
       .eq('user_id', userId)
       .single();
 
-    if (membership) return task;
+    if (membership) {
+      return this.attachTaskAssignees([task]).then((tasks) => tasks[0]);
+    }
 
     throw new ForbiddenException('Not authorized to access this task');
   }
@@ -191,11 +274,10 @@ export class TasksService {
     const task = existing as Task;
 
     if (userRole !== 'admin') {
-      if (task.project_id) {
-        await this.assertProjectAdmin(task.project_id, userId);
-      } else {
-        throw new ForbiddenException('Not authorized to modify a standalone task');
+      if (!task.project_id) {
+        throw new BadRequestException('Task must have an associated project');
       }
+      await this.assertProjectAdmin(task.project_id, userId);
     }
 
     const updatePayload: any = { ...dto };
@@ -215,9 +297,16 @@ export class TasksService {
       };
       if (!statusMap[normalized]) {
         throw new BadRequestException(`Invalid task status: ${updatePayload.status}`);
+    // Validate assignee is a project member if assigning to a project task
+    if (dto.assignee_id !== undefined && task.project_id) {
+      if (dto.assignee_id) {
+        await this.assertProjectMember(task.project_id, dto.assignee_id);
       }
-      updatePayload.status = statusMap[normalized];
     }
+
+    const assignmentUserId = dto.assignee_id;
+    const updatePayload: any = { ...dto };
+    delete updatePayload.assignee_id;
     if (updatePayload.priority) {
       updatePayload.priority = updatePayload.priority.toLowerCase();
     }
@@ -235,6 +324,31 @@ export class TasksService {
 
     await this.broadcastTaskEvent('task:updated', data);
     return data as Task;
+    const updatedTask = data as Task;
+
+    if (assignmentUserId !== undefined && task.project_id) {
+      await this.syncTaskAssignment(updatedTask.id, assignmentUserId);
+      updatedTask.assignee_id = assignmentUserId ?? null;
+    }
+
+    return updatedTask;
+  }
+
+  private async syncTaskAssignment(taskId: string, userId: string | null): Promise<void> {
+    const { error: deletionError } = await this.client
+      .from('task_assignments')
+      .delete()
+      .eq('task_id', taskId);
+    if (deletionError) throw new BadRequestException(deletionError.message);
+
+    if (!userId) {
+      return;
+    }
+
+    const { error: insertionError } = await this.client
+      .from('task_assignments')
+      .insert({ task_id: taskId, user_id: userId });
+    if (insertionError) throw new BadRequestException(insertionError.message);
   }
 
   async delete(id: string, userId: string, userRole: string): Promise<void> {
@@ -251,11 +365,10 @@ export class TasksService {
     const task = existing as Task;
 
     if (userRole !== 'admin') {
-      if (task.project_id) {
-        await this.assertProjectAdmin(task.project_id, userId);
-      } else {
-        throw new ForbiddenException('Not authorized to delete this standalone task');
+      if (!task.project_id) {
+        throw new BadRequestException('Task must have an associated project');
       }
+      await this.assertProjectAdmin(task.project_id, userId);
     }
 
     const { error } = await this.client

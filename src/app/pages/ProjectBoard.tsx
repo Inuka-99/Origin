@@ -12,8 +12,8 @@ interface ApiTask {
   project_id: string | null;
   title: string;
   description: string | null;
-  status: 'todo' | 'in_progress' | 'In Review' | 'Done';
-  priority: string;
+  status: 'todo' | 'in_progress' | 'In Review' | 'Done' | 'completed' | null;
+  priority: 'Low' | 'Medium' | 'High';
   due_date: string | null;
   assigned_to: string | null;
   created_by: string | null;
@@ -295,6 +295,44 @@ export function ProjectBoard() {
       return [];
     }
   }, [api]);
+  const databaseToDisplayStatus = (status: string | null): 'To Do' | 'In Progress' | 'In Review' | 'Done' => {
+    if (!status) return 'To Do';
+    const map: Record<string, 'To Do' | 'In Progress' | 'In Review' | 'Done'> = {
+      'todo': 'To Do',
+      'in_progress': 'In Progress',
+      'In Review': 'In Review',
+      'Done': 'Done',
+      'completed': 'Done',
+    };
+    return map[status] || ('To Do' as const);
+  };
+
+  const displayToDatabaseStatus = (status: Task['status']): string => {
+    const map: Record<string, string> = {
+      'To Do': 'todo',
+      'In Progress': 'in_progress',
+      'In Review': 'In Review',
+      'Done': 'Done',
+    };
+    return map[status] || status;
+  };
+
+  const normalizeTask = (task: ApiTask): Task => {
+    const displayStatus = databaseToDisplayStatus(task.status);
+    return {
+      id: task.id,
+      title: task.title,
+      project: 'Client Website Redesign', // optionally dynamic if you have project data
+      projectColor: '#204EA7',
+      priority: task.priority,
+      dueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : 'N/A',
+      assignees: task.assignee_id ? [task.assignee_id] : [],
+      comments: 0,
+      subtasks: undefined,
+      completed: displayStatus === 'Done',
+      status: displayStatus,
+    };
+  };
 
   const loadTasks = useCallback(async (loadedProjects?: ApiProject[]) => {
     try {
@@ -335,6 +373,10 @@ export function ProjectBoard() {
         const statusKey = task.status === 'todo' ? 'todo'
           : task.status === 'in_progress' ? 'in-progress'
           : task.status === 'In Review' ? 'review'
+        const displayStatus = databaseToDisplayStatus(task.status);
+        const statusKey = displayStatus === 'To Do' ? 'todo'
+          : displayStatus === 'In Progress' ? 'in-progress'
+          : displayStatus === 'In Review' ? 'review'
           : 'done';
         columnTasks[statusKey].push(normalized);
       });
@@ -419,7 +461,7 @@ export function ProjectBoard() {
     const requestBody = {
       project_id: taskForm.project_id || null,
       title: taskForm.title,
-      status: taskForm.status,
+      status: displayToDatabaseStatus(taskForm.status),
       priority: taskForm.priority,
       due_date: taskForm.dueDate ? new Date(taskForm.dueDate).toISOString() : null,
       assigned_to: taskForm.assigneeId || null,
@@ -444,6 +486,8 @@ export function ProjectBoard() {
           completed: created.status === 'Done',
           status: ({ todo: 'To Do', in_progress: 'In Progress', 'In Review': 'In Review', 'Done': 'Done' } as Record<string, Task['status']>)[created.status] ?? 'To Do',
         };
+        const displayStatus = databaseToDisplayStatus(created.status);
+        const statusKey = displayStatus === 'To Do' ? 'todo' : displayStatus === 'In Progress' ? 'in-progress' : displayStatus === 'In Review' ? 'review' : 'done';
         setColumns((prev) => prev.map((col) =>
           col.id === statusKey ? { ...col, tasks: [...col.tasks, newTask] } : col,
         ));
@@ -479,7 +523,7 @@ export function ProjectBoard() {
     });
 
     try {
-      await api.patch(`/tasks/${taskId}`, { status });
+      await api.patch(`/tasks/${taskId}`, { status: displayToDatabaseStatus(status) });
     } catch (error) {
       console.error('Failed to update task status:', error);
       void loadTasks();
@@ -496,6 +540,25 @@ export function ProjectBoard() {
       })));
     } catch (error) {
       console.error('Delete task failed:', error);
+    }
+  };
+
+  const handleAddTask = async () => {
+    const title = prompt('Task title');
+    if (!title) return;
+
+    try {
+      const newTask = await api.post<ApiTask>('/tasks', {
+        project_id: '<<your-project-id>>',
+        title,
+        status: 'todo',
+        priority: 'Medium',
+      });
+      setColumns((prev) => prev.map((col) =>
+        col.id === 'todo' ? { ...col, tasks: [...col.tasks, normalizeTask(newTask)] } : col
+      ));
+    } catch (error) {
+      console.error('Create task failed:', error);
     }
   };
 

@@ -4,64 +4,130 @@ import { useState } from 'react';
 interface Task {
   id: string;
   title: string;
-  project: string;
-  projectColor: string;
-  dueTime: string;
+  project?: {
+    id: string;
+    name: string;
+    color?: string;
+  };
+  due_date?: string;
+  status: string;
+}
+
+interface TodaysFocusProps {
+  tasks: Task[];
+  loading?: boolean;
 }
 
 const sampleTasks: Task[] = [
   {
     id: '1',
     title: 'Review Q1 performance metrics',
-    project: 'Analytics Dashboard',
-    projectColor: '#204EA7',
-    dueTime: '10:00 AM'
+    project: { id: '1', name: 'Analytics Dashboard', color: '#204EA7' },
+    due_date: '2024-04-20T10:00:00Z',
+    status: 'todo'
   },
   {
     id: '2',
     title: 'Update client presentation slides',
-    project: 'Client Portal',
-    projectColor: '#9333EA',
-    dueTime: '2:00 PM'
+    project: { id: '2', name: 'Client Portal', color: '#9333EA' },
+    due_date: '2024-04-20T14:00:00Z',
+    status: 'todo'
   },
   {
     id: '3',
     title: 'Code review for authentication module',
-    project: 'ORIGIN Platform',
-    projectColor: '#16A34A',
-    dueTime: '4:30 PM'
+    project: { id: '3', name: 'ORIGIN Platform', color: '#16A34A' },
+    due_date: '2024-04-20T16:30:00Z',
+    status: 'todo'
   },
   {
     id: '4',
     title: 'Team standup meeting',
-    project: 'Engineering',
-    projectColor: '#DC2626',
-    dueTime: '9:30 AM'
+    project: { id: '4', name: 'Engineering', color: '#DC2626' },
+    due_date: '2024-04-20T09:30:00Z',
+    status: 'todo'
   },
   {
     id: '5',
     title: 'Update documentation for API endpoints',
-    project: 'Backend Infrastructure',
-    projectColor: '#16A34A',
-    dueTime: '3:00 PM'
+    project: { id: '5', name: 'Backend Infrastructure', color: '#16A34A' },
+    due_date: '2024-04-20T15:00:00Z',
+    status: 'todo'
   },
   {
     id: '6',
     title: 'Design review with product team',
-    project: 'Design System',
-    projectColor: '#204EA7',
-    dueTime: '11:30 AM'
+    project: { id: '6', name: 'Design System', color: '#204EA7' },
+    due_date: '2024-04-20T11:30:00Z',
+    status: 'todo'
   }
 ];
 
-export function TodaysFocus() {
+export function TodaysFocus({ tasks, loading = false }: TodaysFocusProps) {
   const [activeTab, setActiveTab] = useState('today');
 
+  // Use provided tasks or fallback to sample
+  const displayTasks = tasks.length > 0 ? tasks : sampleTasks;
+
+  // Filter tasks based on active tab
+  const getFilteredTasks = () => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    switch (activeTab) {
+      case 'today':
+        return displayTasks.filter(task => {
+          if (!task.due_date) return false;
+          const dueDate = new Date(task.due_date);
+          return dueDate >= today && dueDate < tomorrow && task.status !== 'done';
+        });
+      case 'overdue':
+        return displayTasks.filter(task => {
+          if (!task.due_date) return false;
+          const dueDate = new Date(task.due_date);
+          return dueDate < today && task.status !== 'done';
+        });
+      case 'upcoming':
+        return displayTasks.filter(task => {
+          if (!task.due_date) return false;
+          const dueDate = new Date(task.due_date);
+          return dueDate >= tomorrow && task.status !== 'done';
+        });
+      case 'unscheduled':
+        return displayTasks.filter(task => !task.due_date && task.status !== 'done');
+      default:
+        return displayTasks.filter(task => task.status !== 'done');
+    }
+  };
+
+  const filteredTasks = getFilteredTasks();
+
   const tabs = [
-    { id: 'today', label: 'Today', count: 6 },
-    { id: 'overdue', label: 'Overdue', count: 3 },
-    { id: 'upcoming', label: 'Upcoming', count: 12 },
-    { id: 'unscheduled', label: 'Unscheduled', count: 8 }
+    { id: 'today', label: 'Today', count: displayTasks.filter(task => {
+      if (!task.due_date) return false;
+      const dueDate = new Date(task.due_date);
+      const today = new Date();
+      const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const todayEnd = new Date(todayStart);
+      todayEnd.setDate(todayEnd.getDate() + 1);
+      return dueDate >= todayStart && dueDate < todayEnd && task.status !== 'done';
+    }).length },
+    { id: 'overdue', label: 'Overdue', count: displayTasks.filter(task => {
+      if (!task.due_date) return false;
+      const dueDate = new Date(task.due_date);
+      const today = new Date();
+      return dueDate < new Date(today.getFullYear(), today.getMonth(), today.getDate()) && task.status !== 'done';
+    }).length },
+    { id: 'upcoming', label: 'Upcoming', count: displayTasks.filter(task => {
+      if (!task.due_date) return false;
+      const dueDate = new Date(task.due_date);
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      return dueDate >= tomorrow && task.status !== 'done';
+    }).length },
+    { id: 'unscheduled', label: 'Unscheduled', count: displayTasks.filter(task => !task.due_date && task.status !== 'done').length }
   ];
 
   return (
@@ -107,41 +173,51 @@ export function TodaysFocus() {
 
       {/* Scrollable Task List */}
       <div className="flex-1 overflow-y-auto px-6 py-2">
-        <div className="space-y-2">
-          {sampleTasks.map((task) => (
-            <div
-              key={task.id}
-              className="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer group"
-            >
-              <div className="mt-0.5">
-                <div className="w-5 h-5 rounded border-2 border-gray-300 group-hover:border-[#204EA7] transition-colors flex items-center justify-center">
-                  {/* Empty checkbox */}
+        {loading ? (
+          <div className="flex items-center justify-center h-32">
+            <div className="text-sm text-gray-500">Loading tasks...</div>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {filteredTasks.map((task) => (
+              <div
+                key={task.id}
+                className="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer group"
+              >
+                <div className="mt-0.5">
+                  <div className="w-5 h-5 rounded border-2 border-gray-300 group-hover:border-[#204EA7] transition-colors flex items-center justify-center">
+                    {/* Empty checkbox */}
+                  </div>
                 </div>
-              </div>
 
-              <div className="flex-1 min-w-0">
-                <h3 className="text-sm font-medium text-gray-900 mb-1">
-                  {task.title}
-                </h3>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span
-                    className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
-                    style={{ 
-                      backgroundColor: `${task.projectColor}15`,
-                      color: task.projectColor
-                    }}
-                  >
-                    {task.project}
-                  </span>
-                  <span className="flex items-center gap-1 text-xs text-gray-500">
-                    <Clock className="w-3 h-3" />
-                    {task.dueTime}
-                  </span>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-sm font-medium text-gray-900 mb-1">
+                    {task.title}
+                  </h3>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {task.project && (
+                      <span
+                        className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
+                        style={{ 
+                          backgroundColor: `${task.project.color || '#204EA7'}15`,
+                          color: task.project.color || '#204EA7'
+                        }}
+                      >
+                        {task.project.name}
+                      </span>
+                    )}
+                    {task.due_date && (
+                      <span className="flex items-center gap-1 text-xs text-gray-500">
+                        <Clock className="w-3 h-3" />
+                        {new Date(task.due_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Add Task Button */}

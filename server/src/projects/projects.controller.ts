@@ -94,24 +94,29 @@ export class ProjectsController {
   }
 
   @Get(':id/members')
-  async listMembers(@Param('id') id: string) {
-    return this.projectsService.listMembers(id);
+  async listMembers(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    const role = await this.getUserRole(user.userId);
+    return this.projectsService.listMembers(id, user.userId, role);
   }
 
   @Post(':id/members')
   async addMember(
     @Param('id') id: string,
     @Body() body: { user_id: string; role?: 'admin' | 'member' },
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.projectsService.addMember(id, body.user_id, body.role);
+    const role = await this.getUserRole(user.userId);
+    return this.projectsService.addMember(id, body.user_id, body.role, user.userId, role);
   }
 
   @Delete(':id/members/:userId')
   async removeMember(
     @Param('id') id: string,
     @Param('userId') userId: string,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    await this.projectsService.removeMember(id, userId);
+    const role = await this.getUserRole(user.userId);
+    await this.projectsService.removeMember(id, userId, user.userId, role);
     return { removed: true };
   }
 }

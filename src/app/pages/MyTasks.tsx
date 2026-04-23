@@ -21,9 +21,10 @@ type ApiTask = {
   title: string;
   description: string | null;
   project_id: string | null;
-  status: 'todo' | 'in_progress' | 'In Review' | 'Done';
-  priority: string;
+  status: 'todo' | 'in_progress' | 'In Review' | 'Done' | 'completed' | null;
+  priority: 'High' | 'Medium' | 'Low';
   due_date: string | null;
+  assignee_id: string | null;
   assigned_to: string | null;
 };
 
@@ -31,6 +32,7 @@ export function MyTasks() {
   const api = useApiClient();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [projects, setProjects] = useState<{id:string;name:string}[]>([]);
+  const [projectMembers, setProjectMembers] = useState<Record<string, {id:string;user_id:string;profiles?:{full_name?:string;email?:string}}[]>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -44,46 +46,68 @@ export function MyTasks() {
     status: Task['status'];
     priority: Task['priority'];
     due_date: string;
+    assignee_id: string;
   }>({
     title: '',
     project_id: '',
     status: 'To Do',
     priority: 'Medium',
     due_date: '',
+    assignee_id: '',
   });
 
-  const normalizeTask = (task: ApiTask): Task => ({
-    id: task.id,
-    title: task.title,
-    project: task.project_id ? task.project_id : 'Standalone',
-    projectId: task.project_id ?? null,
-    priority: (task.priority?.charAt(0).toUpperCase() + task.priority?.slice(1)) as Task['priority'] || 'Medium',
-    dueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No due date',
-    status: ({ todo: 'To Do', in_progress: 'In Progress', 'In Review': 'In Review', 'Done': 'Done' } as Record<string, Task['status']>)[task.status] ?? 'To Do',
-    assignee: 'Unassigned',
-  });
+  const normalizeTask = (task: ApiTask): Task => {
+    const projectMembersList = task.project_id ? projectMembers[task.project_id] : [];
+    const assignee = projectMembersList?.find(m => m.user_id === task.assignee_id);
+    return {
+      id: task.id,
+      title: task.title,
+      project: task.project_id || 'Unknown Project',
+      projectId: task.project_id ?? null,
+      priority: (task.priority?.charAt(0).toUpperCase() + task.priority?.slice(1)) as Task['priority'] || 'Medium',
+      dueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No due date',
+      status: (task.status
+        ? ((() => {
+            const map: Record<string, string> = {
+              'todo': 'To Do',
+              'in_progress': 'In Progress',
+              'In Review': 'In Review',
+              'Done': 'Done',
+              'completed': 'Done',
+            };
+            return (map[task.status] || task.status) as Task['status'];
+          })())
+        : 'To Do') as Task['status'],
+      assignee: assignee ? (assignee.profiles?.full_name || assignee.profiles?.email || assignee.user_id) : 'Unassigned',
+    };
+  };
 
   const getTaskProjectName = (task: Task): string => {
-    if (!task.projectId) return 'Standalone';
+    if (!task.projectId) return 'Unknown Project';
     const match = projects.find((project) => project.id === task.projectId);
     return match?.name ?? task.project;
   };
 
-  const getStatusEnumValue = (status: string): string => {
+  const databaseToDisplayStatus = (status: string): string => {
+    if (!status) return 'To Do';
     const map: Record<string, string> = {
       'todo': 'To Do',
-      'to do': 'To Do',
-      'in progress': 'In Progress',
       'in_progress': 'In Progress',
-      'in-progress': 'In Progress',
-      'in review': 'In Review',
-      'in_review': 'In Review',
-      'review': 'In Review',
-      'done': 'Done',
+      'In Review': 'In Review',
+      'Done': 'Done',
+      'completed': 'Done',
     };
+    return map[status] || status;
+  };
 
-    const normalized = status.trim().toLowerCase();
-    return map[normalized] ?? status;
+  const displayToDatabaseStatus = (status: Task['status']): string => {
+    const map: Record<Task['status'], string> = {
+      'To Do': 'todo',
+      'In Progress': 'in_progress',
+      'In Review': 'In Review',
+      'Done': 'Done',
+    };
+    return map[status] || status;
   };
 
   const getPriorityEnumValue = (priority: string): string => {
@@ -105,15 +129,7 @@ export function MyTasks() {
 
   const loadProjects = async () => {
     try {
-      let data = await api.get<{id:string;name:string}[]>('/projects');
-
-      // Ensure a fallback project named Standalone exists so tasks never save without a valid project_id.
-      const standaloneProject = data?.find((p) => p.name === 'Standalone');
-      if (!standaloneProject) {
-        const createdStandalone = await api.post<{id:string;name:string}>('/projects', { name: 'Standalone' });
-        data = [createdStandalone, ...(data ?? [])];
-      }
-
+      const data = await api.get<{id:string;name:string}[]>('/projects');
       setProjects(data ?? []);
 
       if (!taskForm.project_id && (data?.length ?? 0) > 0) {
@@ -156,6 +172,15 @@ export function MyTasks() {
     onUpdated: handleTaskUpdated,
     onDeleted: handleTaskDeleted,
   });
+  const loadProjectMembers = async (projectId: string) => {
+    if (!projectId || projectMembers[projectId]) return;
+    try {
+      const members = await api.get(`/projects/${projectId}/members`);
+      setProjectMembers(prev => ({ ...prev, [projectId]: members }));
+    } catch (error) {
+      console.error('Failed to load project members', error);
+    }
+  };
 
   useEffect(() => {
     void loadProjects();
@@ -207,30 +232,53 @@ export function MyTasks() {
       status: 'To Do',
       priority: 'Medium',
       due_date: '',
+      assignee_id: '',
     });
-    setIsModalOpen(true);
-  };
-
-  const openEditTaskModal = (task: Task) => {
-    setIsEditMode(true);
-    setEditingTaskId(task.id);
-    setFormError(null);
-
-    const assignedProjectId = task.projectId ? task.projectId : projects.find((p) => p.name === 'Standalone')?.id ?? '';
-
-    setTaskForm({
-      title: task.title,
-      project_id: assignedProjectId,
-      status: task.status,
-      priority: task.priority,
-      due_date: task.dueDate === 'No due date' ? '' : new Date(task.dueDate).toISOString().slice(0, 10),
-    });
+    if (defaultProjectId) {
+      loadProjectMembers(defaultProjectId);
+    }
     setIsModalOpen(true);
   };
 
   const closeTaskModal = () => {
     setIsModalOpen(false);
     setFormError(null);
+    setIsEditMode(false);
+    setEditingTaskId(null);
+  };
+
+  const openEditTaskModal = async (task: Task) => {
+    setIsEditMode(true);
+    setEditingTaskId(task.id);
+    setFormError(null);
+
+    try {
+      // Fetch the full task data to get assignee_id
+      const fullTask = await api.get<ApiTask>(`/tasks/${task.id}`);
+      
+      const assignedProjectId = fullTask.project_id ?? '';
+
+      setTaskForm({
+        title: fullTask.title,
+        project_id: assignedProjectId,
+        status: databaseToDisplayStatus(fullTask.status),
+        priority: (fullTask.priority?.charAt(0).toUpperCase() + fullTask.priority?.slice(1)) as Task['priority'] || 'Medium',
+        due_date: fullTask.due_date ? new Date(fullTask.due_date).toISOString().slice(0, 10) : '',
+        assignee_id: fullTask.assignee_id || '',
+      });
+      if (assignedProjectId) {
+        loadProjectMembers(assignedProjectId);
+      }
+      setIsModalOpen(true);
+    } catch (error) {
+      console.error('Failed to load task for editing', error);
+      setFormError('Failed to load task details');
+    }
+  };
+
+  const handleProjectChange = (projectId: string) => {
+    setTaskForm(prev => ({ ...prev, project_id: projectId, assignee_id: '' }));
+    loadProjectMembers(projectId);
   };
 
   const saveTask = async () => {
@@ -239,8 +287,7 @@ export function MyTasks() {
       return;
     }
 
-    const standaloneProject = projects.find((p) => p.name === 'Standalone');
-    const projectId = taskForm.project_id || standaloneProject?.id || projects[0]?.id;
+    const projectId = taskForm.project_id || projects[0]?.id;
     if (!projectId) {
       setFormError('A project is required. Select a project or create one first.');
       return;
@@ -249,9 +296,10 @@ export function MyTasks() {
     const payload = {
       project_id: projectId,
       title: taskForm.title,
-      status: getStatusEnumValue(taskForm.status),
+      status: displayToDatabaseStatus(taskForm.status),
       priority: getPriorityEnumValue(taskForm.priority),
       due_date: taskForm.due_date || null,
+      assignee_id: taskForm.assignee_id || null,
     };
 
     try {
@@ -404,13 +452,7 @@ export function MyTasks() {
                       <div className="font-medium text-gray-900">{task.title}</div>
                     </td>
                     <td className="px-6 py-4">
-                      {getTaskProjectName(task) === 'Standalone' ? (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium text-gray-500 bg-gray-100">
-                          Standalone
-                        </span>
-                      ) : (
-                        <span className="text-sm text-gray-600">{getTaskProjectName(task)}</span>
-                      )}
+                      <span className="text-sm text-gray-600">{getTaskProjectName(task)}</span>
                     </td>
                     <td className="px-6 py-4">
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${getPriorityColor(task.priority)}`}>
@@ -484,14 +526,11 @@ export function MyTasks() {
                   <label className="block text-sm font-medium text-gray-700">Project</label>
                   <select
                     value={taskForm.project_id}
-                    onChange={(e) => setTaskForm((prev) => ({ ...prev, project_id: e.target.value }))}
+                    onChange={(e) => handleProjectChange(e.target.value)}
                     className="w-full mt-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7]"
                     name="project_id"
                   >
-                    {/* single standalone option + rest of user projects */}
-                    <option value={projects.find((p) => p.name === 'Standalone')?.id ?? ''}>Standalone</option>
                     {projects
-                      .filter((project) => project.name !== 'Standalone')
                       .map((project) => (
                         <option key={project.id} value={project.id}>{project.name}</option>
                       ))}
@@ -539,6 +578,23 @@ export function MyTasks() {
                       name="due_date"
                       className="w-full mt-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7]"
                     />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Assignee</label>
+                    <select
+                      value={taskForm.assignee_id}
+                      onChange={(e) => setTaskForm((prev) => ({ ...prev, assignee_id: e.target.value }))}
+                      className="w-full mt-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7]"
+                      name="assignee_id"
+                    >
+                      <option value="">Unassigned</option>
+                      {projectMembers[taskForm.project_id]?.map((member) => (
+                        <option key={member.user_id} value={member.user_id}>
+                          {member.profiles?.full_name || member.profiles?.email || member.user_id}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
