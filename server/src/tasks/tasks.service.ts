@@ -43,6 +43,11 @@ export interface UpdateTaskDto {
   assignee_id?: string | null;
 }
 
+export type TaskSortOption = 'default' | 'title-asc' | 'due-asc' | 'priority-desc';
+export type TaskStatusFilter = 'all' | 'To Do' | 'In Progress' | 'In Review' | 'Done';
+export type TaskPriorityFilter = 'all' | 'High' | 'Medium' | 'Low';
+export type TaskDueDateFilter = 'all' | 'today' | 'upcoming' | 'overdue' | 'no-date';
+
 @Injectable()
 export class TasksService {
   private readonly logger = new Logger(TasksService.name);
@@ -63,10 +68,12 @@ export class TasksService {
   }
 
   async create(dto: CreateTaskDto, userId: string): Promise<Task> {
+    const assigneeId = dto.assignee_id ?? dto.assigned_to ?? null;
+
     if (dto.project_id) {
       await this.assertProjectMember(dto.project_id, userId);
-      if (dto.assignee_id) {
-        await this.assertProjectMember(dto.project_id, dto.assignee_id);
+      if (assigneeId) {
+        await this.assertProjectMember(dto.project_id, assigneeId);
       }
     }
 
@@ -98,7 +105,7 @@ export class TasksService {
       status: convertStatus(dto.status ?? 'To Do'),
       priority: (dto.priority ?? 'Medium').toLowerCase(),
       due_date: dto.due_date ?? null,
-      assigned_to: dto.assigned_to ?? null,
+      assigned_to: assigneeId,
       created_by: userId,
     };
 
@@ -114,26 +121,40 @@ export class TasksService {
 
     const task = data as Task;
 
-    if (dto.assignee_id) {
+    if (assigneeId) {
       const { error: assignmentError } = await this.client
         .from('task_assignments')
         .insert({
           task_id: task.id,
-          user_id: dto.assignee_id,
+          user_id: assigneeId,
         });
 
       if (assignmentError) {
         throw new BadRequestException(assignmentError.message);
       }
-      task.assignee_id = dto.assignee_id;
+      task.assignee_id = assigneeId;
+      task.assigned_to = assigneeId;
     }
 
     await this.broadcastTaskEvent('task:created', task);
     return task;
   }
 
-  async listForUser(userId: string, userRole: string): Promise<Task[]> {
+  async listForUser(
+    userId: string,
+    userRole: string,
+    search?: string,
+    status: TaskStatusFilter = 'all',
+    priority: TaskPriorityFilter = 'all',
+    dueDate: TaskDueDateFilter = 'all',
+    sortBy: TaskSortOption = 'default',
+  ): Promise<Task[]> {
     let tasks: Task[] = [];
+    const normalizedSearch = search?.trim().toLowerCase();
+    const normalizedStatus = this.normalizeStatusFilter(status);
+    const normalizedPriority = this.normalizePriorityFilter(priority);
+    const normalizedDueDate = this.normalizeDueDateFilter(dueDate);
+    const normalizedSort = this.normalizeSortOption(sortBy);
 
     if (userRole === 'admin') {
       const { data, error } = await this.client
@@ -166,7 +187,15 @@ export class TasksService {
       tasks = (data ?? []) as Task[];
     }
 
-    return this.attachTaskAssignees(tasks);
+    const filteredTasks = this.filterTasks(
+      tasks,
+      normalizedSearch,
+      normalizedStatus,
+      normalizedPriority,
+      normalizedDueDate,
+    );
+
+    return this.attachTaskAssignees(this.sortTasks(filteredTasks, normalizedSort));
   }
 
   async listByProject(projectId: string, userId: string, userRole: string): Promise<Task[]> {
@@ -181,35 +210,7 @@ export class TasksService {
       .order('created_at', { ascending: false });
 
     if (error) throw new BadRequestException(error.message);
-    const tasks = (data ?? []) as Task[];
-
-    return this.attachTaskAssignees(tasks);
-  }
-
-  private async attachTaskAssignees(tasks: Task[]): Promise<Task[]> {
-    if (tasks.length === 0) return tasks;
-
-    const taskIds = tasks.map((task) => task.id);
-    const { data, error } = await this.client
-      .from('task_assignments')
-      .select('task_id, user_id')
-      .in('task_id', taskIds);
-
-    if (error) {
-      throw new BadRequestException(error.message);
-    }
-
-    const assignmentByTask = (data ?? []).reduce<Record<string, string>>((map, row: any) => {
-      if (row?.task_id && row?.user_id) {
-        map[row.task_id] = row.user_id;
-      }
-      return map;
-    }, {});
-
-    return tasks.map((task) => ({
-      ...task,
-      assignee_id: task.assignee_id ?? assignmentByTask[task.id] ?? null,
-    }));
+    return this.attachTaskAssignees((data ?? []) as Task[]);
   }
 
   async getById(id: string, userId: string, userRole: string): Promise<Task> {
@@ -299,7 +300,16 @@ export class TasksService {
       }
     }
 
-    const assignmentUserId = dto.assignee_id;
+    const assignmentUserId =
+      dto.assignee_id !== undefined ? dto.assignee_id : dto.assigned_to;
+
+    if (assignmentUserId !== undefined && task.project_id) {
+      if (assignmentUserId) {
+        await this.assertProjectMember(task.project_id, assignmentUserId);
+      }
+      updatePayload.assigned_to = assignmentUserId ?? null;
+    }
+
     delete updatePayload.assignee_id;
     if (updatePayload.priority) {
       updatePayload.priority = updatePayload.priority.toLowerCase();
@@ -321,6 +331,7 @@ export class TasksService {
     if (assignmentUserId !== undefined && task.project_id) {
       await this.syncTaskAssignment(updatedTask.id, assignmentUserId);
       updatedTask.assignee_id = assignmentUserId ?? null;
+      updatedTask.assigned_to = assignmentUserId ?? null;
     }
 
     await this.broadcastTaskEvent('task:updated', updatedTask);
@@ -385,7 +396,39 @@ export class TasksService {
     userId: string,
     userRole: string,
   ): Promise<Task> {
-    return this.update(id, { assigned_to: assigneeId }, userId, userRole);
+    return this.update(
+      id,
+      { assignee_id: assigneeId, assigned_to: assigneeId },
+      userId,
+      userRole,
+    );
+  }
+
+  private async attachTaskAssignees(tasks: Task[]): Promise<Task[]> {
+    if (tasks.length === 0) return tasks;
+
+    const taskIds = tasks.map((task) => task.id);
+    const { data, error } = await this.client
+      .from('task_assignments')
+      .select('task_id, user_id')
+      .in('task_id', taskIds);
+
+    if (error) {
+      throw new BadRequestException(error.message);
+    }
+
+    const assignmentByTask = (data ?? []).reduce<Record<string, string>>((map, row: any) => {
+      if (row?.task_id && row?.user_id) {
+        map[row.task_id] = row.user_id;
+      }
+      return map;
+    }, {});
+
+    return tasks.map((task) => ({
+      ...task,
+      assignee_id: task.assignee_id ?? assignmentByTask[task.id] ?? null,
+      assigned_to: task.assigned_to ?? assignmentByTask[task.id] ?? null,
+    }));
   }
 
   private async assertProjectMember(projectId: string, userId: string): Promise<void> {
@@ -412,5 +455,191 @@ export class TasksService {
     if (!data || data.role !== 'admin') {
       throw new ForbiddenException('Only project admins can perform this action');
     }
+  }
+
+  private filterTasks(
+    tasks: Task[],
+    search?: string,
+    status: TaskStatusFilter = 'all',
+    priority: TaskPriorityFilter = 'all',
+    dueDate: TaskDueDateFilter = 'all',
+  ): Task[] {
+    return tasks.filter((task) => {
+      const title = task.title.toLowerCase();
+      const description = task.description?.toLowerCase() ?? '';
+      const matchesSearch = !search || title.includes(search) || description.includes(search);
+      const matchesStatus =
+        status === 'all' || this.normalizeTaskStatusValue(task.status) === status;
+      const matchesPriority =
+        priority === 'all' || this.normalizePriorityValue(task.priority) === priority.toLowerCase();
+      const matchesDueDate = this.matchesDueDateFilter(task.due_date, dueDate);
+
+      return matchesSearch && matchesStatus && matchesPriority && matchesDueDate;
+    });
+  }
+
+  private normalizeStatusFilter(status?: string): TaskStatusFilter {
+    if (!status) {
+      return 'all';
+    }
+
+    const supportedStatusFilters: TaskStatusFilter[] = [
+      'all',
+      'To Do',
+      'In Progress',
+      'In Review',
+      'Done',
+    ];
+
+    if (!supportedStatusFilters.includes(status as TaskStatusFilter)) {
+      throw new BadRequestException(`Invalid task status filter: ${status}`);
+    }
+
+    return status as TaskStatusFilter;
+  }
+
+  private normalizePriorityFilter(priority?: string): TaskPriorityFilter {
+    if (!priority) {
+      return 'all';
+    }
+
+    const supportedPriorityFilters: TaskPriorityFilter[] = [
+      'all',
+      'High',
+      'Medium',
+      'Low',
+    ];
+
+    if (!supportedPriorityFilters.includes(priority as TaskPriorityFilter)) {
+      throw new BadRequestException(`Invalid task priority filter: ${priority}`);
+    }
+
+    return priority as TaskPriorityFilter;
+  }
+
+  private normalizeDueDateFilter(dueDate?: string): TaskDueDateFilter {
+    if (!dueDate) {
+      return 'all';
+    }
+
+    const supportedDueDateFilters: TaskDueDateFilter[] = [
+      'all',
+      'today',
+      'upcoming',
+      'overdue',
+      'no-date',
+    ];
+
+    if (!supportedDueDateFilters.includes(dueDate as TaskDueDateFilter)) {
+      throw new BadRequestException(`Invalid task due date filter: ${dueDate}`);
+    }
+
+    return dueDate as TaskDueDateFilter;
+  }
+
+  private normalizeSortOption(sortBy?: string): TaskSortOption {
+    if (!sortBy) {
+      return 'default';
+    }
+
+    const supportedSortOptions: TaskSortOption[] = [
+      'default',
+      'title-asc',
+      'due-asc',
+      'priority-desc',
+    ];
+
+    if (!supportedSortOptions.includes(sortBy as TaskSortOption)) {
+      throw new BadRequestException(`Invalid task sort option: ${sortBy}`);
+    }
+
+    return sortBy as TaskSortOption;
+  }
+
+  private normalizePriorityValue(priority?: string): string {
+    return priority?.trim().toLowerCase() ?? '';
+  }
+
+  private normalizeTaskStatusValue(status?: string): TaskStatusFilter {
+    const normalized = status?.trim().toLowerCase() ?? '';
+    const statusMap: Record<string, TaskStatusFilter> = {
+      'to do': 'To Do',
+      'todo': 'To Do',
+      'to_do': 'To Do',
+      'in progress': 'In Progress',
+      'in_progress': 'In Progress',
+      'in-progress': 'In Progress',
+      'in review': 'In Review',
+      'in_review': 'In Review',
+      'review': 'In Review',
+      'done': 'Done',
+      'completed': 'Done',
+    };
+
+    return statusMap[normalized] ?? 'To Do';
+  }
+
+  private matchesDueDateFilter(dueDate: string | null, filter: TaskDueDateFilter): boolean {
+    if (filter === 'all') {
+      return true;
+    }
+
+    if (filter === 'no-date') {
+      return !dueDate;
+    }
+
+    if (!dueDate) {
+      return false;
+    }
+
+    const dueDateKey = dueDate.slice(0, 10);
+    const today = new Date();
+    const todayKey = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+      .toISOString()
+      .slice(0, 10);
+
+    if (filter === 'today') {
+      return dueDateKey === todayKey;
+    }
+
+    if (filter === 'upcoming') {
+      return dueDateKey > todayKey;
+    }
+
+    if (filter === 'overdue') {
+      return dueDateKey < todayKey;
+    }
+
+    return true;
+  }
+
+  private sortTasks(tasks: Task[], sortBy: TaskSortOption): Task[] {
+    if (sortBy === 'default') {
+      return tasks;
+    }
+
+    const priorityRank: Record<string, number> = {
+      high: 0,
+      medium: 1,
+      low: 2,
+    };
+
+    return [...tasks].sort((left, right) => {
+      switch (sortBy) {
+        case 'title-asc':
+          return left.title.localeCompare(right.title);
+        case 'due-asc': {
+          if (!left.due_date && !right.due_date) return 0;
+          if (!left.due_date) return 1;
+          if (!right.due_date) return -1;
+          return new Date(left.due_date).getTime() - new Date(right.due_date).getTime();
+        }
+        case 'priority-desc':
+          return (priorityRank[left.priority] ?? Number.MAX_SAFE_INTEGER)
+            - (priorityRank[right.priority] ?? Number.MAX_SAFE_INTEGER);
+        default:
+          return 0;
+      }
+    });
   }
 }

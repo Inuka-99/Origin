@@ -78,8 +78,13 @@ export class ProjectsService {
   }
 
   /** List all projects the user is a member of. Admins see all projects. */
-  async listForUser(userId: string, userRole: string): Promise<Project[]> {
+  async listForUser(
+    userId: string,
+    userRole: string,
+    search?: string,
+  ): Promise<Project[]> {
     const client = this.supabase.getClient();
+    const normalizedSearch = search?.trim().toLowerCase();
 
     if (userRole === 'admin') {
       // Global admins see all projects
@@ -89,8 +94,11 @@ export class ProjectsService {
         .order('created_at', { ascending: false });
 
       if (error) throw new BadRequestException(error.message);
-      // For global admins, they have admin role on all projects
-      return (data ?? []).map(project => ({ ...project, user_role: 'admin' })) as Project[];
+      const projects = (data ?? []).map((project) => ({
+        ...project,
+        user_role: 'admin' as const,
+      })) as Project[];
+      return this.filterProjectsBySearch(projects, normalizedSearch);
     }
 
     // Regular members see only projects they belong to
@@ -110,13 +118,12 @@ export class ProjectsService {
 
     if (error) throw new BadRequestException(error.message);
 
-    // Add user role to each project
-    const projectsWithRoles = (data ?? []).map(project => {
-      const membership = memberships?.find(m => m.project_id === project.id);
+    const projectsWithRoles = (data ?? []).map((project) => {
+      const membership = memberships?.find((member) => member.project_id === project.id);
       return { ...project, user_role: membership?.role || null };
     });
 
-    return projectsWithRoles as Project[];
+    return this.filterProjectsBySearch(projectsWithRoles as Project[], normalizedSearch);
   }
 
   /** Get a single project by ID. */
@@ -270,5 +277,17 @@ export class ProjectsService {
     if (!data || data.role !== 'admin') {
       throw new ForbiddenException('Only project admins can perform this action');
     }
+  }
+
+  private filterProjectsBySearch(projects: Project[], search?: string): Project[] {
+    if (!search) {
+      return projects;
+    }
+
+    return projects.filter((project) => {
+      const name = project.name.toLowerCase();
+      const description = project.description?.toLowerCase() ?? '';
+      return name.includes(search) || description.includes(search);
+    });
   }
 }

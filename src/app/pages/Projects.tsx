@@ -1,11 +1,12 @@
 import { Sidebar } from '../components/Sidebar';
 import { TopBar } from '../components/TopBar';
-import { useNavigate } from 'react-router';
 import { Search, Filter, ChevronDown, Plus, Grid3x3, List, Users, Calendar, MoreVertical, CheckSquare, Loader2, Trash2 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation } from 'react-router';
 import { useProjects, useProjectMembers, type Project as ApiProject, type ProjectMember } from '../lib/useProjects';
 import { useAuthUser } from '../auth/useAuthUser';
 import { useApiClient } from '../lib/api-client';
+import { useClickOutside } from '../lib/useClickOutside';
 
 interface Project extends ApiProject {
   progress: number;
@@ -18,11 +19,32 @@ interface Project extends ApiProject {
 }
 
 
+type SortOption = 'default' | 'name-asc' | 'progress-desc' | 'tasks-desc';
+type StatusFilter = 'all' | Project['status'];
+
+const filterLabels: Record<StatusFilter, string> = {
+  all: 'All Status',
+  Active: 'Active',
+  Completed: 'Completed',
+  'On Hold': 'On Hold',
+};
+
+const sortLabels: Record<SortOption, string> = {
+  default: 'Default Order',
+  'name-asc': 'Name A-Z',
+  'progress-desc': 'Progress High-Low',
+  'tasks-desc': 'Most Tasks',
+};
+
 export function Projects() {
-  const navigate = useNavigate();
-  const { projects: apiProjects, loading, error, createProject, updateProject, deleteProject, refetch } = useProjects();
+  const location = useLocation();
+  const { projects: apiProjects, loading, error, createProject, deleteProject, refetch } = useProjects();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [sortBy, setSortBy] = useState<SortOption>('default');
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [isSortOpen, setIsSortOpen] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [memberRemovalConfirmation, setMemberRemovalConfirmation] = useState<{
     userId: string;
@@ -35,13 +57,17 @@ export function Projects() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState<string | null>(null);
+  const filterRef = useRef<HTMLDivElement | null>(null);
+  const sortRef = useRef<HTMLDivElement | null>(null);
+
+  useClickOutside(filterRef, () => setIsFilterOpen(false));
+  useClickOutside(sortRef, () => setIsSortOpen(false));
+
   const { members, loading: membersLoading, addMember, removeMember } = useProjectMembers(selectedProject?.id || '');
   const { user } = useAuthUser();
   const api = useApiClient();
   const [projectTasks, setProjectTasks] = useState<Record<string, any[]>>({});
-  const [tasksLoading, setTasksLoading] = useState(false);
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = () => {
       setDropdownOpen(null);
@@ -52,16 +78,17 @@ export function Projects() {
     }
   }, [dropdownOpen]);
 
-  // Fetch tasks for all projects
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    setSearchQuery(params.get('search') ?? '');
+  }, [location.search]);
+
   useEffect(() => {
     const fetchProjectTasks = async () => {
       if (apiProjects.length === 0) return;
 
-      setTasksLoading(true);
       try {
         const tasksMap: Record<string, any[]> = {};
-
-        // Fetch tasks for each project in parallel
         const taskPromises = apiProjects.map(async (project) => {
           try {
             const tasks = await api.get(`/tasks/project/${project.id}`);
@@ -81,36 +108,62 @@ export function Projects() {
         setProjectTasks(tasksMap);
       } catch (err) {
         console.error('Failed to fetch project tasks:', err);
-      } finally {
-        setTasksLoading(false);
       }
     };
 
-    fetchProjectTasks();
+    void fetchProjectTasks();
   }, [apiProjects, api]);
 
-  // Convert API projects to display format with calculated stats
-  const projects: Project[] = apiProjects.map(apiProject => {
-    const tasks = projectTasks[apiProject.id] || [];
-    const tasksTotal = tasks.length;
-    const tasksCompleted = tasks.filter(task => task.status === 'Done').length;
-    const progress = tasksTotal > 0 ? Math.round((tasksCompleted / tasksTotal) * 100) : 0;
+  const projects = useMemo(() => {
+    return apiProjects.map((apiProject) => {
+      const tasks = projectTasks[apiProject.id] || [];
+      const tasksTotal = tasks.length;
+      const tasksCompleted = tasks.filter((task) => task.status === 'Done' || task.status === 'completed').length;
+      const progress = tasksTotal > 0 ? Math.round((tasksCompleted / tasksTotal) * 100) : 0;
+      const status: Project['status'] =
+        tasksTotal > 0 && tasksCompleted === tasksTotal ? 'Completed' : 'Active';
 
-    return {
-      ...apiProject,
-      progress,
-      tasksTotal,
-      tasksCompleted,
-      status: 'Active' as const, // TODO: Determine from project state
-      team: [], // TODO: Get from members
-      lastUpdated: new Date(apiProject.updated_at).toLocaleDateString(),
-    };
-  });
+      return {
+        ...apiProject,
+        progress,
+        tasksTotal,
+        tasksCompleted,
+        status,
+        team: [],
+        lastUpdated: new Date(apiProject.updated_at).toLocaleDateString(),
+      };
+    });
+  }, [apiProjects, projectTasks]);
 
-  const filteredProjects = projects.filter(project =>
-    project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    project.description?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredProjects = useMemo(() => {
+    const normalizedSearch = searchQuery.trim().toLowerCase();
+    const matchingProjects = projects.filter((project) => {
+      const matchesSearch =
+        !normalizedSearch
+        || project.name.toLowerCase().includes(normalizedSearch)
+        || (project.description?.toLowerCase() ?? '').includes(normalizedSearch);
+      const matchesStatus = statusFilter === 'all' || project.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+
+    const sortedProjects = [...matchingProjects];
+
+    switch (sortBy) {
+      case 'name-asc':
+        sortedProjects.sort((left, right) => left.name.localeCompare(right.name));
+        break;
+      case 'progress-desc':
+        sortedProjects.sort((left, right) => right.progress - left.progress);
+        break;
+      case 'tasks-desc':
+        sortedProjects.sort((left, right) => right.tasksTotal - left.tasksTotal);
+        break;
+      default:
+        break;
+    }
+
+    return sortedProjects;
+  }, [projects, searchQuery, sortBy, statusFilter]);
 
   const handleCreateProject = async (data: { name: string; description?: string }) => {
     try {
@@ -203,9 +256,7 @@ export function Projects() {
       <Sidebar />
       <TopBar />
 
-      {/* Main Content */}
       <main className="ml-56 pt-16 p-8">
-        {/* Header */}
         <div className="flex items-start justify-between mb-8">
           <div>
             <h1 className="text-3xl font-semibold mb-2" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
@@ -222,34 +273,83 @@ export function Projects() {
           </button>
         </div>
 
-        {/* Controls Bar */}
         <div className="bg-white rounded-lg p-4 mb-6 flex items-center gap-4 shadow-sm">
-          {/* Search */}
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
               type="text"
               placeholder="Search projects..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(event) => setSearchQuery(event.target.value)}
               className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7] focus:border-transparent"
             />
           </div>
 
-          {/* Filter */}
-          <button className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium">
-            <Filter className="w-4 h-4" />
-            Filter
-            <ChevronDown className="w-4 h-4" />
-          </button>
+          <div ref={filterRef} className="relative">
+            <button
+              onClick={() => {
+                setIsFilterOpen((previous) => !previous);
+                setIsSortOpen(false);
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium"
+            >
+              <Filter className="w-4 h-4" />
+              {filterLabels[statusFilter]}
+              <ChevronDown className={`w-4 h-4 transition-transform ${isFilterOpen ? 'rotate-180' : ''}`} />
+            </button>
 
-          {/* Sort */}
-          <button className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium">
-            Sort
-            <ChevronDown className="w-4 h-4" />
-          </button>
+            {isFilterOpen && (
+              <div className="absolute right-0 mt-2 w-44 rounded-lg border border-gray-200 bg-white py-2 shadow-lg z-20">
+                {(['all', 'Active', 'Completed', 'On Hold'] as StatusFilter[]).map((option) => (
+                  <button
+                    key={option}
+                    onClick={() => {
+                      setStatusFilter(option);
+                      setIsFilterOpen(false);
+                    }}
+                    className={`w-full px-4 py-2 text-left text-sm transition-colors ${
+                      statusFilter === option ? 'bg-[#204EA7]/10 text-[#204EA7]' : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    {filterLabels[option]}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
-          {/* View Toggle */}
+          <div ref={sortRef} className="relative">
+            <button
+              onClick={() => {
+                setIsSortOpen((previous) => !previous);
+                setIsFilterOpen(false);
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium"
+            >
+              {sortLabels[sortBy]}
+              <ChevronDown className={`w-4 h-4 transition-transform ${isSortOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {isSortOpen && (
+              <div className="absolute right-0 mt-2 w-48 rounded-lg border border-gray-200 bg-white py-2 shadow-lg z-20">
+                {(['default', 'name-asc', 'progress-desc', 'tasks-desc'] as SortOption[]).map((option) => (
+                  <button
+                    key={option}
+                    onClick={() => {
+                      setSortBy(option);
+                      setIsSortOpen(false);
+                    }}
+                    className={`w-full px-4 py-2 text-left text-sm transition-colors ${
+                      sortBy === option ? 'bg-[#204EA7]/10 text-[#204EA7]' : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    {sortLabels[option]}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="flex items-center gap-1 bg-gray-50 rounded-lg p-1">
             <button
               onClick={() => setViewMode('grid')}
@@ -266,7 +366,6 @@ export function Projects() {
           </div>
         </div>
 
-        {/* Projects Grid/List */}
         {loading ? (
           <div className="bg-white rounded-lg p-12 text-center shadow-sm">
             <Loader2 className="w-8 h-8 animate-spin text-[#204EA7] mx-auto mb-4" />
@@ -290,7 +389,7 @@ export function Projects() {
             <h3 className="text-lg font-semibold text-gray-900 mb-2" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
               No projects found
             </h3>
-            <p className="text-gray-600 mb-6">Create your first project to start tracking work</p>
+            <p className="text-gray-600 mb-6">Try adjusting your search, filter, or sort options.</p>
             <button className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#204EA7] text-white rounded-lg hover:bg-[#1a3d8a] transition-colors font-medium">
               <Plus className="w-5 h-5" />
               Create Project
@@ -307,7 +406,6 @@ export function Projects() {
                 }}
                 className="bg-white rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow cursor-pointer border border-transparent hover:border-[#204EA7]/20"
               >
-                {/* Header */}
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
                     <h3 className="text-lg font-semibold mb-1" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
@@ -360,10 +458,8 @@ export function Projects() {
                   </div>
                 </div>
 
-                {/* Description */}
                 <p className="text-sm text-gray-600 mb-4 line-clamp-2">{project.description}</p>
 
-                {/* Progress */}
                 <div className="mb-4">
                   <div className="flex items-center justify-between text-sm mb-2">
                     <span className="text-gray-600">Progress</span>
@@ -377,7 +473,6 @@ export function Projects() {
                   </div>
                 </div>
 
-                {/* Stats */}
                 <div className="flex items-center gap-4 mb-4 text-sm text-gray-600">
                   <div className="flex items-center gap-1.5">
                     <CheckSquare className="w-4 h-4" />
@@ -385,12 +480,11 @@ export function Projects() {
                   </div>
                 </div>
 
-                {/* Footer */}
                 <div className="flex items-center justify-between pt-4 border-t border-gray-100">
                   <div className="flex items-center -space-x-2">
-                    {project.team.map((member, idx) => (
+                    {project.team.map((member, index) => (
                       <div
-                        key={idx}
+                        key={index}
                         className="w-8 h-8 rounded-full bg-[#204EA7] flex items-center justify-center text-white text-xs font-semibold border-2 border-white"
                       >
                         {member}
@@ -455,9 +549,9 @@ export function Projects() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center -space-x-2">
-                          {project.team.slice(0, 3).map((member, idx) => (
+                          {project.team.slice(0, 3).map((member, index) => (
                             <div
-                              key={idx}
+                              key={index}
                               className="w-8 h-8 rounded-full bg-[#204EA7] flex items-center justify-center text-white text-xs font-semibold border-2 border-white"
                             >
                               {member}

@@ -21,7 +21,7 @@ import {
   Delete,
   Param,
   Body,
-  Req,
+  Query,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
@@ -55,9 +55,12 @@ export class ProjectsController {
   }
 
   @Get()
-  async list(@CurrentUser() user: AuthenticatedUser) {
+  async list(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('search') search?: string,
+  ) {
     const role = await this.getUserRole(user.userId);
-    return this.projectsService.listForUser(user.userId, role);
+    return this.projectsService.listForUser(user.userId, role, search);
   }
 
   @Post()
