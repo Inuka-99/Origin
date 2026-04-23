@@ -89,28 +89,21 @@ export class TasksService {
         throw new BadRequestException(`Invalid task status: ${status}`);
       }
       return result;
+    };
+
     const insertPayload: Partial<Task> = {
       project_id: dto.project_id ?? null,
       title: dto.title,
       description: dto.description ?? null,
-      status: dto.status ?? 'todo',
+      status: convertStatus(dto.status ?? 'To Do'),
       priority: (dto.priority ?? 'Medium').toLowerCase(),
       due_date: dto.due_date ?? null,
+      assigned_to: dto.assigned_to ?? null,
       created_by: userId,
     };
 
     const { data, error } = await this.client
       .from('tasks')
-      .insert({
-        project_id: dto.project_id ?? null,
-        title: dto.title,
-        description: dto.description ?? null,
-        status: convertStatus(dto.status ?? 'To Do'),
-        priority: (dto.priority ?? 'Medium').toLowerCase(),
-        due_date: dto.due_date ?? null,
-        assigned_to: dto.assigned_to ?? null,
-        created_by: userId,
-      })
       .insert(insertPayload)
       .select('*')
       .single();
@@ -119,8 +112,6 @@ export class TasksService {
       throw new BadRequestException(error?.message ?? 'Unable to create task');
     }
 
-    await this.broadcastTaskEvent('task:created', data);
-    return data as Task;
     const task = data as Task;
 
     if (dto.assignee_id) {
@@ -137,6 +128,7 @@ export class TasksService {
       task.assignee_id = dto.assignee_id;
     }
 
+    await this.broadcastTaskEvent('task:created', task);
     return task;
   }
 
@@ -297,7 +289,10 @@ export class TasksService {
       };
       if (!statusMap[normalized]) {
         throw new BadRequestException(`Invalid task status: ${updatePayload.status}`);
-    // Validate assignee is a project member if assigning to a project task
+      }
+      updatePayload.status = statusMap[normalized];
+    }
+
     if (dto.assignee_id !== undefined && task.project_id) {
       if (dto.assignee_id) {
         await this.assertProjectMember(task.project_id, dto.assignee_id);
@@ -305,7 +300,6 @@ export class TasksService {
     }
 
     const assignmentUserId = dto.assignee_id;
-    const updatePayload: any = { ...dto };
     delete updatePayload.assignee_id;
     if (updatePayload.priority) {
       updatePayload.priority = updatePayload.priority.toLowerCase();
@@ -322,8 +316,6 @@ export class TasksService {
       throw new BadRequestException(error?.message ?? 'Update failed');
     }
 
-    await this.broadcastTaskEvent('task:updated', data);
-    return data as Task;
     const updatedTask = data as Task;
 
     if (assignmentUserId !== undefined && task.project_id) {
@@ -331,6 +323,7 @@ export class TasksService {
       updatedTask.assignee_id = assignmentUserId ?? null;
     }
 
+    await this.broadcastTaskEvent('task:updated', updatedTask);
     return updatedTask;
   }
 

@@ -301,7 +301,6 @@ export function Projects() {
             {filteredProjects.map((project) => (
               <div
                 key={project.id}
-                onClick={() => navigate('/project-board')}
                 onClick={() => {
                   setSelectedProject(project);
                   setShowMembersModal(true);

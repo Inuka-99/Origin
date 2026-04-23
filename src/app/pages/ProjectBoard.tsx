@@ -350,13 +350,7 @@ export function ProjectBoard() {
         const projectName = task.project_id ? (resolvedProjects.find((p) => p.id === task.project_id)?.name ?? 'Unknown') : 'Standalone';
         const projectColor = task.project_id ? (resolvedColorMap.get(task.project_id) ?? '#204EA7') : '#6B7280';
         const priority = (task.priority ? task.priority.charAt(0).toUpperCase() + task.priority.slice(1) : 'Medium') as Task['priority'];
-        const dbToDisplay: Record<string, Task['status']> = {
-          todo: 'To Do',
-          in_progress: 'In Progress',
-          'In Review': 'In Review',
-          'Done': 'Done',
-        };
-        const displayStatus = dbToDisplay[task.status] ?? 'To Do';
+        const displayStatus = databaseToDisplayStatus(task.status);
         const normalized: Task = {
           id: task.id,
           title: task.title,
@@ -370,10 +364,6 @@ export function ProjectBoard() {
           completed: task.status === 'Done',
           status: displayStatus,
         };
-        const statusKey = task.status === 'todo' ? 'todo'
-          : task.status === 'in_progress' ? 'in-progress'
-          : task.status === 'In Review' ? 'review'
-        const displayStatus = databaseToDisplayStatus(task.status);
         const statusKey = displayStatus === 'To Do' ? 'todo'
           : displayStatus === 'In Progress' ? 'in-progress'
           : displayStatus === 'In Review' ? 'review'
@@ -470,7 +460,6 @@ export function ProjectBoard() {
     try {
       if (taskFormMode === 'create') {
         const created = await api.post<ApiTask>('/tasks', requestBody);
-        const statusKey = created.status === 'todo' ? 'todo' : created.status === 'in_progress' ? 'in-progress' : created.status === 'In Review' ? 'review' : 'done';
         const projectName = created.project_id ? (projects.find((p) => p.id === created.project_id)?.name ?? 'Unknown') : 'Standalone';
         const projectColor = created.project_id ? (projectColorMap.get(created.project_id) ?? '#204EA7') : '#6B7280';
         const priority = (created.priority ? created.priority.charAt(0).toUpperCase() + created.priority.slice(1) : 'Medium') as Task['priority'];
@@ -487,9 +476,9 @@ export function ProjectBoard() {
           status: ({ todo: 'To Do', in_progress: 'In Progress', 'In Review': 'In Review', 'Done': 'Done' } as Record<string, Task['status']>)[created.status] ?? 'To Do',
         };
         const displayStatus = databaseToDisplayStatus(created.status);
-        const statusKey = displayStatus === 'To Do' ? 'todo' : displayStatus === 'In Progress' ? 'in-progress' : displayStatus === 'In Review' ? 'review' : 'done';
+        const statusKeyValue = displayStatus === 'To Do' ? 'todo' : displayStatus === 'In Progress' ? 'in-progress' : displayStatus === 'In Review' ? 'review' : 'done';
         setColumns((prev) => prev.map((col) =>
-          col.id === statusKey ? { ...col, tasks: [...col.tasks, newTask] } : col,
+          col.id === statusKeyValue ? { ...col, tasks: [...col.tasks, newTask] } : col,
         ));
       } else if (editingTask) {
         await api.patch<ApiTask>(`/tasks/${editingTask.id}`, requestBody);
