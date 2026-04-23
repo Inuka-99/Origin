@@ -16,20 +16,18 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
-  const { domain, clientId, audience } = getAuth0Config();
+  const { domain, clientId, audience, redirectUri } = getAuth0Config();
 
   return (
     <Auth0Provider
       domain={domain}
       clientId={clientId}
       authorizationParams={{
-        redirect_uri: window.location.origin,
+        redirect_uri: redirectUri ?? window.location.origin,
         audience,
       }}
       // Cache tokens in memory (default). For persistent sessions across
       // refreshes, you can switch to `cacheLocation="localstorage"`.
     >
       {children}
-    </Auth0Provider>
-  );
-}
+   

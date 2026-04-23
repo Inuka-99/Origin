@@ -27,6 +27,7 @@ export interface Auth0Config {
   clientId: string;
   audience: string;
   apiUrl: string;
+  redirectUri?: string;
 }
 
 /** Reads and validates Auth0 config from Vite env vars. */
@@ -35,6 +36,7 @@ export function getAuth0Config(): Auth0Config {
   const clientId = import.meta.env.VITE_AUTH0_CLIENT_ID;
   const audience = import.meta.env.VITE_AUTH0_AUDIENCE;
   const apiUrl = import.meta.env.VITE_API_URL;
+  const redirectUri = import.meta.env.VITE_AUTH0_REDIRECT_URI;
 
   if (!domain || !clientId || !audience) {
     throw new Error(
@@ -43,6 +45,4 @@ export function getAuth0Config(): Auth0Config {
         'are set in your .env file at the project root.'
     );
   }
-
-  return { domain, clientId, audience, apiUrl: apiUrl || 'http://localhost:3000' };
-}
+
