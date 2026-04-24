@@ -1,6 +1,6 @@
 import { Sidebar } from '../components/Sidebar';
 import { TopBar } from '../components/TopBar';
-import { Search, Filter, ChevronDown, Plus, Calendar, AlertCircle, CheckCircle2, Circle, Trash2, Edit3 } from 'lucide-react';
+import { Search, Filter, ChevronDown, Plus, Calendar, AlertCircle, CheckCircle2, Circle, Trash2, Edit3, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router';
 import { useApiClient } from '../lib/api-client';
@@ -29,6 +29,12 @@ type ApiTask = {
   due_date: string | null;
   assignee_id: string | null;
   assigned_to: string | null;
+};
+
+type BulkUpdateResponse = {
+  updated: ApiTask[];
+  updatedCount: number;
+  requestedCount: number;
 };
 
 type PriorityFilter = 'all' | Task['priority'];
@@ -76,6 +82,12 @@ export function MyTasks() {
   const [formError, setFormError] = useState<string | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
+  const [bulkStatus, setBulkStatus] = useState<Task['status'] | ''>('');
+  const [bulkPriority, setBulkPriority] = useState<Task['priority'] | ''>('');
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const [bulkMessage, setBulkMessage] = useState<string | null>(null);
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
   const latestSearchRequestRef = useRef(0);
   const priorityMenuRef = useRef<HTMLDivElement | null>(null);
   const sortMenuRef = useRef<HTMLDivElement | null>(null);
@@ -303,6 +315,9 @@ export function MyTasks() {
   }, [api, dueDateFilter, priorityFilter, searchQuery, sortBy, statusFilter, tasks]);
 
   const filteredTasks = displayedTasks;
+  const selectedTaskIdSet = new Set(selectedTaskIds);
+  const allDisplayedTasksSelected = filteredTasks.length > 0
+    && filteredTasks.every((task) => selectedTaskIdSet.has(task.id));
 
   const getPriorityColor = (priority: Task['priority']) => {
     switch (priority) {
@@ -431,9 +446,102 @@ export function MyTasks() {
     try {
       await api.delete(`/tasks/${taskId}`);
       setTasks((previous) => previous.filter((task) => task.id !== taskId));
+      setDisplayedTasks((previous) => previous.filter((task) => task.id !== taskId));
+      setSelectedTaskIds((previous) => previous.filter((id) => id !== taskId));
     } catch (error) {
       console.error('Unable to delete task', error);
       alert('Task deletion failed.');
+    }
+  };
+
+  const toggleTaskSelection = (taskId: string) => {
+    setBulkError(null);
+    setBulkMessage(null);
+    setSelectedTaskIds((previous) =>
+      previous.includes(taskId)
+        ? previous.filter((id) => id !== taskId)
+        : [...previous, taskId],
+    );
+  };
+
+  const toggleAllDisplayedTasks = () => {
+    setBulkError(null);
+    setBulkMessage(null);
+    setSelectedTaskIds((previous) => {
+      const displayedIds = filteredTasks.map((task) => task.id);
+      if (displayedIds.length === 0) {
+        return previous;
+      }
+
+      const displayedIdSet = new Set(displayedIds);
+      const allSelected = displayedIds.every((id) => previous.includes(id));
+
+      if (allSelected) {
+        return previous.filter((id) => !displayedIdSet.has(id));
+      }
+
+      return Array.from(new Set([...previous, ...displayedIds]));
+    });
+  };
+
+  const clearBulkSelection = () => {
+    setSelectedTaskIds([]);
+    setBulkStatus('');
+    setBulkPriority('');
+    setBulkError(null);
+    setBulkMessage(null);
+  };
+
+  const applyBulkUpdate = async () => {
+    if (selectedTaskIds.length === 0) {
+      setBulkError('Select at least one task.');
+      return;
+    }
+
+    if (!bulkStatus && !bulkPriority) {
+      setBulkError('Choose a status or priority to update.');
+      return;
+    }
+
+    setIsBulkUpdating(true);
+    setBulkError(null);
+    setBulkMessage(null);
+
+    try {
+      const payload: {
+        taskIds: string[];
+        status?: string;
+        priority?: string;
+      } = {
+        taskIds: selectedTaskIds,
+      };
+
+      if (bulkStatus) {
+        payload.status = displayToDatabaseStatus(bulkStatus);
+      }
+
+      if (bulkPriority) {
+        payload.priority = getPriorityEnumValue(bulkPriority);
+      }
+
+      const result = await api.patch<BulkUpdateResponse>('/tasks/bulk', payload);
+      const updatedTasks = result.updated.map(normalizeTask);
+      const updatedById = new Map(updatedTasks.map((task) => [task.id, task]));
+
+      const replaceUpdatedTasks = (current: Task[]) =>
+        current.map((task) => updatedById.get(task.id) ?? task);
+
+      setTasks(replaceUpdatedTasks);
+      setDisplayedTasks(replaceUpdatedTasks);
+      setSelectedTaskIds([]);
+      setBulkStatus('');
+      setBulkPriority('');
+      setBulkMessage(`Updated ${result.updatedCount} task${result.updatedCount === 1 ? '' : 's'}.`);
+    } catch (error) {
+      console.error('Bulk update failed', error);
+      setBulkError('Bulk update failed. Check your permissions and try again.');
+    } finally {
+      setIsBulkUpdating(false);
     }
   };
 
@@ -571,6 +679,66 @@ export function MyTasks() {
           </div>
         </div>
 
+        {(selectedTaskIds.length > 0 || bulkError || bulkMessage) && (
+          <div className="bg-white rounded-lg p-4 mb-6 shadow-sm border border-gray-200">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2 mr-auto">
+                <span className="inline-flex h-8 min-w-8 items-center justify-center rounded-lg bg-[#204EA7]/10 px-2 text-sm font-semibold text-[#204EA7]">
+                  {selectedTaskIds.length}
+                </span>
+                <span className="text-sm font-medium text-gray-800">
+                  {selectedTaskIds.length === 1 ? 'task selected' : 'tasks selected'}
+                </span>
+              </div>
+
+              <select
+                value={bulkStatus}
+                onChange={(event) => setBulkStatus(event.target.value as Task['status'] | '')}
+                disabled={isBulkUpdating}
+                className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#204EA7] disabled:opacity-50"
+              >
+                <option value="">Keep status</option>
+                <option value="To Do">To Do</option>
+                <option value="In Progress">In Progress</option>
+                <option value="In Review">In Review</option>
+                <option value="Done">Done</option>
+              </select>
+
+              <select
+                value={bulkPriority}
+                onChange={(event) => setBulkPriority(event.target.value as Task['priority'] | '')}
+                disabled={isBulkUpdating}
+                className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#204EA7] disabled:opacity-50"
+              >
+                <option value="">Keep priority</option>
+                <option value="High">High</option>
+                <option value="Medium">Medium</option>
+                <option value="Low">Low</option>
+              </select>
+
+              <button
+                onClick={applyBulkUpdate}
+                disabled={isBulkUpdating || selectedTaskIds.length === 0 || (!bulkStatus && !bulkPriority)}
+                className="px-4 py-2 rounded-lg bg-[#204EA7] text-white text-sm font-medium hover:bg-[#1a3d8a] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {isBulkUpdating ? 'Updating...' : 'Apply Update'}
+              </button>
+
+              <button
+                onClick={clearBulkSelection}
+                disabled={isBulkUpdating}
+                className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 transition-colors"
+                title="Clear selection"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {bulkError && <p className="mt-3 text-sm text-red-600">{bulkError}</p>}
+            {bulkMessage && <p className="mt-3 text-sm text-green-700">{bulkMessage}</p>}
+          </div>
+        )}
+
         <div className="grid grid-cols-4 gap-4 mb-6">
           <div className="bg-white rounded-lg p-4 shadow-sm">
             <div className="text-2xl font-semibold mb-1" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
@@ -603,6 +771,16 @@ export function MyTasks() {
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
+                  <th className="w-12 px-6 py-3">
+                    <input
+                      type="checkbox"
+                      checked={allDisplayedTasksSelected}
+                      onChange={toggleAllDisplayedTasks}
+                      disabled={filteredTasks.length === 0}
+                      className="h-4 w-4 rounded border-gray-300 text-[#204EA7] focus:ring-[#204EA7]"
+                      aria-label="Select all visible tasks"
+                    />
+                  </th>
                   <th className="text-left px-6 py-3 text-sm font-semibold text-gray-900">Task Name</th>
                   <th className="text-left px-6 py-3 text-sm font-semibold text-gray-900">Project</th>
                   <th className="text-left px-6 py-3 text-sm font-semibold text-gray-900">Priority</th>
@@ -614,6 +792,15 @@ export function MyTasks() {
               <tbody className="divide-y divide-gray-200">
                 {filteredTasks.map((task) => (
                   <tr key={task.id} className="hover:bg-gray-50 cursor-pointer">
+                    <td className="px-6 py-4">
+                      <input
+                        type="checkbox"
+                        checked={selectedTaskIdSet.has(task.id)}
+                        onChange={() => toggleTaskSelection(task.id)}
+                        className="h-4 w-4 rounded border-gray-300 text-[#204EA7] focus:ring-[#204EA7]"
+                        aria-label={`Select ${task.title}`}
+                      />
+                    </td>
                     <td className="px-6 py-4">
                       <div className="font-medium text-gray-900">{task.title}</div>
                     </td>

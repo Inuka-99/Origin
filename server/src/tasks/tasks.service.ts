@@ -43,6 +43,18 @@ export interface UpdateTaskDto {
   assignee_id?: string | null;
 }
 
+export interface BulkUpdateTasksDto {
+  taskIds?: string[];
+  status?: UpdateTaskDto['status'];
+  priority?: UpdateTaskDto['priority'];
+}
+
+export interface BulkUpdateTasksResult {
+  updated: Task[];
+  updatedCount: number;
+  requestedCount: number;
+}
+
 export type TaskSortOption = 'default' | 'title-asc' | 'due-asc' | 'priority-desc';
 export type TaskStatusFilter = 'all' | 'To Do' | 'In Progress' | 'In Review' | 'Done';
 export type TaskPriorityFilter = 'all' | 'High' | 'Medium' | 'Low';
@@ -338,6 +350,55 @@ export class TasksService {
     return updatedTask;
   }
 
+  async bulkUpdate(
+    dto: BulkUpdateTasksDto,
+    userId: string,
+    userRole: string,
+  ): Promise<BulkUpdateTasksResult> {
+    const taskIds = Array.from(
+      new Set(
+        (dto.taskIds ?? [])
+          .map((id) => id.trim())
+          .filter(Boolean),
+      ),
+    );
+
+    if (taskIds.length === 0) {
+      throw new BadRequestException('Select at least one task to update');
+    }
+
+    const updatePayload: Pick<UpdateTaskDto, 'status' | 'priority'> = {};
+
+    if (dto.status !== undefined) {
+      updatePayload.status = this.normalizeStatusValue(dto.status) as UpdateTaskDto['status'];
+    }
+
+    if (dto.priority !== undefined) {
+      updatePayload.priority = this.normalizePriorityForWrite(dto.priority) as UpdateTaskDto['priority'];
+    }
+
+    if (Object.keys(updatePayload).length === 0) {
+      throw new BadRequestException('Choose a status or priority to update');
+    }
+
+    const updated: Task[] = [];
+
+    for (const taskId of taskIds) {
+      updated.push(await this.update(taskId, updatePayload, userId, userRole));
+    }
+
+    await this.broadcastTaskEvent('tasks:bulk-updated', {
+      taskIds,
+      updatedCount: updated.length,
+    });
+
+    return {
+      updated,
+      updatedCount: updated.length,
+      requestedCount: taskIds.length,
+    };
+  }
+
   private async syncTaskAssignment(taskId: string, userId: string | null): Promise<void> {
     const { error: deletionError } = await this.client
       .from('task_assignments')
@@ -558,6 +619,46 @@ export class TasksService {
 
   private normalizePriorityValue(priority?: string): string {
     return priority?.trim().toLowerCase() ?? '';
+  }
+
+  private normalizePriorityForWrite(priority: string): string {
+    const normalized = priority.trim().toLowerCase();
+    const priorityMap: Record<string, string> = {
+      low: 'low',
+      medium: 'medium',
+      high: 'high',
+    };
+
+    const result = priorityMap[normalized];
+    if (!result) {
+      throw new BadRequestException(`Invalid task priority: ${priority}`);
+    }
+
+    return result;
+  }
+
+  private normalizeStatusValue(status: string): string {
+    const normalized = status.trim().toLowerCase();
+    const statusMap: Record<string, string> = {
+      'to do': 'todo',
+      todo: 'todo',
+      to_do: 'todo',
+      'in progress': 'in_progress',
+      in_progress: 'in_progress',
+      'in-progress': 'in_progress',
+      'in review': 'In Review',
+      in_review: 'In Review',
+      review: 'In Review',
+      done: 'Done',
+      completed: 'Done',
+    };
+
+    const result = statusMap[normalized];
+    if (!result) {
+      throw new BadRequestException(`Invalid task status: ${status}`);
+    }
+
+    return result;
   }
 
   private normalizeTaskStatusValue(status?: string): TaskStatusFilter {

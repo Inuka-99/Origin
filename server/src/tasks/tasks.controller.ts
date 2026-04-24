@@ -18,6 +18,7 @@ import {
 } from '../auth';
 import {
   TasksService,
+  type BulkUpdateTasksDto,
   type CreateTaskDto,
   type TaskDueDateFilter,
   type TaskPriorityFilter,
@@ -91,6 +92,15 @@ export class TasksController {
   ) {
     const role = await this.getUserRole(user.userId);
     return this.tasksService.getById(id, user.userId, role);
+  }
+
+  @Patch('bulk')
+  async bulkUpdate(
+    @Body() dto: BulkUpdateTasksDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const role = await this.getUserRole(user.userId);
+    return this.tasksService.bulkUpdate(dto, user.userId, role);
   }
 
   @Patch(':id')
