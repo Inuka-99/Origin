@@ -60,9 +60,12 @@ export class ProjectsController {
   }
 
   @Get()
-  async list(@CurrentUser() user: AuthenticatedUser) {
+  async list(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('search') search?: string,
+  ) {
     const role = await this.getUserRole(user.userId);
-    return this.projectsService.listForUser(user.userId, role);
+    return this.projectsService.listForUser(user.userId, role, search);
   }
 
   @Post()
@@ -99,8 +102,9 @@ export class ProjectsController {
   }
 
   @Get(':id/members')
-  async listMembers(@Param('id') id: string) {
-    return this.projectsService.listMembers(id);
+  async listMembers(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    const role = await this.getUserRole(user.userId);
+    return this.projectsService.listMembers(id, user.userId, role);
   }
 
   @Get(':id/member-candidates')
@@ -116,11 +120,11 @@ export class ProjectsController {
   @Post(':id/members')
   async addMember(
     @Param('id') id: string,
-    @Body() body: AddProjectMemberDto,
+    @Body() body: { user_id: string; role?: 'admin' | 'member' },
     @CurrentUser() user: AuthenticatedUser,
   ) {
     const role = await this.getUserRole(user.userId);
-    return this.projectsService.addMember(id, body, user.userId, role);
+    return this.projectsService.addMember(id, body.user_id, body.role, user.userId, role);
   }
 
   @Delete(':id/members/:userId')

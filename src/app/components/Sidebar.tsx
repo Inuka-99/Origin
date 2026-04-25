@@ -1,4 +1,4 @@
-import { LayoutDashboard, Folder, CheckSquare, Calendar, Users, Settings, MessageSquare, Shield } from 'lucide-react';
+import { LayoutDashboard, Folder, CheckSquare, Calendar, Users, Settings, MessageSquare, Shield, Kanban, Activity } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router';
 import { useUserRole } from '../auth/useUserRole';
 
@@ -14,10 +14,12 @@ interface MenuItem {
 const menuItems: MenuItem[] = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
   { icon: Folder, label: 'Projects', path: '/projects' },
+  { icon: Kanban, label: 'Board', path: '/project-board' },
   { icon: CheckSquare, label: 'My Tasks', path: '/tasks' },
   { icon: MessageSquare, label: 'Messages', path: '/messages', badge: 3 },
   { icon: Calendar, label: 'Calendar', path: '/calendar' },
   { icon: Users, label: 'Team', path: '/team' },
+  { icon: Activity, label: 'Activity Log', path: '/activity-log' },
   { icon: Shield, label: 'Admin', path: '/admin', adminOnly: true },
   { icon: Settings, label: 'Settings', path: '/settings' },
 ];

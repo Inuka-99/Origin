@@ -1,8 +1,11 @@
 import { Sidebar } from '../components/Sidebar';
 import { TopBar } from '../components/TopBar';
 import { Search, Filter, ChevronDown, Plus, Calendar, AlertCircle, CheckCircle2, Circle, Trash2, Edit3 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router';
 import { useApiClient } from '../lib/api-client';
+import { useTaskRealtime } from '../lib/use-task-realtime';
+import { useClickOutside } from '../lib/useClickOutside';
 
 interface Task {
   id: string;
@@ -11,6 +14,7 @@ interface Task {
   projectId: string | null;
   priority: 'High' | 'Medium' | 'Low';
   dueDate: string;
+  dueDateValue: string | null;
   status: 'To Do' | 'In Progress' | 'In Review' | 'Done';
   assignee: string;
 }
@@ -18,53 +22,98 @@ interface Task {
 type ApiTask = {
   id: string;
   title: string;
+  description: string | null;
   project_id: string | null;
-  status: 'To Do' | 'In Progress' | 'In Review' | 'Done';
+  status: 'todo' | 'in_progress' | 'In Review' | 'Done' | 'completed' | null;
   priority: 'High' | 'Medium' | 'Low';
   due_date: string | null;
-
+  assignee_id: string | null;
+  assigned_to: string | null;
 };
 
-const [initial] = [] as Task[]; // placeholder
+type PriorityFilter = 'all' | Task['priority'];
+type DueDateFilter = 'all' | 'today' | 'upcoming' | 'overdue' | 'no-date';
+type SortOption = 'default' | 'title-asc' | 'due-asc' | 'priority-desc';
 
+const priorityLabels: Record<PriorityFilter, string> = {
+  all: 'All Priorities',
+  High: 'High',
+  Medium: 'Medium',
+  Low: 'Low',
+};
+
+const dueDateLabels: Record<DueDateFilter, string> = {
+  all: 'All Due Dates',
+  today: 'Due Today',
+  upcoming: 'Upcoming',
+  overdue: 'Overdue',
+  'no-date': 'No Due Date',
+};
+
+const sortLabels: Record<SortOption, string> = {
+  default: 'Default Order',
+  'title-asc': 'Title A-Z',
+  'due-asc': 'Due Date',
+  'priority-desc': 'Priority High-Low',
+};
 export function MyTasks() {
   const api = useApiClient();
+  const location = useLocation();
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [displayedTasks, setDisplayedTasks] = useState<Task[]>([]);
   const [projects, setProjects] = useState<{id:string;name:string}[]>([]);
+  const [projectMembers, setProjectMembers] = useState<Record<string, {id:string;user_id:string;profiles?:{full_name?:string;email?:string}}[]>>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [isSearchLoading, setIsSearchLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all');
+  const [dueDateFilter, setDueDateFilter] = useState<DueDateFilter>('all');
+  const [sortBy, setSortBy] = useState<SortOption>('default');
+  const [isPriorityMenuOpen, setIsPriorityMenuOpen] = useState(false);
+  const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const latestSearchRequestRef = useRef(0);
+  const priorityMenuRef = useRef<HTMLDivElement | null>(null);
+  const sortMenuRef = useRef<HTMLDivElement | null>(null);
   const [taskForm, setTaskForm] = useState<{
     title: string;
     project_id: string;
     status: Task['status'];
     priority: Task['priority'];
     due_date: string;
+    assignee_id: string;
   }>({
     title: '',
     project_id: '',
     status: 'To Do',
     priority: 'Medium',
     due_date: '',
+    assignee_id: '',
   });
 
-  const normalizeTask = (task: ApiTask): Task => ({
-    id: task.id,
-    title: task.title,
-    project: task.project_id ? task.project_id : 'Standalone',
-    projectId: task.project_id ?? null,
-    priority: (task.priority?.charAt(0).toUpperCase() + task.priority?.slice(1)) as Task['priority'] || 'Medium',
-    dueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No due date',
-    status: (task.status
-      ?.split('_')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ') || 'To Do') as Task['status'],
-    assignee: 'Unassigned',
-  });
+  useClickOutside(priorityMenuRef, () => setIsPriorityMenuOpen(false));
+  useClickOutside(sortMenuRef, () => setIsSortMenuOpen(false));
+
+  const normalizeTask = (task: ApiTask): Task => {
+    const projectMembersList = task.project_id ? projectMembers[task.project_id] : [];
+    const assignee = projectMembersList?.find((member) => member.user_id === task.assignee_id);
+
+    return {
+      id: task.id,
+      title: task.title,
+      project: task.project_id || 'Standalone',
+      projectId: task.project_id ?? null,
+      priority: (task.priority?.charAt(0).toUpperCase() + task.priority?.slice(1)) as Task['priority'] || 'Medium',
+      dueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No due date',
+      dueDateValue: task.due_date,
+      status: databaseToDisplayStatus(task.status),
+      assignee: assignee ? (assignee.profiles?.full_name || assignee.profiles?.email || assignee.user_id) : 'Unassigned',
+    };
+  };
 
   const getTaskProjectName = (task: Task): string => {
     if (!task.projectId) return 'Standalone';
@@ -72,21 +121,26 @@ export function MyTasks() {
     return match?.name ?? task.project;
   };
 
-  const getStatusEnumValue = (status: string): string => {
+  const databaseToDisplayStatus = (status: string): string => {
+    if (!status) return 'To Do';
     const map: Record<string, string> = {
       'todo': 'To Do',
-      'to do': 'To Do',
-      'in progress': 'In Progress',
       'in_progress': 'In Progress',
-      'in-progress': 'In Progress',
-      'in review': 'In Review',
-      'in_review': 'In Review',
-      'review': 'In Review',
-      'done': 'Done',
+      'In Review': 'In Review',
+      'Done': 'Done',
+      'completed': 'Done',
     };
+    return map[status] || status;
+  };
 
-    const normalized = status.trim().toLowerCase();
-    return map[normalized] ?? status;
+  const displayToDatabaseStatus = (status: Task['status']): string => {
+    const map: Record<Task['status'], string> = {
+      'To Do': 'todo',
+      'In Progress': 'in_progress',
+      'In Review': 'In Review',
+      'Done': 'Done',
+    };
+    return map[status] || status;
   };
 
   const getPriorityEnumValue = (priority: string): string => {
@@ -97,34 +151,98 @@ export function MyTasks() {
     setIsLoading(true);
     try {
       const data = await api.get<ApiTask[]>('/tasks');
-      setTasks(data.map(normalizeTask));
+      const normalizedTasks = data.map(normalizeTask);
+      setTasks(normalizedTasks);
+      setDisplayedTasks(normalizedTasks);
     } catch (error) {
       console.error('Failed to load tasks', error);
       setTasks([]);
+      setDisplayedTasks([]);
     } finally {
       setIsLoading(false);
     }
   };
 
+  const buildTasksPath = () => {
+    const params = new URLSearchParams();
+    const trimmedSearch = searchQuery.trim();
+
+    if (trimmedSearch) {
+      params.set('search', trimmedSearch);
+    }
+
+    if (statusFilter !== 'all') {
+      params.set('status', statusFilter);
+    }
+
+    if (priorityFilter !== 'all') {
+      params.set('priority', priorityFilter);
+    }
+
+    if (dueDateFilter !== 'all') {
+      params.set('dueDate', dueDateFilter);
+    }
+
+    if (sortBy !== 'default') {
+      params.set('sortBy', sortBy);
+    }
+
+    const queryString = params.toString();
+    return queryString ? `/tasks?${queryString}` : '/tasks';
+  };
+
   const loadProjects = async () => {
     try {
-      let data = await api.get<{id:string;name:string}[]>('/projects');
-
-      // Ensure a fallback project named Standalone exists so tasks never save without a valid project_id.
-      const standaloneProject = data?.find((p) => p.name === 'Standalone');
-      if (!standaloneProject) {
-        const createdStandalone = await api.post<{id:string;name:string}>('/projects', { name: 'Standalone' });
-        data = [createdStandalone, ...(data ?? [])];
-      }
-
+      const data = await api.get<{id:string;name:string}[]>('/projects');
       setProjects(data ?? []);
 
       if (!taskForm.project_id && (data?.length ?? 0) > 0) {
-        setTaskForm((prev) => ({ ...prev, project_id: data![0].id }));
+        setTaskForm((previous) => ({ ...previous, project_id: data![0].id }));
       }
     } catch (error) {
       console.error('Failed to load projects', error);
       setProjects([]);
+    }
+  };
+
+  const handleTaskCreated = useCallback((task: ApiTask) => {
+    setTasks((prev) => {
+      if (prev.some((item) => item.id === task.id)) return prev;
+      return [...prev, normalizeTask(task)];
+    });
+  }, [projects]);
+
+  const handleTaskUpdated = useCallback((task: ApiTask) => {
+    setTasks((prev) => {
+      const normalizedTask = normalizeTask(task);
+      let found = false;
+      const updatedTasks = prev.map((item) => {
+        if (item.id === task.id) {
+          found = true;
+          return normalizedTask;
+        }
+        return item;
+      });
+      return found ? updatedTasks : [...updatedTasks, normalizedTask];
+    });
+  }, [projects]);
+
+  const handleTaskDeleted = useCallback((payload: { id: string }) => {
+    setTasks((prev) => prev.filter((task) => task.id !== payload.id));
+  }, []);
+
+  useTaskRealtime({
+    onCreated: handleTaskCreated,
+    onUpdated: handleTaskUpdated,
+    onDeleted: handleTaskDeleted,
+  });
+  const loadProjectMembers = async (projectId: string) => {
+    if (!projectId || projectMembers[projectId]) return;
+    try {
+      const members = await api.get(`/projects/${projectId}/members`);
+      setProjectMembers(prev => ({ ...prev, [projectId]: members }));
+    } catch (error) {
+      console.error('Failed to load project members', error);
     }
   };
 
@@ -133,13 +251,58 @@ export function MyTasks() {
     void loadTasks();
   }, []);
 
-  const filteredTasks = tasks.filter(task => {
-    const projectName = getTaskProjectName(task);
-    const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      projectName.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || task.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    setSearchQuery(params.get('search') ?? '');
+  }, [location.search]);
+
+  useEffect(() => {
+    const trimmedSearch = searchQuery.trim();
+    const hasActiveFilters =
+      statusFilter !== 'all'
+      || priorityFilter !== 'all'
+      || dueDateFilter !== 'all'
+      || sortBy !== 'default';
+
+    if (!trimmedSearch && !hasActiveFilters) {
+      latestSearchRequestRef.current += 1;
+      setDisplayedTasks(tasks);
+      setIsSearchLoading(false);
+      return;
+    }
+
+    const requestId = latestSearchRequestRef.current + 1;
+    latestSearchRequestRef.current = requestId;
+
+    const timeoutId = window.setTimeout(() => {
+      void (async () => {
+        setIsSearchLoading(true);
+        try {
+          const data = await api.get<ApiTask[]>(buildTasksPath());
+          if (latestSearchRequestRef.current !== requestId) {
+            return;
+          }
+          setDisplayedTasks(data.map(normalizeTask));
+        } catch (error) {
+          if (latestSearchRequestRef.current !== requestId) {
+            return;
+          }
+          console.error('Failed to search tasks', error);
+          setDisplayedTasks([]);
+        } finally {
+          if (latestSearchRequestRef.current === requestId) {
+            setIsSearchLoading(false);
+          }
+        }
+      })();
+    }, 300);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [api, dueDateFilter, priorityFilter, searchQuery, sortBy, statusFilter, tasks]);
+
+  const filteredTasks = displayedTasks;
 
   const getPriorityColor = (priority: Task['priority']) => {
     switch (priority) {
@@ -178,30 +341,53 @@ export function MyTasks() {
       status: 'To Do',
       priority: 'Medium',
       due_date: '',
+      assignee_id: '',
     });
-    setIsModalOpen(true);
-  };
-
-  const openEditTaskModal = (task: Task) => {
-    setIsEditMode(true);
-    setEditingTaskId(task.id);
-    setFormError(null);
-
-    const assignedProjectId = task.projectId ? task.projectId : projects.find((p) => p.name === 'Standalone')?.id ?? '';
-
-    setTaskForm({
-      title: task.title,
-      project_id: assignedProjectId,
-      status: task.status,
-      priority: task.priority,
-      due_date: task.dueDate === 'No due date' ? '' : new Date(task.dueDate).toISOString().slice(0, 10),
-    });
+    if (defaultProjectId) {
+      void loadProjectMembers(defaultProjectId);
+    }
     setIsModalOpen(true);
   };
 
   const closeTaskModal = () => {
     setIsModalOpen(false);
     setFormError(null);
+    setIsEditMode(false);
+    setEditingTaskId(null);
+  };
+
+  const openEditTaskModal = async (task: Task) => {
+    setIsEditMode(true);
+    setEditingTaskId(task.id);
+    setFormError(null);
+
+    try {
+      // Fetch the full task data to get assignee_id
+      const fullTask = await api.get<ApiTask>(`/tasks/${task.id}`);
+      
+      const assignedProjectId = fullTask.project_id ?? '';
+
+      setTaskForm({
+        title: fullTask.title,
+        project_id: assignedProjectId,
+        status: databaseToDisplayStatus(fullTask.status),
+        priority: (fullTask.priority?.charAt(0).toUpperCase() + fullTask.priority?.slice(1)) as Task['priority'] || 'Medium',
+        due_date: fullTask.due_date ? new Date(fullTask.due_date).toISOString().slice(0, 10) : '',
+        assignee_id: fullTask.assignee_id || '',
+      });
+      if (assignedProjectId) {
+        loadProjectMembers(assignedProjectId);
+      }
+      setIsModalOpen(true);
+    } catch (error) {
+      console.error('Failed to load task for editing', error);
+      setFormError('Failed to load task details');
+    }
+  };
+
+  const handleProjectChange = (projectId: string) => {
+    setTaskForm(prev => ({ ...prev, project_id: projectId, assignee_id: '' }));
+    loadProjectMembers(projectId);
   };
 
   const saveTask = async () => {
@@ -210,8 +396,7 @@ export function MyTasks() {
       return;
     }
 
-    const standaloneProject = projects.find((p) => p.name === 'Standalone');
-    const projectId = taskForm.project_id || standaloneProject?.id || projects[0]?.id;
+    const projectId = taskForm.project_id || projects[0]?.id;
     if (!projectId) {
       setFormError('A project is required. Select a project or create one first.');
       return;
@@ -220,18 +405,23 @@ export function MyTasks() {
     const payload = {
       project_id: projectId,
       title: taskForm.title,
-      status: getStatusEnumValue(taskForm.status),
+      status: displayToDatabaseStatus(taskForm.status),
       priority: getPriorityEnumValue(taskForm.priority),
       due_date: taskForm.due_date || null,
+      assignee_id: taskForm.assignee_id || null,
     };
 
     try {
       if (isEditMode && editingTaskId) {
         const updated = await api.patch<ApiTask>(`/tasks/${editingTaskId}`, payload);
-        setTasks((prev) => prev.map((t) => (t.id === editingTaskId ? normalizeTask(updated) : t)));
+        setTasks((previous) => previous.map((task) => (task.id === editingTaskId ? normalizeTask(updated) : task)));
       } else {
         const created = await api.post<ApiTask>('/tasks', payload);
-        setTasks((prev) => [...prev, normalizeTask(created)]);
+        setTasks((previous) =>
+          previous.some((task) => task.id === created.id)
+            ? previous
+            : [...previous, normalizeTask(created)],
+        );
       }
       closeTaskModal();
     } catch (error) {
@@ -244,7 +434,7 @@ export function MyTasks() {
     if (!confirm('Delete this task?')) return;
     try {
       await api.delete(`/tasks/${taskId}`);
-      setTasks((prev) => prev.filter((t) => t.id !== taskId));
+      setTasks((previous) => previous.filter((task) => task.id !== taskId));
     } catch (error) {
       console.error('Unable to delete task', error);
       alert('Task deletion failed.');
@@ -269,9 +459,7 @@ export function MyTasks() {
       <Sidebar />
       <TopBar />
 
-      {/* Main Content */}
       <main className="ml-56 pt-16 p-8">
-        {/* Header */}
         <div className="flex items-start justify-between mb-8">
           <div>
             <h1 className="text-3xl font-semibold mb-2" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
@@ -285,24 +473,21 @@ export function MyTasks() {
           </button>
         </div>
 
-        {/* Controls Bar */}
         <div className="bg-white rounded-lg p-4 mb-6 flex items-center gap-4 shadow-sm">
-          {/* Search */}
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
               type="text"
               placeholder="Search tasks..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(event) => setSearchQuery(event.target.value)}
               className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7] focus:border-transparent"
             />
           </div>
 
-          {/* Status Filter */}
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(event) => setStatusFilter(event.target.value)}
             className="px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#204EA7]"
           >
             <option value="all">All Status</option>
@@ -312,49 +497,111 @@ export function MyTasks() {
             <option value="Done">Done</option>
           </select>
 
-          {/* Priority Filter */}
-          <button className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium">
-            <Filter className="w-4 h-4" />
-            Priority
-            <ChevronDown className="w-4 h-4" />
-          </button>
+          <select
+            value={dueDateFilter}
+            onChange={(event) => setDueDateFilter(event.target.value as DueDateFilter)}
+            className="px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#204EA7]"
+          >
+            {(['all', 'today', 'upcoming', 'overdue', 'no-date'] as DueDateFilter[]).map((option) => (
+              <option key={option} value={option}>
+                {dueDateLabels[option]}
+              </option>
+            ))}
+          </select>
 
-          {/* Sort */}
-          <button className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium">
-            Sort
-            <ChevronDown className="w-4 h-4" />
-          </button>
+          <div ref={priorityMenuRef} className="relative">
+            <button
+              onClick={() => {
+                setIsPriorityMenuOpen((previous) => !previous);
+                setIsSortMenuOpen(false);
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium"
+            >
+              <Filter className="w-4 h-4" />
+              {priorityLabels[priorityFilter]}
+              <ChevronDown className={`w-4 h-4 transition-transform ${isPriorityMenuOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {isPriorityMenuOpen && (
+              <div className="absolute right-0 mt-2 w-44 rounded-lg border border-gray-200 bg-white py-2 shadow-lg z-20">
+                {(['all', 'High', 'Medium', 'Low'] as PriorityFilter[]).map((option) => (
+                  <button
+                    key={option}
+                    onClick={() => {
+                      setPriorityFilter(option);
+                      setIsPriorityMenuOpen(false);
+                    }}
+                    className={`w-full px-4 py-2 text-left text-sm transition-colors ${
+                      priorityFilter === option ? 'bg-[#204EA7]/10 text-[#204EA7]' : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    {priorityLabels[option]}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div ref={sortMenuRef} className="relative">
+            <button
+              onClick={() => {
+                setIsSortMenuOpen((previous) => !previous);
+                setIsPriorityMenuOpen(false);
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium"
+            >
+              {sortLabels[sortBy]}
+              <ChevronDown className={`w-4 h-4 transition-transform ${isSortMenuOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {isSortMenuOpen && (
+              <div className="absolute right-0 mt-2 w-48 rounded-lg border border-gray-200 bg-white py-2 shadow-lg z-20">
+                {(['default', 'title-asc', 'due-asc', 'priority-desc'] as SortOption[]).map((option) => (
+                  <button
+                    key={option}
+                    onClick={() => {
+                      setSortBy(option);
+                      setIsSortMenuOpen(false);
+                    }}
+                    className={`w-full px-4 py-2 text-left text-sm transition-colors ${
+                      sortBy === option ? 'bg-[#204EA7]/10 text-[#204EA7]' : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    {sortLabels[option]}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Task Stats */}
         <div className="grid grid-cols-4 gap-4 mb-6">
           <div className="bg-white rounded-lg p-4 shadow-sm">
             <div className="text-2xl font-semibold mb-1" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
-              {tasks.filter(t => t.status !== 'Done').length}
+              {tasks.filter((task) => task.status !== 'Done').length}
             </div>
             <div className="text-sm text-gray-600">Active Tasks</div>
           </div>
           <div className="bg-white rounded-lg p-4 shadow-sm">
             <div className="text-2xl font-semibold mb-1" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
-              {tasks.filter(t => t.status === 'In Progress').length}
+              {tasks.filter((task) => task.status === 'In Progress').length}
             </div>
             <div className="text-sm text-gray-600">In Progress</div>
           </div>
           <div className="bg-white rounded-lg p-4 shadow-sm">
             <div className="text-2xl font-semibold mb-1" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
-              {tasks.filter(t => t.dueDate === 'Today').length}
+              {tasks.filter((task) => task.dueDate === 'Today').length}
             </div>
             <div className="text-sm text-gray-600">Due Today</div>
           </div>
           <div className="bg-white rounded-lg p-4 shadow-sm">
             <div className="text-2xl font-semibold mb-1" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
-              {tasks.filter(t => t.status === 'Done').length}
+              {tasks.filter((task) => task.status === 'Done').length}
             </div>
             <div className="text-sm text-gray-600">Completed</div>
           </div>
         </div>
 
-        {/* Tasks Table */}
         <div className="bg-white rounded-lg shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -375,13 +622,7 @@ export function MyTasks() {
                       <div className="font-medium text-gray-900">{task.title}</div>
                     </td>
                     <td className="px-6 py-4">
-                      {getTaskProjectName(task) === 'Standalone' ? (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium text-gray-500 bg-gray-100">
-                          Standalone
-                        </span>
-                      ) : (
-                        <span className="text-sm text-gray-600">{getTaskProjectName(task)}</span>
-                      )}
+                      <span className="text-sm text-gray-600">{getTaskProjectName(task)}</span>
                     </td>
                     <td className="px-6 py-4">
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${getPriorityColor(task.priority)}`}>
@@ -419,7 +660,7 @@ export function MyTasks() {
             </table>
           </div>
 
-          {isLoading ? (
+          {isLoading || isSearchLoading ? (
             <div className="p-12 text-center text-gray-500">Loading tasks...</div>
           ) : filteredTasks.length === 0 ? (
             <div className="p-12 text-center">
@@ -427,9 +668,9 @@ export function MyTasks() {
                 <CheckCircle2 className="w-8 h-8 text-gray-400" />
               </div>
               <h3 className="text-lg font-semibold text-gray-900 mb-2" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
-                You have no tasks
+                No tasks found
               </h3>
-              <p className="text-gray-600">Create a task or join a project with tasks.</p>
+              <p className="text-gray-600">Try adjusting your search, filters, or sorting.</p>
             </div>
           ) : null}
         </div>
@@ -439,7 +680,7 @@ export function MyTasks() {
             <div className="w-full max-w-lg bg-white rounded-xl p-6 shadow-lg">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-semibold">{isEditMode ? 'Edit Task' : 'Create Task'}</h2>
-                <button onClick={closeTaskModal} className="text-gray-400 hover:text-gray-700">✕</button>
+                <button onClick={closeTaskModal} className="text-gray-400 hover:text-gray-700">X</button>
               </div>
 
               <div className="space-y-3">
@@ -447,7 +688,7 @@ export function MyTasks() {
                   <label className="block text-sm font-medium text-gray-700">Task Title</label>
                   <input
                     value={taskForm.title}
-                    onChange={(e) => setTaskForm((prev) => ({ ...prev, title: e.target.value }))}
+                    onChange={(event) => setTaskForm((previous) => ({ ...previous, title: event.target.value }))}
                     placeholder="Task title"
                     className="w-full mt-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7]"
                     name="title"
@@ -458,14 +699,11 @@ export function MyTasks() {
                   <label className="block text-sm font-medium text-gray-700">Project</label>
                   <select
                     value={taskForm.project_id}
-                    onChange={(e) => setTaskForm((prev) => ({ ...prev, project_id: e.target.value }))}
+                    onChange={(e) => handleProjectChange(e.target.value)}
                     className="w-full mt-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7]"
                     name="project_id"
                   >
-                    {/* single standalone option + rest of user projects */}
-                    <option value={projects.find((p) => p.name === 'Standalone')?.id ?? ''}>Standalone</option>
                     {projects
-                      .filter((project) => project.name !== 'Standalone')
                       .map((project) => (
                         <option key={project.id} value={project.id}>{project.name}</option>
                       ))}
@@ -477,7 +715,7 @@ export function MyTasks() {
                     <label className="block text-sm font-medium text-gray-700">Status</label>
                     <select
                       value={taskForm.status}
-                      onChange={(e) => setTaskForm((prev) => ({ ...prev, status: e.target.value as Task['status'] }))}
+                      onChange={(event) => setTaskForm((previous) => ({ ...previous, status: event.target.value as Task['status'] }))}
                       name="status"
                       className="w-full mt-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7]"
                     >
@@ -492,7 +730,7 @@ export function MyTasks() {
                     <label className="block text-sm font-medium text-gray-700">Priority</label>
                     <select
                       value={taskForm.priority}
-                      onChange={(e) => setTaskForm((prev) => ({ ...prev, priority: e.target.value as Task['priority'] }))}
+                      onChange={(event) => setTaskForm((previous) => ({ ...previous, priority: event.target.value as Task['priority'] }))}
                       name="priority"
                       className="w-full mt-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7]"
                     >
@@ -509,10 +747,27 @@ export function MyTasks() {
                     <input
                       type="date"
                       value={taskForm.due_date}
-                      onChange={(e) => setTaskForm((prev) => ({ ...prev, due_date: e.target.value }))}
+                      onChange={(event) => setTaskForm((previous) => ({ ...previous, due_date: event.target.value }))}
                       name="due_date"
                       className="w-full mt-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7]"
                     />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Assignee</label>
+                    <select
+                      value={taskForm.assignee_id}
+                      onChange={(e) => setTaskForm((prev) => ({ ...prev, assignee_id: e.target.value }))}
+                      className="w-full mt-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7]"
+                      name="assignee_id"
+                    >
+                      <option value="">Unassigned</option>
+                      {projectMembers[taskForm.project_id]?.map((member) => (
+                        <option key={member.user_id} value={member.user_id}>
+                          {member.profiles?.full_name || member.profiles?.email || member.user_id}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
