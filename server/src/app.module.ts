@@ -17,6 +17,7 @@ import { SupabaseModule } from './supabase';
 import { UsersModule } from './users';
 import { ProjectsModule } from './projects';
 import { TasksModule } from './tasks/tasks.module';
+import { DataIntegrityModule } from './data-integrity';
 import { AppController } from './app.controller';
 
 @Module({
@@ -41,6 +42,9 @@ import { AppController } from './app.controller';
 
     // Task CRUD with role-based access
     TasksModule,
+
+    // Admin-only database consistency checks and integrity checkpoints
+    DataIntegrityModule,
   ],
   controllers: [AppController],
 })

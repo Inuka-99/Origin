@@ -6,6 +6,7 @@ import {
   Delete,
   Param,
   Body,
+  Query,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
@@ -15,7 +16,16 @@ import {
   UserSyncInterceptor,
   type AuthenticatedUser,
 } from '../auth';
-import { TasksService, type CreateTaskDto, type UpdateTaskDto } from './tasks.service';
+import {
+  TasksService,
+  type BulkUpdateTasksDto,
+  type CreateTaskDto,
+  type TaskDueDateFilter,
+  type TaskPriorityFilter,
+  type UpdateTaskDto,
+  type TaskSortOption,
+  type TaskStatusFilter,
+} from './tasks.service';
 import { SupabaseService } from '../supabase';
 
 @Controller('tasks')
@@ -38,9 +48,24 @@ export class TasksController {
   }
 
   @Get()
-  async list(@CurrentUser() user: AuthenticatedUser) {
+  async list(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('search') search?: string,
+    @Query('status') status?: TaskStatusFilter,
+    @Query('priority') priority?: TaskPriorityFilter,
+    @Query('dueDate') dueDate?: TaskDueDateFilter,
+    @Query('sortBy') sortBy?: TaskSortOption,
+  ) {
     const role = await this.getUserRole(user.userId);
-    return this.tasksService.listForUser(user.userId, role);
+    return this.tasksService.listForUser(
+      user.userId,
+      role,
+      search,
+      status,
+      priority,
+      dueDate,
+      sortBy,
+    );
   }
 
   @Get('project/:projectId')
@@ -69,6 +94,15 @@ export class TasksController {
     return this.tasksService.getById(id, user.userId, role);
   }
 
+  @Patch('bulk')
+  async bulkUpdate(
+    @Body() dto: BulkUpdateTasksDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const role = await this.getUserRole(user.userId);
+    return this.tasksService.bulkUpdate(dto, user.userId, role);
+  }
+
   @Patch(':id')
   async update(
     @Param('id') id: string,
@@ -87,5 +121,20 @@ export class TasksController {
     const role = await this.getUserRole(user.userId);
     await this.tasksService.delete(id, user.userId, role);
     return { deleted: true };
+  }
+
+  /**
+   * Assign a task to a team member
+   * PATCH /tasks/:id/assign
+   * Body: { userId: string | null }  — pass null to unassign
+   */
+  @Patch(':id/assign')
+  async assign(
+    @Param('id') id: string,
+    @Body('userId') assigneeId: string | null,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const role = await this.getUserRole(user.userId);
+    return this.tasksService.assignTask(id, assigneeId, user.userId, role);
   }
 }

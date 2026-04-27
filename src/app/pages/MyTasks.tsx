@@ -1,8 +1,11 @@
 import { Sidebar } from '../components/Sidebar';
 import { TopBar } from '../components/TopBar';
-import { Search, Filter, ChevronDown, Plus, Calendar, AlertCircle, CheckCircle2, Circle, Trash2, Edit3 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { Search, Filter, ChevronDown, Plus, Calendar, AlertCircle, CheckCircle2, Circle, Trash2, Edit3, X } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router';
 import { useApiClient } from '../lib/api-client';
+import { useTaskRealtime } from '../lib/use-task-realtime';
+import { useClickOutside } from '../lib/useClickOutside';
 
 interface Task {
   id: string;
@@ -11,6 +14,7 @@ interface Task {
   projectId: string | null;
   priority: 'High' | 'Medium' | 'Low';
   dueDate: string;
+  dueDateValue: string | null;
   status: 'To Do' | 'In Progress' | 'In Review' | 'Done';
   assignee: string;
 }
@@ -18,27 +22,75 @@ interface Task {
 type ApiTask = {
   id: string;
   title: string;
+  description: string | null;
   project_id: string | null;
   status: 'todo' | 'in_progress' | 'In Review' | 'Done' | 'completed' | null;
   priority: 'High' | 'Medium' | 'Low';
   due_date: string | null;
   assignee_id: string | null;
+  assigned_to: string | null;
 };
 
-const [initial] = [] as Task[]; // placeholder
+type BulkUpdateResponse = {
+  updated: ApiTask[];
+  updatedCount: number;
+  requestedCount: number;
+};
 
+type PriorityFilter = 'all' | Task['priority'];
+type DueDateFilter = 'all' | 'today' | 'upcoming' | 'overdue' | 'no-date';
+type SortOption = 'default' | 'title-asc' | 'due-asc' | 'priority-desc';
+
+const priorityLabels: Record<PriorityFilter, string> = {
+  all: 'All Priorities',
+  High: 'High',
+  Medium: 'Medium',
+  Low: 'Low',
+};
+
+const dueDateLabels: Record<DueDateFilter, string> = {
+  all: 'All Due Dates',
+  today: 'Due Today',
+  upcoming: 'Upcoming',
+  overdue: 'Overdue',
+  'no-date': 'No Due Date',
+};
+
+const sortLabels: Record<SortOption, string> = {
+  default: 'Default Order',
+  'title-asc': 'Title A-Z',
+  'due-asc': 'Due Date',
+  'priority-desc': 'Priority High-Low',
+};
 export function MyTasks() {
   const api = useApiClient();
+  const location = useLocation();
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [displayedTasks, setDisplayedTasks] = useState<Task[]>([]);
   const [projects, setProjects] = useState<{id:string;name:string}[]>([]);
   const [projectMembers, setProjectMembers] = useState<Record<string, {id:string;user_id:string;profiles?:{full_name?:string;email?:string}}[]>>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [isSearchLoading, setIsSearchLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all');
+  const [dueDateFilter, setDueDateFilter] = useState<DueDateFilter>('all');
+  const [sortBy, setSortBy] = useState<SortOption>('default');
+  const [isPriorityMenuOpen, setIsPriorityMenuOpen] = useState(false);
+  const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
+  const [bulkStatus, setBulkStatus] = useState<Task['status'] | ''>('');
+  const [bulkPriority, setBulkPriority] = useState<Task['priority'] | ''>('');
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const [bulkMessage, setBulkMessage] = useState<string | null>(null);
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
+  const latestSearchRequestRef = useRef(0);
+  const priorityMenuRef = useRef<HTMLDivElement | null>(null);
+  const sortMenuRef = useRef<HTMLDivElement | null>(null);
   const [taskForm, setTaskForm] = useState<{
     title: string;
     project_id: string;
@@ -55,34 +107,28 @@ export function MyTasks() {
     assignee_id: '',
   });
 
+  useClickOutside(priorityMenuRef, () => setIsPriorityMenuOpen(false));
+  useClickOutside(sortMenuRef, () => setIsSortMenuOpen(false));
+
   const normalizeTask = (task: ApiTask): Task => {
     const projectMembersList = task.project_id ? projectMembers[task.project_id] : [];
-    const assignee = projectMembersList?.find(m => m.user_id === task.assignee_id);
+    const assignee = projectMembersList?.find((member) => member.user_id === task.assignee_id);
+
     return {
       id: task.id,
       title: task.title,
-      project: task.project_id || 'Unknown Project',
+      project: task.project_id || 'Standalone',
       projectId: task.project_id ?? null,
       priority: (task.priority?.charAt(0).toUpperCase() + task.priority?.slice(1)) as Task['priority'] || 'Medium',
       dueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No due date',
-      status: (task.status
-        ? ((() => {
-            const map: Record<string, string> = {
-              'todo': 'To Do',
-              'in_progress': 'In Progress',
-              'In Review': 'In Review',
-              'Done': 'Done',
-              'completed': 'Done',
-            };
-            return (map[task.status] || task.status) as Task['status'];
-          })())
-        : 'To Do') as Task['status'],
+      dueDateValue: task.due_date,
+      status: databaseToDisplayStatus(task.status),
       assignee: assignee ? (assignee.profiles?.full_name || assignee.profiles?.email || assignee.user_id) : 'Unassigned',
     };
   };
 
   const getTaskProjectName = (task: Task): string => {
-    if (!task.projectId) return 'Unknown Project';
+    if (!task.projectId) return 'Standalone';
     const match = projects.find((project) => project.id === task.projectId);
     return match?.name ?? task.project;
   };
@@ -117,13 +163,44 @@ export function MyTasks() {
     setIsLoading(true);
     try {
       const data = await api.get<ApiTask[]>('/tasks');
-      setTasks(data.map(normalizeTask));
+      const normalizedTasks = data.map(normalizeTask);
+      setTasks(normalizedTasks);
+      setDisplayedTasks(normalizedTasks);
     } catch (error) {
       console.error('Failed to load tasks', error);
       setTasks([]);
+      setDisplayedTasks([]);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const buildTasksPath = () => {
+    const params = new URLSearchParams();
+    const trimmedSearch = searchQuery.trim();
+
+    if (trimmedSearch) {
+      params.set('search', trimmedSearch);
+    }
+
+    if (statusFilter !== 'all') {
+      params.set('status', statusFilter);
+    }
+
+    if (priorityFilter !== 'all') {
+      params.set('priority', priorityFilter);
+    }
+
+    if (dueDateFilter !== 'all') {
+      params.set('dueDate', dueDateFilter);
+    }
+
+    if (sortBy !== 'default') {
+      params.set('sortBy', sortBy);
+    }
+
+    const queryString = params.toString();
+    return queryString ? `/tasks?${queryString}` : '/tasks';
   };
 
   const loadProjects = async () => {
@@ -132,7 +209,7 @@ export function MyTasks() {
       setProjects(data ?? []);
 
       if (!taskForm.project_id && (data?.length ?? 0) > 0) {
-        setTaskForm((prev) => ({ ...prev, project_id: data![0].id }));
+        setTaskForm((previous) => ({ ...previous, project_id: data![0].id }));
       }
     } catch (error) {
       console.error('Failed to load projects', error);
@@ -140,6 +217,37 @@ export function MyTasks() {
     }
   };
 
+  const handleTaskCreated = useCallback((task: ApiTask) => {
+    setTasks((prev) => {
+      if (prev.some((item) => item.id === task.id)) return prev;
+      return [...prev, normalizeTask(task)];
+    });
+  }, [projects]);
+
+  const handleTaskUpdated = useCallback((task: ApiTask) => {
+    setTasks((prev) => {
+      const normalizedTask = normalizeTask(task);
+      let found = false;
+      const updatedTasks = prev.map((item) => {
+        if (item.id === task.id) {
+          found = true;
+          return normalizedTask;
+        }
+        return item;
+      });
+      return found ? updatedTasks : [...updatedTasks, normalizedTask];
+    });
+  }, [projects]);
+
+  const handleTaskDeleted = useCallback((payload: { id: string }) => {
+    setTasks((prev) => prev.filter((task) => task.id !== payload.id));
+  }, []);
+
+  useTaskRealtime({
+    onCreated: handleTaskCreated,
+    onUpdated: handleTaskUpdated,
+    onDeleted: handleTaskDeleted,
+  });
   const loadProjectMembers = async (projectId: string) => {
     if (!projectId || projectMembers[projectId]) return;
     try {
@@ -155,13 +263,61 @@ export function MyTasks() {
     void loadTasks();
   }, []);
 
-  const filteredTasks = tasks.filter(task => {
-    const projectName = getTaskProjectName(task);
-    const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      projectName.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || task.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    setSearchQuery(params.get('search') ?? '');
+  }, [location.search]);
+
+  useEffect(() => {
+    const trimmedSearch = searchQuery.trim();
+    const hasActiveFilters =
+      statusFilter !== 'all'
+      || priorityFilter !== 'all'
+      || dueDateFilter !== 'all'
+      || sortBy !== 'default';
+
+    if (!trimmedSearch && !hasActiveFilters) {
+      latestSearchRequestRef.current += 1;
+      setDisplayedTasks(tasks);
+      setIsSearchLoading(false);
+      return;
+    }
+
+    const requestId = latestSearchRequestRef.current + 1;
+    latestSearchRequestRef.current = requestId;
+
+    const timeoutId = window.setTimeout(() => {
+      void (async () => {
+        setIsSearchLoading(true);
+        try {
+          const data = await api.get<ApiTask[]>(buildTasksPath());
+          if (latestSearchRequestRef.current !== requestId) {
+            return;
+          }
+          setDisplayedTasks(data.map(normalizeTask));
+        } catch (error) {
+          if (latestSearchRequestRef.current !== requestId) {
+            return;
+          }
+          console.error('Failed to search tasks', error);
+          setDisplayedTasks([]);
+        } finally {
+          if (latestSearchRequestRef.current === requestId) {
+            setIsSearchLoading(false);
+          }
+        }
+      })();
+    }, 300);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [api, dueDateFilter, priorityFilter, searchQuery, sortBy, statusFilter, tasks]);
+
+  const filteredTasks = displayedTasks;
+  const selectedTaskIdSet = new Set(selectedTaskIds);
+  const allDisplayedTasksSelected = filteredTasks.length > 0
+    && filteredTasks.every((task) => selectedTaskIdSet.has(task.id));
 
   const getPriorityColor = (priority: Task['priority']) => {
     switch (priority) {
@@ -203,7 +359,7 @@ export function MyTasks() {
       assignee_id: '',
     });
     if (defaultProjectId) {
-      loadProjectMembers(defaultProjectId);
+      void loadProjectMembers(defaultProjectId);
     }
     setIsModalOpen(true);
   };
@@ -273,10 +429,10 @@ export function MyTasks() {
     try {
       if (isEditMode && editingTaskId) {
         const updated = await api.patch<ApiTask>(`/tasks/${editingTaskId}`, payload);
-        setTasks((prev) => prev.map((t) => (t.id === editingTaskId ? normalizeTask(updated) : t)));
+        setTasks((previous) => previous.map((task) => (task.id === editingTaskId ? normalizeTask(updated) : task)));
       } else {
         const created = await api.post<ApiTask>('/tasks', payload);
-        setTasks((prev) => [...prev, normalizeTask(created)]);
+        setTasks((previous) => [...previous, normalizeTask(created)]);
       }
       closeTaskModal();
     } catch (error) {
@@ -289,10 +445,103 @@ export function MyTasks() {
     if (!confirm('Delete this task?')) return;
     try {
       await api.delete(`/tasks/${taskId}`);
-      setTasks((prev) => prev.filter((t) => t.id !== taskId));
+      setTasks((previous) => previous.filter((task) => task.id !== taskId));
+      setDisplayedTasks((previous) => previous.filter((task) => task.id !== taskId));
+      setSelectedTaskIds((previous) => previous.filter((id) => id !== taskId));
     } catch (error) {
       console.error('Unable to delete task', error);
       alert('Task deletion failed.');
+    }
+  };
+
+  const toggleTaskSelection = (taskId: string) => {
+    setBulkError(null);
+    setBulkMessage(null);
+    setSelectedTaskIds((previous) =>
+      previous.includes(taskId)
+        ? previous.filter((id) => id !== taskId)
+        : [...previous, taskId],
+    );
+  };
+
+  const toggleAllDisplayedTasks = () => {
+    setBulkError(null);
+    setBulkMessage(null);
+    setSelectedTaskIds((previous) => {
+      const displayedIds = filteredTasks.map((task) => task.id);
+      if (displayedIds.length === 0) {
+        return previous;
+      }
+
+      const displayedIdSet = new Set(displayedIds);
+      const allSelected = displayedIds.every((id) => previous.includes(id));
+
+      if (allSelected) {
+        return previous.filter((id) => !displayedIdSet.has(id));
+      }
+
+      return Array.from(new Set([...previous, ...displayedIds]));
+    });
+  };
+
+  const clearBulkSelection = () => {
+    setSelectedTaskIds([]);
+    setBulkStatus('');
+    setBulkPriority('');
+    setBulkError(null);
+    setBulkMessage(null);
+  };
+
+  const applyBulkUpdate = async () => {
+    if (selectedTaskIds.length === 0) {
+      setBulkError('Select at least one task.');
+      return;
+    }
+
+    if (!bulkStatus && !bulkPriority) {
+      setBulkError('Choose a status or priority to update.');
+      return;
+    }
+
+    setIsBulkUpdating(true);
+    setBulkError(null);
+    setBulkMessage(null);
+
+    try {
+      const payload: {
+        taskIds: string[];
+        status?: string;
+        priority?: string;
+      } = {
+        taskIds: selectedTaskIds,
+      };
+
+      if (bulkStatus) {
+        payload.status = displayToDatabaseStatus(bulkStatus);
+      }
+
+      if (bulkPriority) {
+        payload.priority = getPriorityEnumValue(bulkPriority);
+      }
+
+      const result = await api.patch<BulkUpdateResponse>('/tasks/bulk', payload);
+      const updatedTasks = result.updated.map(normalizeTask);
+      const updatedById = new Map(updatedTasks.map((task) => [task.id, task]));
+
+      const replaceUpdatedTasks = (current: Task[]) =>
+        current.map((task) => updatedById.get(task.id) ?? task);
+
+      setTasks(replaceUpdatedTasks);
+      setDisplayedTasks(replaceUpdatedTasks);
+      setSelectedTaskIds([]);
+      setBulkStatus('');
+      setBulkPriority('');
+      setBulkMessage(`Updated ${result.updatedCount} task${result.updatedCount === 1 ? '' : 's'}.`);
+    } catch (error) {
+      console.error('Bulk update failed', error);
+      setBulkError('Bulk update failed. Check your permissions and try again.');
+    } finally {
+      setIsBulkUpdating(false);
     }
   };
 
@@ -314,9 +563,7 @@ export function MyTasks() {
       <Sidebar />
       <TopBar />
 
-      {/* Main Content */}
       <main className="ml-56 pt-16 p-8">
-        {/* Header */}
         <div className="flex items-start justify-between mb-8">
           <div>
             <h1 className="text-3xl font-semibold mb-2" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
@@ -330,24 +577,21 @@ export function MyTasks() {
           </button>
         </div>
 
-        {/* Controls Bar */}
         <div className="bg-white rounded-lg p-4 mb-6 flex items-center gap-4 shadow-sm">
-          {/* Search */}
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
               type="text"
               placeholder="Search tasks..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(event) => setSearchQuery(event.target.value)}
               className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7] focus:border-transparent"
             />
           </div>
 
-          {/* Status Filter */}
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(event) => setStatusFilter(event.target.value)}
             className="px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#204EA7]"
           >
             <option value="all">All Status</option>
@@ -357,54 +601,186 @@ export function MyTasks() {
             <option value="Done">Done</option>
           </select>
 
-          {/* Priority Filter */}
-          <button className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium">
-            <Filter className="w-4 h-4" />
-            Priority
-            <ChevronDown className="w-4 h-4" />
-          </button>
+          <select
+            value={dueDateFilter}
+            onChange={(event) => setDueDateFilter(event.target.value as DueDateFilter)}
+            className="px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#204EA7]"
+          >
+            {(['all', 'today', 'upcoming', 'overdue', 'no-date'] as DueDateFilter[]).map((option) => (
+              <option key={option} value={option}>
+                {dueDateLabels[option]}
+              </option>
+            ))}
+          </select>
 
-          {/* Sort */}
-          <button className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium">
-            Sort
-            <ChevronDown className="w-4 h-4" />
-          </button>
+          <div ref={priorityMenuRef} className="relative">
+            <button
+              onClick={() => {
+                setIsPriorityMenuOpen((previous) => !previous);
+                setIsSortMenuOpen(false);
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium"
+            >
+              <Filter className="w-4 h-4" />
+              {priorityLabels[priorityFilter]}
+              <ChevronDown className={`w-4 h-4 transition-transform ${isPriorityMenuOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {isPriorityMenuOpen && (
+              <div className="absolute right-0 mt-2 w-44 rounded-lg border border-gray-200 bg-white py-2 shadow-lg z-20">
+                {(['all', 'High', 'Medium', 'Low'] as PriorityFilter[]).map((option) => (
+                  <button
+                    key={option}
+                    onClick={() => {
+                      setPriorityFilter(option);
+                      setIsPriorityMenuOpen(false);
+                    }}
+                    className={`w-full px-4 py-2 text-left text-sm transition-colors ${
+                      priorityFilter === option ? 'bg-[#204EA7]/10 text-[#204EA7]' : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    {priorityLabels[option]}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div ref={sortMenuRef} className="relative">
+            <button
+              onClick={() => {
+                setIsSortMenuOpen((previous) => !previous);
+                setIsPriorityMenuOpen(false);
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium"
+            >
+              {sortLabels[sortBy]}
+              <ChevronDown className={`w-4 h-4 transition-transform ${isSortMenuOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {isSortMenuOpen && (
+              <div className="absolute right-0 mt-2 w-48 rounded-lg border border-gray-200 bg-white py-2 shadow-lg z-20">
+                {(['default', 'title-asc', 'due-asc', 'priority-desc'] as SortOption[]).map((option) => (
+                  <button
+                    key={option}
+                    onClick={() => {
+                      setSortBy(option);
+                      setIsSortMenuOpen(false);
+                    }}
+                    className={`w-full px-4 py-2 text-left text-sm transition-colors ${
+                      sortBy === option ? 'bg-[#204EA7]/10 text-[#204EA7]' : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    {sortLabels[option]}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Task Stats */}
+        {(selectedTaskIds.length > 0 || bulkError || bulkMessage) && (
+          <div className="bg-white rounded-lg p-4 mb-6 shadow-sm border border-gray-200">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2 mr-auto">
+                <span className="inline-flex h-8 min-w-8 items-center justify-center rounded-lg bg-[#204EA7]/10 px-2 text-sm font-semibold text-[#204EA7]">
+                  {selectedTaskIds.length}
+                </span>
+                <span className="text-sm font-medium text-gray-800">
+                  {selectedTaskIds.length === 1 ? 'task selected' : 'tasks selected'}
+                </span>
+              </div>
+
+              <select
+                value={bulkStatus}
+                onChange={(event) => setBulkStatus(event.target.value as Task['status'] | '')}
+                disabled={isBulkUpdating}
+                className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#204EA7] disabled:opacity-50"
+              >
+                <option value="">Keep status</option>
+                <option value="To Do">To Do</option>
+                <option value="In Progress">In Progress</option>
+                <option value="In Review">In Review</option>
+                <option value="Done">Done</option>
+              </select>
+
+              <select
+                value={bulkPriority}
+                onChange={(event) => setBulkPriority(event.target.value as Task['priority'] | '')}
+                disabled={isBulkUpdating}
+                className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#204EA7] disabled:opacity-50"
+              >
+                <option value="">Keep priority</option>
+                <option value="High">High</option>
+                <option value="Medium">Medium</option>
+                <option value="Low">Low</option>
+              </select>
+
+              <button
+                onClick={applyBulkUpdate}
+                disabled={isBulkUpdating || selectedTaskIds.length === 0 || (!bulkStatus && !bulkPriority)}
+                className="px-4 py-2 rounded-lg bg-[#204EA7] text-white text-sm font-medium hover:bg-[#1a3d8a] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {isBulkUpdating ? 'Updating...' : 'Apply Update'}
+              </button>
+
+              <button
+                onClick={clearBulkSelection}
+                disabled={isBulkUpdating}
+                className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-50 transition-colors"
+                title="Clear selection"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {bulkError && <p className="mt-3 text-sm text-red-600">{bulkError}</p>}
+            {bulkMessage && <p className="mt-3 text-sm text-green-700">{bulkMessage}</p>}
+          </div>
+        )}
+
         <div className="grid grid-cols-4 gap-4 mb-6">
           <div className="bg-white rounded-lg p-4 shadow-sm">
             <div className="text-2xl font-semibold mb-1" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
-              {tasks.filter(t => t.status !== 'Done').length}
+              {tasks.filter((task) => task.status !== 'Done').length}
             </div>
             <div className="text-sm text-gray-600">Active Tasks</div>
           </div>
           <div className="bg-white rounded-lg p-4 shadow-sm">
             <div className="text-2xl font-semibold mb-1" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
-              {tasks.filter(t => t.status === 'In Progress').length}
+              {tasks.filter((task) => task.status === 'In Progress').length}
             </div>
             <div className="text-sm text-gray-600">In Progress</div>
           </div>
           <div className="bg-white rounded-lg p-4 shadow-sm">
             <div className="text-2xl font-semibold mb-1" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
-              {tasks.filter(t => t.dueDate === 'Today').length}
+              {tasks.filter((task) => task.dueDate === 'Today').length}
             </div>
             <div className="text-sm text-gray-600">Due Today</div>
           </div>
           <div className="bg-white rounded-lg p-4 shadow-sm">
             <div className="text-2xl font-semibold mb-1" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
-              {tasks.filter(t => t.status === 'Done').length}
+              {tasks.filter((task) => task.status === 'Done').length}
             </div>
             <div className="text-sm text-gray-600">Completed</div>
           </div>
         </div>
 
-        {/* Tasks Table */}
         <div className="bg-white rounded-lg shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
+                  <th className="w-12 px-6 py-3">
+                    <input
+                      type="checkbox"
+                      checked={allDisplayedTasksSelected}
+                      onChange={toggleAllDisplayedTasks}
+                      disabled={filteredTasks.length === 0}
+                      className="h-4 w-4 rounded border-gray-300 text-[#204EA7] focus:ring-[#204EA7]"
+                      aria-label="Select all visible tasks"
+                    />
+                  </th>
                   <th className="text-left px-6 py-3 text-sm font-semibold text-gray-900">Task Name</th>
                   <th className="text-left px-6 py-3 text-sm font-semibold text-gray-900">Project</th>
                   <th className="text-left px-6 py-3 text-sm font-semibold text-gray-900">Priority</th>
@@ -416,6 +792,15 @@ export function MyTasks() {
               <tbody className="divide-y divide-gray-200">
                 {filteredTasks.map((task) => (
                   <tr key={task.id} className="hover:bg-gray-50 cursor-pointer">
+                    <td className="px-6 py-4">
+                      <input
+                        type="checkbox"
+                        checked={selectedTaskIdSet.has(task.id)}
+                        onChange={() => toggleTaskSelection(task.id)}
+                        className="h-4 w-4 rounded border-gray-300 text-[#204EA7] focus:ring-[#204EA7]"
+                        aria-label={`Select ${task.title}`}
+                      />
+                    </td>
                     <td className="px-6 py-4">
                       <div className="font-medium text-gray-900">{task.title}</div>
                     </td>
@@ -445,7 +830,10 @@ export function MyTasks() {
                       <button onClick={() => openEditTaskModal(task)} className="p-1 hover:bg-gray-100 rounded text-gray-500 hover:text-gray-900">
                         <Edit3 className="w-4 h-4" />
                       </button>
-                      <button onClick={() => deleteTask(task.id)} className="p-1 hover:bg-gray-100 rounded text-red-500 hover:text-red-700">
+                      <button
+                        onClick={() => deleteTask(task.id)}
+                        className="rounded border border-red-700 bg-white p-1 text-red-700 transition-all duration-200 hover:bg-red-700 hover:text-white hover:shadow-sm"
+                      >
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </td>
@@ -455,7 +843,7 @@ export function MyTasks() {
             </table>
           </div>
 
-          {isLoading ? (
+          {isLoading || isSearchLoading ? (
             <div className="p-12 text-center text-gray-500">Loading tasks...</div>
           ) : filteredTasks.length === 0 ? (
             <div className="p-12 text-center">
@@ -463,9 +851,9 @@ export function MyTasks() {
                 <CheckCircle2 className="w-8 h-8 text-gray-400" />
               </div>
               <h3 className="text-lg font-semibold text-gray-900 mb-2" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
-                You have no tasks
+                No tasks found
               </h3>
-              <p className="text-gray-600">Create a task or join a project with tasks.</p>
+              <p className="text-gray-600">Try adjusting your search, filters, or sorting.</p>
             </div>
           ) : null}
         </div>
@@ -475,7 +863,7 @@ export function MyTasks() {
             <div className="w-full max-w-lg bg-white rounded-xl p-6 shadow-lg">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-semibold">{isEditMode ? 'Edit Task' : 'Create Task'}</h2>
-                <button onClick={closeTaskModal} className="text-gray-400 hover:text-gray-700">✕</button>
+                <button onClick={closeTaskModal} className="text-gray-400 hover:text-gray-700">X</button>
               </div>
 
               <div className="space-y-3">
@@ -483,7 +871,7 @@ export function MyTasks() {
                   <label className="block text-sm font-medium text-gray-700">Task Title</label>
                   <input
                     value={taskForm.title}
-                    onChange={(e) => setTaskForm((prev) => ({ ...prev, title: e.target.value }))}
+                    onChange={(event) => setTaskForm((previous) => ({ ...previous, title: event.target.value }))}
                     placeholder="Task title"
                     className="w-full mt-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7]"
                     name="title"
@@ -510,7 +898,7 @@ export function MyTasks() {
                     <label className="block text-sm font-medium text-gray-700">Status</label>
                     <select
                       value={taskForm.status}
-                      onChange={(e) => setTaskForm((prev) => ({ ...prev, status: e.target.value as Task['status'] }))}
+                      onChange={(event) => setTaskForm((previous) => ({ ...previous, status: event.target.value as Task['status'] }))}
                       name="status"
                       className="w-full mt-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7]"
                     >
@@ -525,7 +913,7 @@ export function MyTasks() {
                     <label className="block text-sm font-medium text-gray-700">Priority</label>
                     <select
                       value={taskForm.priority}
-                      onChange={(e) => setTaskForm((prev) => ({ ...prev, priority: e.target.value as Task['priority'] }))}
+                      onChange={(event) => setTaskForm((previous) => ({ ...previous, priority: event.target.value as Task['priority'] }))}
                       name="priority"
                       className="w-full mt-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7]"
                     >
@@ -542,7 +930,7 @@ export function MyTasks() {
                     <input
                       type="date"
                       value={taskForm.due_date}
-                      onChange={(e) => setTaskForm((prev) => ({ ...prev, due_date: e.target.value }))}
+                      onChange={(event) => setTaskForm((previous) => ({ ...previous, due_date: event.target.value }))}
                       name="due_date"
                       className="w-full mt-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7]"
                     />
