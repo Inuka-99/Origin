@@ -1,23 +1,29 @@
 import { Sidebar } from '../components/Sidebar';
 import { TopBar } from '../components/TopBar';
 import { ChevronRight, Plus, MoreVertical, GripVertical, MessageSquare, Calendar as CalendarIcon, CheckSquare, Trash2 } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import { useApiClient } from '../lib/api-client';
+import { useApiClient, unwrapList, type PaginatedList } from '../lib/api-client';
+import { useTaskRealtime } from '../lib/use-task-realtime';
 
 interface ApiTask {
   id: string;
-  project_id: string;
+  project_id: string | null;
   title: string;
   description: string | null;
-  status: 'To Do' | 'In Progress' | 'In Review' | 'Done';
+  status: 'todo' | 'in_progress' | 'In Review' | 'Done' | 'completed' | null;
   priority: 'Low' | 'Medium' | 'High';
   due_date: string | null;
-  assignee_id: string | null;
+  assigned_to: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
+}
+
+interface ApiProject {
+  id: string;
+  name: string;
 }
 
 interface Task {
@@ -58,168 +64,7 @@ const statusMap: Record<string, Task['status']> = {
   done: 'Done',
 };
 
-const mockColumns: Column[] = [
-  {
-    id: 'backlog',
-    title: 'Backlog',
-    tasks: [
-      {
-        id: '1',
-        title: 'Create user authentication flow',
-        project: 'Backend',
-        projectColor: '#16A34A',
-        priority: 'Medium',
-        dueDate: 'Mar 15',
-        assignees: ['AM', 'JL'],
-        comments: 3,
-        subtasks: { completed: 2, total: 5 }
-      },
-      {
-        id: '2',
-        title: 'Design mobile app wireframes',
-        project: 'Design',
-        projectColor: '#9333EA',
-        priority: 'Low',
-        dueDate: 'Mar 20',
-        assignees: ['SC'],
-        comments: 1,
-        subtasks: { completed: 0, total: 3 }
-      }
-    ]
-  },
-  {
-    id: 'todo',
-    title: 'To Do',
-    tasks: [
-      {
-        id: '3',
-        title: 'Update homepage banner images',
-        project: 'Frontend',
-        projectColor: '#204EA7',
-        priority: 'High',
-        dueDate: 'Mar 6',
-        assignees: ['SJ'],
-        comments: 5,
-        subtasks: { completed: 1, total: 2 }
-      },
-      {
-        id: '4',
-        title: 'Review API documentation',
-        project: 'Backend',
-        projectColor: '#16A34A',
-        priority: 'Medium',
-        dueDate: 'Mar 8',
-        assignees: ['AM', 'PW'],
-        comments: 2,
-        subtasks: { completed: 3, total: 4 }
-      },
-      {
-        id: '5',
-        title: 'Set up analytics tracking',
-        project: 'Frontend',
-        projectColor: '#204EA7',
-        priority: 'High',
-        dueDate: 'Mar 7',
-        assignees: ['JL', 'MK', 'TB'],
-        comments: 7,
-        subtasks: { completed: 0, total: 6 }
-      }
-    ]
-  },
-  {
-    id: 'in-progress',
-    title: 'In Progress',
-    tasks: [
-      {
-        id: '6',
-        title: 'Implement payment gateway integration',
-        project: 'Backend',
-        projectColor: '#16A34A',
-        priority: 'High',
-        dueDate: 'Mar 5',
-        assignees: ['AM'],
-        comments: 12,
-        subtasks: { completed: 4, total: 8 }
-      },
-      {
-        id: '7',
-        title: 'Create responsive navigation menu',
-        project: 'Frontend',
-        projectColor: '#204EA7',
-        priority: 'Medium',
-        dueDate: 'Mar 6',
-        assignees: ['SJ', 'SC'],
-        comments: 4,
-        subtasks: { completed: 2, total: 3 }
-      }
-    ]
-  },
-  {
-    id: 'review',
-    title: 'Review',
-    tasks: [
-      {
-        id: '8',
-        title: 'User dashboard layout refinements',
-        project: 'Design',
-        projectColor: '#9333EA',
-        priority: 'Medium',
-        dueDate: 'Mar 4',
-        assignees: ['SC', 'EM'],
-        comments: 8,
-        subtasks: { completed: 5, total: 5 }
-      },
-      {
-        id: '9',
-        title: 'Database optimization queries',
-        project: 'Backend',
-        projectColor: '#16A34A',
-        priority: 'High',
-        dueDate: 'Mar 5',
-        assignees: ['PW'],
-        comments: 3,
-        subtasks: { completed: 1, total: 4 }
-      }
-    ]
-  },
-  {
-    id: 'done',
-    title: 'Done',
-    tasks: [
-      {
-        id: '10',
-        title: 'Initial project setup and configuration',
-        project: 'Backend',
-        projectColor: '#16A34A',
-        priority: 'High',
-        dueDate: 'Mar 1',
-        assignees: ['AM', 'PW'],
-        comments: 15,
-        subtasks: { completed: 8, total: 8 },
-        completed: true
-      },
-      {
-        id: '11',
-        title: 'Design system color palette',
-        project: 'Design',
-        projectColor: '#9333EA',
-        priority: 'Medium',
-        dueDate: 'Feb 28',
-        assignees: ['SC'],
-        comments: 6,
-        subtasks: { completed: 4, total: 4 },
-        completed: true
-      }
-    ]
-  }
-];
-
-const teamMembers = [
-  { initials: 'SJ', name: 'Sarah Johnson' },
-  { initials: 'AM', name: 'Alex Morgan' },
-  { initials: 'JL', name: 'Jordan Lee' },
-  { initials: 'SC', name: 'Sam Chen' }
-];
+const PROJECT_COLORS = ['#204EA7', '#16A34A', '#9333EA', '#DC2626', '#D97706', '#0891B2', '#DB2777', '#059669'];
 
 interface TaskCardProps {
   task: Task;
@@ -259,15 +104,15 @@ function TaskCard({ task, columnId, onMoveTask, onDeleteTask, onEditTask }: Task
   return (
     <div
       ref={dragRef}
-      className={`bg-white rounded-lg p-4 shadow-sm border border-gray-200 hover:shadow-md transition-all cursor-grab active:cursor-grabbing group ${
+      className={`bg-surface rounded-lg p-4 shadow-sm border border-border-subtle hover:shadow-md transition-all cursor-grab active:cursor-grabbing group ${
         task.completed ? 'opacity-60' : ''
       } ${isDragging ? 'opacity-50 shadow-xl scale-105' : ''}`}
       style={{ transition: 'all 0.2s ease' }}
     >
       <div className="flex items-start gap-2">
-        <GripVertical className="w-4 h-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-0.5" />
+        <GripVertical className="w-4 h-4 text-text-tertiary opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-0.5" />
         <div className="flex-1 min-w-0">
-          <h4 className={`text-sm font-medium mb-2 ${task.completed ? 'line-through' : 'text-gray-900'}`}>
+          <h4 className={`text-sm font-medium mb-2 ${task.completed ? 'line-through' : 'text-text-primary'}`}>
             {task.title}
           </h4>
 
@@ -287,7 +132,7 @@ function TaskCard({ task, columnId, onMoveTask, onDeleteTask, onEditTask }: Task
             <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${getPriorityColor(task.priority)}`}>
               {task.priority}
             </span>
-            <span className="flex items-center gap-1 text-xs text-gray-500">
+            <span className="flex items-center gap-1 text-xs text-text-tertiary">
               <CalendarIcon className="w-3 h-3" />
               {task.dueDate}
             </span>
@@ -300,20 +145,20 @@ function TaskCard({ task, columnId, onMoveTask, onDeleteTask, onEditTask }: Task
                 {task.assignees.map((assignee, idx) => (
                   <div
                     key={idx}
-                    className="w-6 h-6 rounded-full bg-[#204EA7] flex items-center justify-center text-white text-xs font-semibold border-2 border-white"
+                    className="w-6 h-6 rounded-full bg-accent flex items-center justify-center text-white text-xs font-semibold border-2 border-surface"
                   >
                     {assignee}
                   </div>
                 ))}
               </div>
               {task.subtasks && (
-                <div className="flex items-center gap-1 text-xs text-gray-500">
+                <div className="flex items-center gap-1 text-xs text-text-tertiary">
                   <CheckSquare className="w-3.5 h-3.5" />
                   {task.subtasks.completed}/{task.subtasks.total}
                 </div>
               )}
             </div>
-            <div className="flex items-center gap-1 text-xs text-gray-500">
+            <div className="flex items-center gap-1 text-xs text-text-tertiary">
               <MessageSquare className="w-3.5 h-3.5" />
               {task.comments}
             </div>
@@ -325,7 +170,7 @@ function TaskCard({ task, columnId, onMoveTask, onDeleteTask, onEditTask }: Task
               e.stopPropagation();
               onEditTask(task);
             }}
-            className="p-1 hover:bg-blue-100 rounded"
+            className="p-1 hover:bg-accent-soft rounded"
             title="Edit task"
           >
             <MoreVertical className="w-4 h-4 text-blue-500" />
@@ -335,10 +180,10 @@ function TaskCard({ task, columnId, onMoveTask, onDeleteTask, onEditTask }: Task
               e.stopPropagation();
               onDeleteTask(task.id);
             }}
-            className="p-1 hover:bg-red-100 rounded"
+            className="rounded border border-red-700 bg-surface p-1 text-red-700 transition-all duration-200 hover:bg-red-700 hover:text-white hover:shadow-sm"
             title="Delete task"
           >
-            <Trash2 className="w-4 h-4 text-red-500" />
+            <Trash2 className="w-4 h-4" />
           </button>
         </div>
       </div>
@@ -379,23 +224,23 @@ function KanbanColumn({ column, onMoveTask, onDeleteTask, onEditTask }: KanbanCo
   return (
     <div
       ref={dropRef}
-      className={`w-80 bg-gray-50 rounded-lg p-4 flex flex-col transition-all ${
-        isActive ? 'ring-2 ring-[#204EA7] ring-opacity-50 bg-[#204EA7]/5' : ''
+      className={`w-80 bg-surface-sunken rounded-lg p-4 flex flex-col transition-all ${
+        isActive ? 'ring-2 ring-accent ring-opacity-50 bg-accent/5' : ''
       }`}
       style={{ height: 'calc(100vh - 280px)', minHeight: '500px' }}
     >
       {/* Column Header */}
       <div className="flex items-center justify-between mb-4 flex-shrink-0">
         <div className="flex items-center gap-2">
-          <h3 className="font-semibold text-gray-900" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+          <h3 className="font-semibold text-text-primary" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
             {column.title}
           </h3>
-          <span className="px-2 py-0.5 bg-gray-200 text-gray-700 text-xs font-semibold rounded-full">
+          <span className="px-2 py-0.5 bg-surface-hover text-text-secondary text-xs font-semibold rounded-full">
             {column.tasks.length}
           </span>
         </div>
-        <button className="p-1 hover:bg-gray-200 rounded transition-colors">
-          <Plus className="w-4 h-4 text-gray-600" />
+        <button className="p-1 hover:bg-surface-hover rounded transition-colors">
+          <Plus className="w-4 h-4 text-text-secondary" />
         </button>
       </div>
 
@@ -403,8 +248,8 @@ function KanbanColumn({ column, onMoveTask, onDeleteTask, onEditTask }: KanbanCo
       <div className="space-y-3 overflow-y-auto flex-1 pr-1 kanban-scrollbar">
         {column.tasks.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center py-12">
-            <p className="text-sm text-gray-400 mb-4">No tasks in this stage</p>
-            <button className="flex items-center gap-2 px-3 py-2 text-[#204EA7] text-sm font-medium hover:bg-[#204EA7]/5 rounded-lg transition-colors">
+            <p className="text-sm text-text-tertiary mb-4">No tasks in this stage</p>
+            <button className="flex items-center gap-2 px-3 py-2 text-accent text-sm font-medium hover:bg-accent/5 rounded-lg transition-colors">
               <Plus className="w-4 h-4" />
               Add Task
             </button>
@@ -437,25 +282,68 @@ export function ProjectBoard() {
     { id: 'done', title: 'Done', tasks: [] },
   ]);
   const [isLoading, setIsLoading] = useState(false);
+  const [projects, setProjects] = useState<ApiProject[]>([]);
+  const projectColorMap = new Map<string, string>(projects.map((p, i) => [p.id, PROJECT_COLORS[i % PROJECT_COLORS.length]]));
 
-  const normalizeTask = (task: ApiTask): Task => ({
-    id: task.id,
-    title: task.title,
-    project: 'Client Website Redesign', // optionally dynamic if you have project data
-    projectColor: '#204EA7',
-    priority: task.priority,
-    dueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : 'N/A',
-    assignees: task.assignee_id ? [task.assignee_id] : [],
-    comments: 0,
-    subtasks: undefined,
-    completed: task.status === 'Done',
-    status: task.status,
-  });
+  const loadProjects = useCallback(async () => {
+    try {
+      // /projects now returns { data, total, page, limit }; unwrapList
+      // tolerates both the new envelope and the legacy bare-array shape.
+      const response = await api.get<ApiProject[] | PaginatedList<ApiProject>>('/projects');
+      const list = unwrapList(response);
+      setProjects(list);
+      return list;
+    } catch (err) {
+      console.error('Failed to load projects', err);
+      return [];
+    }
+  }, [api]);
+  const databaseToDisplayStatus = (status: string | null): 'To Do' | 'In Progress' | 'In Review' | 'Done' => {
+    if (!status) return 'To Do';
+    const map: Record<string, 'To Do' | 'In Progress' | 'In Review' | 'Done'> = {
+      'todo': 'To Do',
+      'in_progress': 'In Progress',
+      'In Review': 'In Review',
+      'Done': 'Done',
+      'completed': 'Done',
+    };
+    return map[status] || ('To Do' as const);
+  };
 
-  const loadTasks = async () => {
+  const displayToDatabaseStatus = (status: Task['status']): string => {
+    const map: Record<string, string> = {
+      'To Do': 'todo',
+      'In Progress': 'in_progress',
+      'In Review': 'In Review',
+      'Done': 'Done',
+    };
+    return map[status] || status;
+  };
+
+  const normalizeTask = (task: ApiTask): Task => {
+    const displayStatus = databaseToDisplayStatus(task.status);
+    return {
+      id: task.id,
+      title: task.title,
+      project: 'Client Website Redesign', // optionally dynamic if you have project data
+      projectColor: '#204EA7',
+      priority: task.priority,
+      dueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : 'N/A',
+      assignees: task.assignee_id ? [task.assignee_id] : [],
+      comments: 0,
+      subtasks: undefined,
+      completed: displayStatus === 'Done',
+      status: displayStatus,
+    };
+  };
+
+  const loadTasks = useCallback(async (loadedProjects?: ApiProject[]) => {
     try {
       setIsLoading(true);
-      const tasks = await api.get<ApiTask[]>('/tasks');
+      const resolvedProjects = loadedProjects ?? projects;
+      const resolvedColorMap = new Map<string, string>(resolvedProjects.map((p, i) => [p.id, PROJECT_COLORS[i % PROJECT_COLORS.length]]));
+      const tasksResponse = await api.get<ApiTask[] | PaginatedList<ApiTask>>('/tasks');
+      const tasks = unwrapList(tasksResponse);
       const columnTasks: Record<string, Task[]> = {
         todo: [],
         'in-progress': [],
@@ -463,33 +351,62 @@ export function ProjectBoard() {
         done: [],
       };
       tasks.forEach((task) => {
-        const statusKey = task.status === 'To Do' ? 'todo'
-          : task.status === 'In Progress' ? 'in-progress'
-          : task.status === 'In Review' ? 'review'
+        const projectName = task.project_id ? (resolvedProjects.find((p) => p.id === task.project_id)?.name ?? 'Unknown') : 'Standalone';
+        const projectColor = task.project_id ? (resolvedColorMap.get(task.project_id) ?? '#204EA7') : '#6B7280';
+        const priority = (task.priority ? task.priority.charAt(0).toUpperCase() + task.priority.slice(1) : 'Medium') as Task['priority'];
+        const displayStatus = databaseToDisplayStatus(task.status);
+        const normalized: Task = {
+          id: task.id,
+          title: task.title,
+          project: projectName,
+          projectColor,
+          priority,
+          dueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : 'N/A',
+          assignees: task.assigned_to ? [task.assigned_to.slice(0, 2).toUpperCase()] : [],
+          comments: 0,
+          subtasks: undefined,
+          completed: task.status === 'Done',
+          status: displayStatus,
+        };
+        const statusKey = displayStatus === 'To Do' ? 'todo'
+          : displayStatus === 'In Progress' ? 'in-progress'
+          : displayStatus === 'In Review' ? 'review'
           : 'done';
-        columnTasks[statusKey].push(normalizeTask(task));
+        columnTasks[statusKey].push(normalized);
       });
-      setColumns((prev) => prev.map((col) => ({ ...col, tasks: columnTasks[col.id] || [] })));
+      setColumns((prev) => prev.map((col) => ({ ...col, tasks: columnTasks[col.id] ?? [] })));
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [api, projects]);
 
   useEffect(() => {
+    void loadProjects().then((loaded) => void loadTasks(loaded));
+  }, [loadProjects, loadTasks]);
+
+  const refreshTasks = useCallback(() => {
     void loadTasks();
-  }, []);
+  }, [loadTasks]);
+
+  useTaskRealtime({
+    onCreated: refreshTasks,
+    onUpdated: refreshTasks,
+    onDeleted: refreshTasks,
+  });
 
   const [isTaskFormOpen, setIsTaskFormOpen] = useState(false);
   const [taskFormMode, setTaskFormMode] = useState<'create' | 'edit'>('create');
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [taskForm, setTaskForm] = useState<{
     title: string;
+    project_id: string;
     status: Task['status'];
     priority: Task['priority'];
     dueDate: string;
     assigneeId: string;
   }>({
     title: '',
+    project_id: '',
     status: 'To Do',
     priority: 'Medium',
     dueDate: '',
@@ -497,11 +414,11 @@ export function ProjectBoard() {
   });
 
   const openCreateForm = () => {
-    console.log('Opening create form');
     setTaskFormMode('create');
     setEditingTask(null);
     setTaskForm({
       title: '',
+      project_id: projects[0]?.id ?? '',
       status: 'To Do',
       priority: 'Medium',
       dueDate: '',
@@ -511,10 +428,12 @@ export function ProjectBoard() {
   };
 
   const openEditForm = (task: Task) => {
+    const matchedProject = projects.find((p) => p.name === task.project);
     setTaskFormMode('edit');
     setEditingTask(task);
     setTaskForm({
       title: task.title,
+      project_id: matchedProject?.id ?? projects[0]?.id ?? '',
       status: task.status ?? 'To Do',
       priority: task.priority,
       dueDate: task.dueDate === 'N/A' ? '' : task.dueDate,
@@ -534,23 +453,39 @@ export function ProjectBoard() {
     }
 
     const requestBody = {
-      project_id: 'YOUR_PROJECT_ID',
+      project_id: taskForm.project_id || null,
       title: taskForm.title,
-      status: taskForm.status,
+      status: displayToDatabaseStatus(taskForm.status),
       priority: taskForm.priority,
       due_date: taskForm.dueDate ? new Date(taskForm.dueDate).toISOString() : null,
-      assignee_id: taskForm.assigneeId || null,
+      assigned_to: taskForm.assigneeId || null,
     };
 
     try {
       if (taskFormMode === 'create') {
         const created = await api.post<ApiTask>('/tasks', requestBody);
-        const statusKey = created.status === 'To Do' ? 'todo' : created.status === 'In Progress' ? 'in-progress' : created.status === 'In Review' ? 'review' : 'done';
+        const projectName = created.project_id ? (projects.find((p) => p.id === created.project_id)?.name ?? 'Unknown') : 'Standalone';
+        const projectColor = created.project_id ? (projectColorMap.get(created.project_id) ?? '#204EA7') : '#6B7280';
+        const priority = (created.priority ? created.priority.charAt(0).toUpperCase() + created.priority.slice(1) : 'Medium') as Task['priority'];
+        const newTask: Task = {
+          id: created.id,
+          title: created.title,
+          project: projectName,
+          projectColor,
+          priority,
+          dueDate: created.due_date ? new Date(created.due_date).toLocaleDateString() : 'N/A',
+          assignees: created.assigned_to ? [created.assigned_to.slice(0, 2).toUpperCase()] : [],
+          comments: 0,
+          completed: created.status === 'Done',
+          status: ({ todo: 'To Do', in_progress: 'In Progress', 'In Review': 'In Review', 'Done': 'Done' } as Record<string, Task['status']>)[created.status] ?? 'To Do',
+        };
+        const displayStatus = databaseToDisplayStatus(created.status);
+        const statusKeyValue = displayStatus === 'To Do' ? 'todo' : displayStatus === 'In Progress' ? 'in-progress' : displayStatus === 'In Review' ? 'review' : 'done';
         setColumns((prev) => prev.map((col) =>
-          col.id === statusKey ? { ...col, tasks: [...col.tasks, normalizeTask(created)] } : col,
+          col.id === statusKeyValue ? { ...col, tasks: [...col.tasks, newTask] } : col,
         ));
       } else if (editingTask) {
-        const updated = await api.patch<ApiTask>(`/tasks/${editingTask.id}`, requestBody);
+        await api.patch<ApiTask>(`/tasks/${editingTask.id}`, requestBody);
         await loadTasks();
       }
       closeTaskForm();
@@ -581,7 +516,7 @@ export function ProjectBoard() {
     });
 
     try {
-      await api.patch(`/tasks/${taskId}`, { status });
+      await api.patch(`/tasks/${taskId}`, { status: displayToDatabaseStatus(status) });
     } catch (error) {
       console.error('Failed to update task status:', error);
       void loadTasks();
@@ -609,7 +544,7 @@ export function ProjectBoard() {
       const newTask = await api.post<ApiTask>('/tasks', {
         project_id: '<<your-project-id>>',
         title,
-        status: 'To Do',
+        status: 'todo',
         priority: 'Medium',
       });
       setColumns((prev) => prev.map((col) =>
@@ -622,47 +557,30 @@ export function ProjectBoard() {
 
   return (
     <DndProvider backend={HTML5Backend}>
-      <div className="min-h-screen bg-[#F7F8FA]">
+      <div className="min-h-screen bg-canvas">
         <Sidebar />
         <TopBar />
 
         {/* Main Content */}
-        <main className="ml-56 pt-16 p-8">
+        <main className="pt-16 p-8 transition-[margin] duration-200 ease-out" style={{ marginLeft: 'var(--sidebar-width)' }}>
           {/* Breadcrumb */}
-          <div className="flex items-center gap-2 text-sm text-gray-600 mb-4">
-            <a href="/projects" className="hover:text-[#204EA7] transition-colors">Projects</a>
+          <div className="flex items-center gap-2 text-sm text-text-secondary mb-4">
+            <a href="/projects" className="hover:text-accent transition-colors">Projects</a>
             <ChevronRight className="w-4 h-4" />
-            <span className="text-gray-900 font-medium">Client Website Redesign</span>
+            <span className="text-text-primary font-medium">Task Board</span>
           </div>
 
-          {/* Project Header */}
+          {/* Board Header */}
           <div className="flex items-start justify-between mb-6">
-            <div className="flex items-start gap-4">
-              <div>
-                <h1 className="text-3xl font-semibold mb-2" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
-                  Client Website Redesign
-                </h1>
-                <div className="flex items-center gap-3">
-                  <span className="inline-block px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                    Active
-                  </span>
-                  <div className="flex items-center -space-x-2">
-                    {teamMembers.map((member, idx) => (
-                      <div
-                        key={idx}
-                        className="w-8 h-8 rounded-full bg-[#204EA7] flex items-center justify-center text-white text-xs font-semibold border-2 border-white"
-                        title={member.name}
-                      >
-                        {member.initials}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
+            <div>
+              <h1 className="text-3xl font-semibold mb-2" style={{ fontFamily: 'Space Grotesk, sans-serif', color: 'var(--text-primary)' }}>
+                Task Board
+              </h1>
+              <p className="text-sm text-text-tertiary">{isLoading ? 'Loading...' : `${columns.reduce((sum, c) => sum + c.tasks.length, 0)} tasks across ${columns.length} columns`}</p>
             </div>
             <button
               onClick={openCreateForm}
-              className="flex items-center gap-2 px-4 py-2.5 bg-[#204EA7] text-white rounded-lg hover:bg-[#1a3d8a] transition-colors font-medium"
+              className="flex items-center gap-2 px-4 py-2.5 bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors font-medium"
             >
               <Plus className="w-5 h-5" />
               Add Task
@@ -670,20 +588,20 @@ export function ProjectBoard() {
           </div>
 
           {/* View Switcher */}
-          <div className="flex items-center gap-1 mb-6 border-b border-gray-200">
-            <button className="px-4 py-2.5 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-t-lg transition-colors">
+          <div className="flex items-center gap-1 mb-6 border-b border-border-subtle">
+            <button className="px-4 py-2.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-sunken rounded-t-lg transition-colors">
               Overview
             </button>
-            <button className="px-4 py-2.5 text-sm font-medium text-[#204EA7] bg-white border-b-2 border-[#204EA7] rounded-t-lg">
+            <button className="px-4 py-2.5 text-sm font-medium text-accent bg-surface border-b-2 border-accent rounded-t-lg">
               Board
             </button>
-            <button className="px-4 py-2.5 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-t-lg transition-colors">
+            <button className="px-4 py-2.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-sunken rounded-t-lg transition-colors">
               List
             </button>
-            <button className="px-4 py-2.5 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-t-lg transition-colors">
+            <button className="px-4 py-2.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-sunken rounded-t-lg transition-colors">
               Calendar
             </button>
-            <button className="px-4 py-2.5 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-t-lg transition-colors">
+            <button className="px-4 py-2.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-sunken rounded-t-lg transition-colors">
               Activity
             </button>
           </div>
@@ -691,67 +609,89 @@ export function ProjectBoard() {
           {/* Task form modal */}
           {isTaskFormOpen && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-              <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
+              <div className="w-full max-w-lg rounded-xl bg-surface p-6 shadow-xl">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-lg font-semibold">
                     {taskFormMode === 'create' ? 'Create Task' : 'Edit Task'}
                   </h2>
-                  <button onClick={closeTaskForm} className="text-gray-400 hover:text-gray-600">X</button>
+                  <button onClick={closeTaskForm} className="text-text-tertiary hover:text-text-secondary">X</button>
                 </div>
                 <div className="space-y-3">
-                  <input
-                    name="title"
-                    value={taskForm.title}
-                    onChange={(e) => setTaskForm((prev) => ({ ...prev, title: e.target.value }))}
-                    placeholder="Task title"
-                    className="w-full border border-gray-300 rounded p-2"
-                  />
-                  <select
-                    name="status"
-                    value={taskForm.status}
-                    onChange={(e) => setTaskForm((prev) => ({ ...prev, status: e.target.value as Task['status'] }))}
-                    className="w-full border border-gray-300 rounded p-2"
-                  >
-                    <option value="To Do">To Do</option>
-                    <option value="In Progress">In Progress</option>
-                    <option value="In Review">In Review</option>
-                    <option value="Done">Done</option>
-                  </select>
-                  <select
-                    name="priority"
-                    value={taskForm.priority}
-                    onChange={(e) => setTaskForm((prev) => ({ ...prev, priority: e.target.value as Task['priority'] }))}
-                    className="w-full border border-gray-300 rounded p-2"
-                  >
-                    <option value="High">High</option>
-                    <option value="Medium">Medium</option>
-                    <option value="Low">Low</option>
-                  </select>
-                  <input
-                    name="dueDate"
-                    type="date"
-                    value={taskForm.dueDate}
-                    onChange={(e) => setTaskForm((prev) => ({ ...prev, dueDate: e.target.value }))}
-                    className="w-full border border-gray-300 rounded p-2"
-                  />
-                  <input
-                    name="assigneeId"
-                    value={taskForm.assigneeId}
-                    onChange={(e) => setTaskForm((prev) => ({ ...prev, assigneeId: e.target.value }))}
-                    placeholder="Assignee user id"
-                    className="w-full border border-gray-300 rounded p-2"
-                  />
+                  <div>
+                    <label className="block text-xs font-medium text-text-secondary mb-1">Title</label>
+                    <input
+                      name="title"
+                      value={taskForm.title}
+                      onChange={(e) => setTaskForm((prev) => ({ ...prev, title: e.target.value }))}
+                      placeholder="Task title"
+                      className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+                    />
+                  </div>
+                  {projects.length > 0 && (
+                    <div>
+                      <label className="block text-xs font-medium text-text-secondary mb-1">Project</label>
+                      <select
+                        name="project_id"
+                        value={taskForm.project_id}
+                        onChange={(e) => setTaskForm((prev) => ({ ...prev, project_id: e.target.value }))}
+                        className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+                      >
+                        {projects.map((p) => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-text-secondary mb-1">Status</label>
+                      <select
+                        name="status"
+                        value={taskForm.status}
+                        onChange={(e) => setTaskForm((prev) => ({ ...prev, status: e.target.value as Task['status'] }))}
+                        className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+                      >
+                        <option value="To Do">To Do</option>
+                        <option value="In Progress">In Progress</option>
+                        <option value="In Review">In Review</option>
+                        <option value="Done">Done</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-text-secondary mb-1">Priority</label>
+                      <select
+                        name="priority"
+                        value={taskForm.priority}
+                        onChange={(e) => setTaskForm((prev) => ({ ...prev, priority: e.target.value as Task['priority'] }))}
+                        className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+                      >
+                        <option value="High">High</option>
+                        <option value="Medium">Medium</option>
+                        <option value="Low">Low</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-text-secondary mb-1">Due Date</label>
+                    <input
+                      name="dueDate"
+                      type="date"
+                      value={taskForm.dueDate}
+                      onChange={(e) => setTaskForm((prev) => ({ ...prev, dueDate: e.target.value }))}
+                      className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+                    />
+                  </div>
                 </div>
                 <div className="mt-4 flex justify-end gap-2">
                   <button
                     onClick={closeTaskForm}
-                    className="px-4 py-2 text-sm bg-gray-100 rounded hover:bg-gray-200"
+                    className="px-4 py-2 text-sm bg-surface-hover rounded hover:bg-surface-hover"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={submitTaskForm}
-                    className="px-4 py-2 text-sm bg-[#204EA7] text-white rounded hover:bg-[#163b74]"
+                    className="px-4 py-2 text-sm bg-accent text-white rounded hover:bg-[#163b74]"
                   >
                     Save
                   </button>

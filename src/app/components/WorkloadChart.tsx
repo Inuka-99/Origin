@@ -12,12 +12,12 @@ const data = [
 
 export function WorkloadChart() {
   return (
-    <div className="bg-white rounded-lg border border-gray-200" style={{ boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)' }}>
-      <div className="px-6 py-4 border-b border-gray-200">
-        <h3 className="font-semibold text-gray-900" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+    <div className="bg-surface rounded-lg border border-border-subtle" style={{ boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)' }}>
+      <div className="px-6 py-4 border-b border-border-subtle">
+        <h3 className="font-semibold text-text-primary" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
           Workload Distribution
         </h3>
-        <p className="text-xs text-gray-500 mt-1">Tasks completed this week</p>
+        <p className="text-xs text-text-tertiary mt-1">Tasks completed this week</p>
       </div>
       <div className="p-6">
         <ResponsiveContainer width="100%" height={280}>

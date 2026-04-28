@@ -1,4 +1,5 @@
 import { RouterProvider } from 'react-router';
+import { Toaster } from 'sonner';
 import { router } from './routes';
 
 /**
@@ -6,5 +7,10 @@ import { router } from './routes';
  * Auth0Provider is applied one level up in main.tsx.
  */
 export default function App() {
-  return <RouterProvider router={router} />;
+  return (
+    <>
+      <RouterProvider router={router} />
+      <Toaster position="top-right" richColors />
+    </>
+  );
 }

@@ -30,7 +30,7 @@ export function LoginScreenMobile() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F7F8FA] flex items-center justify-center p-4">
+    <div className="min-h-screen bg-canvas flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Logo and Title */}
         <div className="text-center mb-8">
@@ -39,23 +39,23 @@ export function LoginScreenMobile() {
           </div>
           <h1 
             className="text-2xl mb-2 font-semibold" 
-            style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}
+            style={{ fontFamily: 'Space Grotesk, sans-serif', color: 'var(--text-primary)' }}
           >
             Welcome to ORIGIN
           </h1>
-          <p className="text-sm text-[#676769] font-normal">
+          <p className="text-sm text-text-secondary font-normal">
             Sign in to access your workspace
           </p>
         </div>
 
         {/* Login Card */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+        <div className="bg-surface rounded-lg shadow-sm border border-divider p-6">
           <form onSubmit={handleSubmit}>
             {/* Email Input */}
             <div className="mb-5">
               <label 
                 htmlFor="email" 
-                className="block text-sm font-medium text-[#676769] mb-2"
+                className="block text-sm font-medium text-text-secondary mb-2"
               >
                 Email Address
               </label>
@@ -64,7 +64,7 @@ export function LoginScreenMobile() {
                 id="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 rounded-lg border border-gray-200 focus:border-[#204EA7] focus:ring-2 focus:ring-[#204EA7]/10 outline-none transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+                className="w-full px-4 py-3 rounded-lg border border-border-subtle focus:border-accent focus:ring-2 focus:ring-accent/10 outline-none transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
                 placeholder="sarah@company.com"
                 required
                 disabled={isLoading}
@@ -75,7 +75,7 @@ export function LoginScreenMobile() {
             <div className="mb-5">
               <label 
                 htmlFor="password" 
-                className="block text-sm font-medium text-[#676769] mb-2"
+                className="block text-sm font-medium text-text-secondary mb-2"
               >
                 Password
               </label>
@@ -86,8 +86,8 @@ export function LoginScreenMobile() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className={`w-full px-4 py-3 rounded-lg border ${
-                    error ? 'border-red-500' : 'border-gray-200'
-                  } focus:border-[#204EA7] focus:ring-2 focus:ring-[#204EA7]/10 outline-none transition-all text-sm pr-12 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]`}
+                    error ? 'border-red-500' : 'border-border-subtle'
+                  } focus:border-accent focus:ring-2 focus:ring-accent/10 outline-none transition-all text-sm pr-12 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]`}
                   placeholder="Enter your password"
                   required
                   disabled={isLoading}
@@ -95,7 +95,7 @@ export function LoginScreenMobile() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors disabled:cursor-not-allowed w-8 h-8 flex items-center justify-center"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-text-tertiary hover:text-text-secondary transition-colors disabled:cursor-not-allowed w-8 h-8 flex items-center justify-center"
                   disabled={isLoading}
                 >
                   {showPassword ? (
@@ -115,15 +115,15 @@ export function LoginScreenMobile() {
               <label className="flex items-center gap-2 cursor-pointer min-h-[44px]">
                 <input
                   type="checkbox"
-                  className="w-5 h-5 rounded border-gray-300 text-[#204EA7] focus:ring-[#204EA7]/20 disabled:cursor-not-allowed"
+                  className="w-5 h-5 rounded border-border-strong text-accent focus:ring-accent/20 disabled:cursor-not-allowed"
                   disabled={isLoading}
                 />
-                <span className="text-sm text-[#676769]">Remember me</span>
+                <span className="text-sm text-text-secondary">Remember me</span>
               </label>
               <button
                 type="button"
                 onClick={() => navigate('/forgot-password')}
-                className="text-sm text-[#204EA7] hover:text-[#1a3d8a] font-medium transition-colors disabled:opacity-50 min-h-[44px] px-2"
+                className="text-sm text-accent hover:text-[#1a3d8a] font-medium transition-colors disabled:opacity-50 min-h-[44px] px-2"
                 disabled={isLoading}
               >
                 Forgot password?
@@ -133,7 +133,7 @@ export function LoginScreenMobile() {
             {/* Sign In Button */}
             <button
               type="submit"
-              className="w-full bg-[#204EA7] text-white py-3 rounded-lg hover:bg-[#1a3d8a] transition-colors font-medium text-sm mb-5 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+              className="w-full bg-accent text-white py-3 rounded-lg hover:bg-accent-hover transition-colors font-medium text-sm mb-5 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
               disabled={isLoading}
             >
               {isLoading ? (
@@ -149,10 +149,10 @@ export function LoginScreenMobile() {
             {/* Divider */}
             <div className="relative mb-5">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-200"></div>
+                <div className="w-full border-t border-border-subtle"></div>
               </div>
               <div className="relative flex justify-center text-xs">
-                <span className="bg-white px-4 text-gray-500">Or continue with</span>
+                <span className="bg-surface px-4 text-text-tertiary">Or continue with</span>
               </div>
             </div>
 
@@ -160,7 +160,7 @@ export function LoginScreenMobile() {
             <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
-                className="flex items-center justify-center gap-2 px-3 py-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium text-[#676769] disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+                className="flex items-center justify-center gap-2 px-3 py-3 border border-border-subtle rounded-lg hover:bg-surface-sunken transition-colors text-sm font-medium text-text-secondary disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
                 disabled={isLoading}
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -185,7 +185,7 @@ export function LoginScreenMobile() {
               </button>
               <button
                 type="button"
-                className="flex items-center justify-center gap-2 px-3 py-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium text-[#676769] disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+                className="flex items-center justify-center gap-2 px-3 py-3 border border-border-subtle rounded-lg hover:bg-surface-sunken transition-colors text-sm font-medium text-text-secondary disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
                 disabled={isLoading}
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
@@ -198,11 +198,11 @@ export function LoginScreenMobile() {
         </div>
 
         {/* Sign Up Link */}
-        <p className="text-center text-sm text-[#676769] mt-5">
+        <p className="text-center text-sm text-text-secondary mt-5">
           Don't have an account?{' '}
           <button
             onClick={() => navigate('/register')}
-            className="text-[#204EA7] hover:text-[#1a3d8a] font-medium transition-colors min-h-[44px] inline-flex items-center"
+            className="text-accent hover:text-[#1a3d8a] font-medium transition-colors min-h-[44px] inline-flex items-center"
           >
             Sign up for free
           </button>
