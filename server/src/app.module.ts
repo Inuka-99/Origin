@@ -18,10 +18,7 @@
  */
 
 import {
-  type MiddlewareConsumer,
   Module,
-  type NestModule,
-  RequestMethod,
 } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './auth';
@@ -33,7 +30,7 @@ import { ActivityLogModule } from './activity-log';
 import { ChatModule } from './chat';
 import { GoogleCalendarModule } from './integrations/google-calendar';
 import { AppController } from './app.controller';
-import { RateLimitMiddleware } from './common/rate-limit.middleware';
+import { RateLimitInterceptor } from './common/rate-limit.interceptor';
 
 @Module({
   imports: [
@@ -69,16 +66,6 @@ import { RateLimitMiddleware } from './common/rate-limit.middleware';
     GoogleCalendarModule,
   ],
   controllers: [AppController],
-  providers: [RateLimitMiddleware],
+  providers: [RateLimitInterceptor],
 })
-export class AppModule implements NestModule {
-  configure(consumer: MiddlewareConsumer): void {
-    // Apply rate limiting to every authenticated route. We exclude
-    // GET / (the health check on AppController) so probes can poll
-    // freely without hitting 429.
-    consumer
-      .apply(RateLimitMiddleware)
-      .exclude({ path: '/', method: RequestMethod.GET })
-      .forRoutes('*');
-  }
-}
+export class AppModule {}
