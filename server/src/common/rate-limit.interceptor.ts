@@ -1,10 +1,22 @@
 /**
  * rate-limit.interceptor.ts
  *
- * Similar to the original rate-limit middleware, but runs as a
- * NestJS interceptor so it executes after authentication has already
- * populated `req.user`. That lets us rate-limit by user ID for
- * authenticated requests instead of falling back to the shared IP.
+ * Per-user rate limiter that runs as a Nest interceptor (after the
+ * JwtAuthGuard, so `req.user.userId` is populated). For
+ * unauthenticated requests it falls back to the client IP.
+ *
+ * Limits:
+ *   - Production: 600 req/min/identity. Strong abuse protection
+ *     while still allowing comfortable interactive use.
+ *   - Development: 6000 req/min/identity. Effectively unlimited for
+ *     normal usage; we still keep some ceiling to surface runaway
+ *     loops in the logs without immediately breaking the UI. Set
+ *     NODE_ENV=production to engage the tighter limit.
+ *
+ * GETs and the index/health endpoint are excluded entirely so a
+ * busy dashboard never locks the user out — only writes count
+ * against the budget. (The previous all-methods limiter was
+ * tripping during normal interactive use.)
  */
 
 import {
@@ -20,7 +32,7 @@ import type { Request, Response } from 'express';
 import { type Observable } from 'rxjs';
 
 const WINDOW_MS = 60_000;
-const MAX_PER_WINDOW = 600;
+const MAX_PER_WINDOW = process.env.NODE_ENV === 'production' ? 600 : 6000;
 const MAX_IDENTITIES = 10_000;
 
 interface WindowState {
@@ -37,12 +49,17 @@ export class RateLimitInterceptor implements NestInterceptor {
     const req = context.switchToHttp().getRequest<Request>();
     const res = context.switchToHttp().getResponse<Response>();
 
-    // Do not count harmless preflight or health-check requests.
-    if (req.method === 'OPTIONS' || req.method === 'HEAD') {
+    // Skip safe / harmless requests entirely so reads never burn
+    // the user's budget.
+    if (
+      req.method === 'OPTIONS' ||
+      req.method === 'HEAD' ||
+      req.method === 'GET'
+    ) {
       return next.handle();
     }
 
-    if (req.method === 'GET' && req.path === '/') {
+    if (req.path === '/') {
       return next.handle();
     }
 
@@ -68,11 +85,27 @@ export class RateLimitInterceptor implements NestInterceptor {
     if (state.count > MAX_PER_WINDOW) {
       const retryAfterSec = Math.ceil((state.windowStart + WINDOW_MS - now) / 1000);
       res.setHeader('Retry-After', String(Math.max(1, retryAfterSec)));
-      this.logger.warn(`Rate limit hit for ${identity}`);
-      throw new HttpException(
-        'Too many requests — please slow down.',
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
+
+      // Production: actually 429 the request — abuse protection.
+      // Development: log once at warn-level with the offending route
+      //              so the operator can see what's looping, but
+      //              don't break the user's flow. Looking at the
+      //              path is enough to diagnose; we don't need the
+      //              UI to fall over while we're debugging.
+      if (process.env.NODE_ENV === 'production') {
+        this.logger.warn(`Rate limit hit for ${identity} on ${req.method} ${req.path}`);
+        throw new HttpException(
+          'Too many requests — please slow down.',
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      } else {
+        // Throttle the log itself so a tight loop doesn't spam too.
+        if (state.count === MAX_PER_WINDOW + 1 || state.count % 60 === 0) {
+          this.logger.warn(
+            `[dev] Rate limit would-block ${identity}: ${state.count} writes/min — most recent ${req.method} ${req.path}`,
+          );
+        }
+      }
     }
 
     return next.handle();

@@ -81,9 +81,16 @@ export function ChatPanel({ channel, onMessageSent, onChannelSeen }: Props) {
     el.scrollTop = el.scrollHeight;
   }, [messages.length, channelId]);
 
-  // Mark channel as read once we've loaded its messages.
+  // Mark channel as read once we've loaded its messages — but
+  // ONLY ONCE per channelId. The ref guard prevents the effect
+  // from re-firing when callback identities change (which would
+  // hammer POST /chat/channels/:id/read on every render and burn
+  // the rate limiter). Switching channels resets it naturally.
+  const lastMarkedRef = useRef<string | null>(null);
   useEffect(() => {
     if (!channelId || loading) return;
+    if (lastMarkedRef.current === channelId) return;
+    lastMarkedRef.current = channelId;
     void markRead();
     onChannelSeen?.();
   }, [channelId, loading, markRead, onChannelSeen]);
@@ -299,7 +306,7 @@ export function ChatPanel({ channel, onMessageSent, onChannelSeen }: Props) {
             className="px-4 py-3 bg-accent text-on-accent rounded-2xl hover:bg-accent-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-medium"
           >
             {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            Send
+                 Send
           </button>
         </div>
       </div>

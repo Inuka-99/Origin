@@ -445,7 +445,7 @@ export class ChatService {
   private async broadcast(channelId: string, event: string, payload: unknown): Promise<void> {
     try {
       const ch = this.client.channel(`chat:${channelId}`);
-      await ch.send({ type: 'broadcast', event, payload });
+      await ch.httpSend(event, payload);
     } catch (err) {
       this.logger.warn(`chat broadcast failed: ${(err as Error).message}`);
     }
