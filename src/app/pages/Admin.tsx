@@ -69,28 +69,28 @@ export function Admin() {
   const memberCount = users.filter((u) => u.role === 'member').length;
 
   return (
-    <div className="min-h-screen bg-[#F7F8FA]">
+    <div className="min-h-screen bg-canvas">
       <Sidebar />
       <TopBar />
 
-      <main className="ml-56 pt-16 p-8">
+      <main className="pt-16 p-8 transition-[margin] duration-200 ease-out" style={{ marginLeft: 'var(--sidebar-width)' }}>
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
-            <Shield className="w-8 h-8 text-[#204EA7]" />
+            <Shield className="w-8 h-8 text-accent" />
             <h1
               className="text-3xl font-semibold"
-              style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}
+              style={{ fontFamily: 'Space Grotesk, sans-serif', color: 'var(--text-primary)' }}
             >
               Admin Panel
             </h1>
           </div>
-          <p className="text-gray-600">Manage user roles and access permissions</p>
+          <p className="text-text-secondary">Manage user roles and access permissions</p>
         </div>
 
         {/* Stats Cards */}
         <div className="grid grid-cols-3 gap-4 mb-6">
-          <div className="bg-white rounded-lg shadow-sm p-4 flex items-center gap-4">
+          <div className="bg-surface rounded-lg shadow-sm p-4 flex items-center gap-4">
             <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
               <Users className="w-5 h-5 text-blue-600" />
             </div>
@@ -98,10 +98,10 @@ export function Admin() {
               <div className="text-2xl font-semibold" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
                 {users.length}
               </div>
-              <div className="text-sm text-gray-500">Total Users</div>
+              <div className="text-sm text-text-tertiary">Total Users</div>
             </div>
           </div>
-          <div className="bg-white rounded-lg shadow-sm p-4 flex items-center gap-4">
+          <div className="bg-surface rounded-lg shadow-sm p-4 flex items-center gap-4">
             <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
               <UserCheck className="w-5 h-5 text-purple-600" />
             </div>
@@ -109,10 +109,10 @@ export function Admin() {
               <div className="text-2xl font-semibold" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
                 {adminCount}
               </div>
-              <div className="text-sm text-gray-500">Admins</div>
+              <div className="text-sm text-text-tertiary">Admins</div>
             </div>
           </div>
-          <div className="bg-white rounded-lg shadow-sm p-4 flex items-center gap-4">
+          <div className="bg-surface rounded-lg shadow-sm p-4 flex items-center gap-4">
             <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
               <UserX className="w-5 h-5 text-green-600" />
             </div>
@@ -120,14 +120,14 @@ export function Admin() {
               <div className="text-2xl font-semibold" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
                 {memberCount}
               </div>
-              <div className="text-sm text-gray-500">Members</div>
+              <div className="text-sm text-text-tertiary">Members</div>
             </div>
           </div>
         </div>
 
         {/* User Management Table */}
-        <div className="bg-white rounded-lg shadow-sm">
-          <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+        <div className="bg-surface rounded-lg shadow-sm">
+          <div className="p-4 border-b border-divider flex items-center justify-between">
             <h2
               className="text-lg font-semibold"
               style={{ fontFamily: 'Space Grotesk, sans-serif' }}
@@ -136,18 +136,18 @@ export function Admin() {
             </h2>
             <div className="flex items-center gap-3">
               <div className="relative">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary" />
                 <input
                   type="text"
                   placeholder="Search users..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7] focus:border-transparent w-64"
+                  className="pl-9 pr-4 py-2 bg-surface-sunken border border-border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent w-64"
                 />
               </div>
               <button
                 onClick={loadUsers}
-                className="p-2 text-gray-500 hover:text-[#204EA7] hover:bg-gray-50 rounded-lg transition-colors"
+                className="p-2 text-text-tertiary hover:text-accent hover:bg-surface-sunken rounded-lg transition-colors"
               >
                 <RefreshCw className="w-4 h-4" />
               </button>
@@ -155,15 +155,15 @@ export function Admin() {
           </div>
 
           {loading ? (
-            <div className="p-12 text-center text-gray-500">Loading users...</div>
+            <div className="p-12 text-center text-text-tertiary">Loading users...</div>
           ) : filteredUsers.length === 0 ? (
-            <div className="p-12 text-center text-gray-500">
+            <div className="p-12 text-center text-text-tertiary">
               {search ? 'No users match your search' : 'No users found'}
             </div>
           ) : (
             <table className="w-full">
               <thead>
-                <tr className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <tr className="text-left text-xs font-medium text-text-tertiary uppercase tracking-wider">
                   <th className="px-6 py-3">User</th>
                   <th className="px-6 py-3">Role</th>
                   <th className="px-6 py-3">Joined</th>
@@ -172,17 +172,17 @@ export function Admin() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {filteredUsers.map((user) => (
-                  <tr key={user.id} className="hover:bg-gray-50 transition-colors">
+                  <tr key={user.id} className="hover:bg-surface-sunken transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-[#204EA7] flex items-center justify-center text-white text-sm font-semibold">
+                        <div className="w-9 h-9 rounded-full bg-accent flex items-center justify-center text-white text-sm font-semibold">
                           {(user.full_name || user.email || '?').charAt(0).toUpperCase()}
                         </div>
                         <div>
-                          <div className="font-medium text-gray-900 text-sm">
+                          <div className="font-medium text-text-primary text-sm">
                             {user.full_name || 'Unnamed User'}
                           </div>
-                          <div className="text-xs text-gray-500">{user.email || user.id}</div>
+                          <div className="text-xs text-text-tertiary">{user.email || user.id}</div>
                         </div>
                       </div>
                     </td>
@@ -191,14 +191,14 @@ export function Admin() {
                         className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
                           user.role === 'admin'
                             ? 'bg-purple-100 text-purple-700'
-                            : 'bg-gray-100 text-gray-700'
+                            : 'bg-surface-hover text-text-secondary'
                         }`}
                       >
                         {user.role === 'admin' && <Shield className="w-3 h-3" />}
                         {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-500">
+                    <td className="px-6 py-4 text-sm text-text-tertiary">
                       {new Date(user.created_at).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4 text-right">
@@ -207,8 +207,8 @@ export function Admin() {
                         disabled={updatingId === user.id}
                         className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                           user.role === 'admin'
-                            ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            : 'bg-[#204EA7]/10 text-[#204EA7] hover:bg-[#204EA7]/20'
+                            ? 'bg-surface-hover text-text-secondary hover:bg-surface-hover'
+                            : 'bg-accent/10 text-accent hover:bg-accent/20'
                         } disabled:opacity-50`}
                       >
                         {updatingId === user.id

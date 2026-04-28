@@ -28,9 +28,9 @@ import { useApiClient } from '../lib/api-client';
 import {
   type CreateProjectPayload,
   getProjectPriorityBadgeClasses,
+  type Project,
   type ProjectPriority,
   type ProjectStatus,
-  type Project,
 } from '../lib/projects';
 
 const PROJECT_STATUSES: ProjectStatus[] = [
@@ -104,10 +104,10 @@ function validateForm(form: ProjectFormState): FormErrors {
 }
 
 const formControlClassName =
-  'flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm outline-none transition-[border-color,box-shadow] hover:border-gray-400 hover:shadow-md focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50';
+  'flex h-10 w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm shadow-sm outline-none transition-[border-color,box-shadow] hover:border-border-strong hover:shadow-md focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50';
 
 const textAreaClassName =
-  'min-h-24 rounded-md border border-gray-300 bg-white shadow-sm transition-[border-color,box-shadow] hover:border-gray-400 hover:shadow-md focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50';
+  'min-h-24 rounded-md border border-border-strong bg-surface shadow-sm transition-[border-color,box-shadow] hover:border-border-strong hover:shadow-md focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50';
 
 export function Projects() {
   const api = useApiClient();
@@ -158,10 +158,7 @@ export function Projects() {
     }
 
     return projects.filter((project) =>
-      [
-        project.name,
-        project.description ?? '',
-      ].some((value) => value.toLowerCase().includes(query)),
+      [project.name, project.description ?? ''].some((value) => value.toLowerCase().includes(query)),
     );
   }, [projects, searchQuery]);
 
@@ -175,6 +172,7 @@ export function Projects() {
     if (isSubmitting) {
       return;
     }
+
     setIsModalOpen(false);
   };
 
@@ -221,111 +219,138 @@ export function Projects() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F7F8FA]">
+    <div className="min-h-screen bg-canvas">
       <Sidebar />
       <TopBar />
 
-      <main className="ml-56 px-8 pt-20 pb-8">
+      <main
+        className="px-8 pb-8 pt-20 transition-[margin] duration-200 ease-out"
+        style={{ marginLeft: 'var(--sidebar-width)' }}
+      >
         <div className="mb-10 flex items-center justify-between gap-6">
           <div className="pt-1">
-            <h1 className="mb-3 text-3xl font-semibold" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
+            <h1
+              className="mb-3 text-3xl font-semibold text-text-primary"
+              style={{ fontFamily: 'Space Grotesk, sans-serif' }}
+            >
               Projects
             </h1>
-            <p className="text-gray-600">Manage and track all active projects</p>
+            <p className="text-text-secondary">Manage and track all active projects</p>
           </div>
           <button
             type="button"
             onClick={openCreateModal}
-            className="mt-1 flex items-center gap-2 rounded-lg bg-[#204EA7] px-4 py-2.5 font-medium text-white transition-colors hover:bg-[#1a3d8a]"
+            className="mt-1 flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 font-medium text-white transition-colors hover:bg-accent-hover"
           >
-            <Plus className="w-5 h-5" />
+            <Plus className="h-5 w-5" />
             Create Project
           </button>
         </div>
 
-        <div className="bg-white rounded-lg p-4 mb-6 flex items-center gap-4 shadow-sm">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+        <div className="mb-6 flex items-center gap-4 rounded-lg bg-surface p-4 shadow-sm">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-text-tertiary" />
             <input
               type="text"
               placeholder="Search projects..."
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7] focus:border-transparent"
+              className="w-full rounded-lg border border-border-subtle bg-surface-sunken py-2.5 pl-10 pr-4 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-accent"
             />
           </div>
 
-          <button type="button" className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium text-gray-500 cursor-not-allowed">
-            <Filter className="w-4 h-4" />
-            Filter
-            <ChevronDown className="w-4 h-4" />
+          <button
+            type="button"
+            className="cursor-not-allowed rounded-lg border border-border-subtle bg-surface-sunken px-4 py-2.5 text-sm font-medium text-text-tertiary"
+          >
+            <span className="flex items-center gap-2">
+              <Filter className="h-4 w-4" />
+              Filter
+              <ChevronDown className="h-4 w-4" />
+            </span>
           </button>
 
-          <button type="button" className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium text-gray-500 cursor-not-allowed">
-            Sort
-            <ChevronDown className="w-4 h-4" />
+          <button
+            type="button"
+            className="cursor-not-allowed rounded-lg border border-border-subtle bg-surface-sunken px-4 py-2.5 text-sm font-medium text-text-tertiary"
+          >
+            <span className="flex items-center gap-2">
+              Sort
+              <ChevronDown className="h-4 w-4" />
+            </span>
           </button>
 
-          <div className="flex items-center gap-1 bg-gray-50 rounded-lg p-1">
+          <div className="flex items-center gap-1 rounded-lg bg-surface-sunken p-1">
             <button
               type="button"
               onClick={() => setViewMode('grid')}
-              className={`p-2 rounded ${viewMode === 'grid' ? 'bg-white shadow-sm' : 'hover:bg-gray-100'}`}
+              className={`rounded p-2 ${viewMode === 'grid' ? 'bg-surface shadow-sm' : 'hover:bg-surface-hover'}`}
             >
-              <Grid3x3 className="w-4 h-4 text-gray-700" />
+              <Grid3x3 className="h-4 w-4 text-text-secondary" />
             </button>
             <button
               type="button"
               onClick={() => setViewMode('list')}
-              className={`p-2 rounded ${viewMode === 'list' ? 'bg-white shadow-sm' : 'hover:bg-gray-100'}`}
+              className={`rounded p-2 ${viewMode === 'list' ? 'bg-surface shadow-sm' : 'hover:bg-surface-hover'}`}
             >
-              <List className="w-4 h-4 text-gray-700" />
+              <List className="h-4 w-4 text-text-secondary" />
             </button>
           </div>
         </div>
 
         {isLoading ? (
-          <div className="bg-white rounded-lg p-12 shadow-sm text-gray-600">Loading projects...</div>
+          <div className="rounded-lg bg-surface p-12 text-text-secondary shadow-sm">Loading projects...</div>
         ) : loadError ? (
-          <div className="bg-white rounded-lg p-12 shadow-sm">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+          <div className="rounded-lg bg-surface p-12 shadow-sm">
+            <h3
+              className="mb-2 text-lg font-semibold text-text-primary"
+              style={{ fontFamily: 'Space Grotesk, sans-serif' }}
+            >
               Projects are unavailable
             </h3>
             <p className="text-red-600">{loadError}</p>
           </div>
         ) : filteredProjects.length === 0 ? (
-          <div className="bg-white rounded-lg p-12 text-center shadow-sm">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Grid3x3 className="w-8 h-8 text-gray-400" />
+          <div className="rounded-lg bg-surface p-12 text-center shadow-sm">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-surface-hover">
+              <Grid3x3 className="h-8 w-8 text-text-tertiary" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+            <h3
+              className="mb-2 text-lg font-semibold text-text-primary"
+              style={{ fontFamily: 'Space Grotesk, sans-serif' }}
+            >
               No projects found
             </h3>
-            <p className="text-gray-600 mb-6">Create your first project to start tracking work</p>
+            <p className="mb-6 text-text-secondary">Create your first project to start tracking work</p>
             <button
               type="button"
               onClick={openCreateModal}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#204EA7] text-white rounded-lg hover:bg-[#1a3d8a] transition-colors font-medium"
+              className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 font-medium text-white transition-colors hover:bg-accent-hover"
             >
-              <Plus className="w-5 h-5" />
+              <Plus className="h-5 w-5" />
               Create Project
             </button>
           </div>
         ) : viewMode === 'grid' ? (
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
             {filteredProjects.map((project) => (
               <button
                 key={project.id}
                 type="button"
                 onClick={() => navigate(`/projects/${project.id}`)}
-                className="text-left bg-white rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow border border-transparent hover:border-[#204EA7]/20"
+                className="rounded-2xl border border-transparent bg-surface p-6 text-left shadow-sm transition-shadow hover:border-accent/20 hover:shadow-md"
               >
-                <div className="flex items-start justify-between gap-3 mb-4">
+                <div className="mb-4 flex items-start justify-between gap-3">
                   <div>
-                    <h3 className="text-lg font-semibold mb-1 text-[#1a1a1a]" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+                    <h3
+                      className="mb-1 text-lg font-semibold text-text-primary"
+                      style={{ fontFamily: 'Space Grotesk, sans-serif' }}
+                    >
                       {project.name}
                     </h3>
-                    <p className="text-xs text-gray-500">Created by {project.created_by || 'Unknown user'}</p>
+                    <p className="text-xs text-text-tertiary">
+                      Created by {project.created_by || 'Unknown user'}
+                    </p>
                   </div>
                   <span
                     className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${getProjectPriorityBadgeClasses(project.priority)}`}
@@ -334,13 +359,13 @@ export function Projects() {
                   </span>
                 </div>
 
-                <p className="text-sm text-gray-600 mb-4 min-h-10">
+                <p className="mb-4 min-h-10 text-sm text-text-secondary">
                   {project.description || 'No description has been added yet.'}
                 </p>
 
-                <div className="flex items-center justify-between pt-4 border-t border-gray-100 text-xs text-gray-500">
+                <div className="flex items-center justify-between border-t border-divider pt-4 text-xs text-text-tertiary">
                   <span className="flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5" />
+                    <Calendar className="h-3.5 w-3.5" />
                     Updated {formatCreated(project.updated_at)}
                   </span>
                   <span>Created {formatCreated(project.created_at)}</span>
@@ -349,17 +374,17 @@ export function Projects() {
             ))}
           </div>
         ) : (
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+          <div className="overflow-hidden rounded-lg bg-surface shadow-sm">
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200">
+                <thead className="border-b border-border-subtle bg-surface-sunken">
                   <tr>
-                    <th className="text-left px-6 py-3 text-sm font-semibold text-gray-900">Project</th>
-                    <th className="text-left px-6 py-3 text-sm font-semibold text-gray-900">Description</th>
-                    <th className="text-left px-6 py-3 text-sm font-semibold text-gray-900">Created By</th>
-                    <th className="text-left px-6 py-3 text-sm font-semibold text-gray-900">Priority</th>
-                    <th className="text-left px-6 py-3 text-sm font-semibold text-gray-900">Created</th>
-                    <th className="text-left px-6 py-3 text-sm font-semibold text-gray-900">Updated</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-text-primary">Project</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-text-primary">Description</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-text-primary">Created By</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-text-primary">Priority</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-text-primary">Created</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-text-primary">Updated</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -367,13 +392,17 @@ export function Projects() {
                     <tr
                       key={project.id}
                       onClick={() => navigate(`/projects/${project.id}`)}
-                      className="hover:bg-gray-50 cursor-pointer"
+                      className="cursor-pointer hover:bg-surface-sunken"
                     >
                       <td className="px-6 py-4">
-                        <div className="font-semibold text-gray-900">{project.name}</div>
+                        <div className="font-semibold text-text-primary">{project.name}</div>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-700 max-w-sm truncate">{project.description || 'No description'}</td>
-                      <td className="px-6 py-4 text-sm text-gray-700">{project.created_by || 'Unknown'}</td>
+                      <td className="max-w-sm truncate px-6 py-4 text-sm text-text-secondary">
+                        {project.description || 'No description'}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-text-secondary">
+                        {project.created_by || 'Unknown'}
+                      </td>
                       <td className="px-6 py-4">
                         <span
                           className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${getProjectPriorityBadgeClasses(project.priority)}`}
@@ -381,8 +410,12 @@ export function Projects() {
                           {project.priority}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-700">{formatCreated(project.created_at)}</td>
-                      <td className="px-6 py-4 text-sm text-gray-700">{formatCreated(project.updated_at)}</td>
+                      <td className="px-6 py-4 text-sm text-text-secondary">
+                        {formatCreated(project.created_at)}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-text-secondary">
+                        {formatCreated(project.updated_at)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -393,21 +426,24 @@ export function Projects() {
       </main>
 
       <Dialog open={isModalOpen} onOpenChange={(open) => (open ? setIsModalOpen(true) : closeCreateModal())}>
-        <DialogContent className="w-[min(92vw,58rem)] max-w-5xl max-h-[90vh] overflow-hidden border-0 p-0 shadow-2xl">
-          <div className="bg-white max-h-[90vh] overflow-y-auto">
-            <DialogHeader className="px-6 pt-5 pb-3 border-b border-gray-100">
-              <DialogTitle style={{ fontFamily: 'Space Grotesk, sans-serif' }} className="text-2xl text-gray-950">
+        <DialogContent className="max-h-[90vh] w-[min(92vw,58rem)] max-w-5xl overflow-hidden border-0 p-0 shadow-2xl">
+          <div className="max-h-[90vh] overflow-y-auto bg-surface">
+            <DialogHeader className="border-b border-divider px-6 pb-3 pt-5">
+              <DialogTitle
+                style={{ fontFamily: 'Space Grotesk, sans-serif' }}
+                className="text-2xl text-gray-950"
+              >
                 Create Project
               </DialogTitle>
-              <DialogDescription className="text-gray-600">
+              <DialogDescription className="text-text-secondary">
                 Capture the essentials now and refine the project after creation.
               </DialogDescription>
             </DialogHeader>
 
-            <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <form onSubmit={handleSubmit} className="space-y-4 px-6 py-5">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-900 mb-1.5">
+                  <label className="mb-1.5 block text-sm font-medium text-text-primary">
                     Project Name <span className="text-red-500">*</span>
                   </label>
                   <Input
@@ -421,7 +457,7 @@ export function Projects() {
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-900 mb-1.5">Description</label>
+                  <label className="mb-1.5 block text-sm font-medium text-text-primary">Description</label>
                   <Textarea
                     value={form.description}
                     onChange={(event) => setField('description', event.target.value)}
@@ -431,7 +467,7 @@ export function Projects() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-900 mb-1.5">Start Date</label>
+                  <label className="mb-1.5 block text-sm font-medium text-text-primary">Start Date</label>
                   <Input
                     type="date"
                     value={form.start_date}
@@ -441,7 +477,7 @@ export function Projects() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-900 mb-1.5">Due Date</label>
+                  <label className="mb-1.5 block text-sm font-medium text-text-primary">Due Date</label>
                   <Input
                     type="date"
                     value={form.due_date}
@@ -453,7 +489,7 @@ export function Projects() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-900 mb-1.5">
+                  <label className="mb-1.5 block text-sm font-medium text-text-primary">
                     Priority <span className="text-red-500">*</span>
                   </label>
                   <ProjectPrioritySelect
@@ -465,7 +501,7 @@ export function Projects() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-900 mb-1.5">Status</label>
+                  <label className="mb-1.5 block text-sm font-medium text-text-primary">Status</label>
                   <select
                     value={form.status}
                     onChange={(event) => setField('status', event.target.value as ProjectStatus)}
@@ -480,7 +516,7 @@ export function Projects() {
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-900 mb-1.5">
+                  <label className="mb-1.5 block text-sm font-medium text-text-primary">
                     Department <span className="text-red-500">*</span>
                   </label>
                   <Input
@@ -494,7 +530,7 @@ export function Projects() {
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-900 mb-1.5">Tags</label>
+                  <label className="mb-1.5 block text-sm font-medium text-text-primary">Tags</label>
                   <Input
                     value={form.tags}
                     onChange={(event) => setField('tags', event.target.value)}
@@ -504,11 +540,11 @@ export function Projects() {
                 </div>
               </div>
 
-              <DialogFooter className="pt-3 border-t border-gray-100">
+              <DialogFooter className="border-t border-divider pt-3">
                 <Button type="button" variant="outline" onClick={closeCreateModal} disabled={isSubmitting}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={isSubmitting} className="bg-[#204EA7] hover:bg-[#1a3d8a] text-white">
+                <Button type="submit" disabled={isSubmitting} className="bg-accent text-white hover:bg-accent-hover">
                   {isSubmitting ? 'Creating...' : 'Create Project'}
                 </Button>
               </DialogFooter>

@@ -1,6 +1,20 @@
-import { LayoutDashboard, Folder, CheckSquare, Calendar, Users, Settings, MessageSquare, Shield, Kanban, Activity } from 'lucide-react';
+import {
+  LayoutDashboard,
+  Folder,
+  CheckSquare,
+  Calendar,
+  Users,
+  Settings,
+  MessageSquare,
+  Shield,
+  Kanban,
+  Activity,
+  ChevronLeft,
+  ChevronRight,
+} from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router';
 import { useUserRole } from '../auth/useUserRole';
+import { useSidebarState } from '../layout';
 
 interface MenuItem {
   icon: React.ComponentType<{ className?: string }>;
@@ -28,6 +42,7 @@ export function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const { isAdmin } = useUserRole();
+  const { collapsed, toggle } = useSidebarState();
 
   // Filter menu items based on user role
   const visibleItems = menuItems.filter(
@@ -35,16 +50,29 @@ export function Sidebar() {
   );
 
   return (
-    <aside className="w-56 bg-[#203D70] h-screen fixed left-0 top-0 flex flex-col">
-      {/* Logo Area */}
-      <div className="px-4 py-6">
-        <div className="mb-4">
-          <div className="text-white text-xl font-bold" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>ORIGIN</div>
+    <aside
+      className="h-screen fixed left-0 top-0 flex flex-col z-20 transition-[width] duration-200 ease-out"
+      style={{
+        width: 'var(--sidebar-width)',
+        background: 'var(--sidebar-bg)',
+        borderRight: '1px solid var(--sidebar-border)',
+        color: 'var(--sidebar-fg)',
+      }}
+      aria-label="Primary navigation"
+    >
+      {/* Logo Area — full wordmark when expanded, single "O" when collapsed */}
+      <div className={`px-5 py-6 ${collapsed ? 'flex justify-center px-0' : ''}`}>
+        <div
+          className="text-xl font-bold tracking-tight transition-all"
+          style={{ fontFamily: 'Space Grotesk, sans-serif', color: 'var(--sidebar-fg)' }}
+          aria-label="Origin"
+        >
+          {collapsed ? 'O' : 'ORIGIN'}
         </div>
       </div>
 
       {/* Navigation Menu */}
-      <nav className="flex-1 px-3 pt-2">
+      <nav className={`flex-1 pt-2 ${collapsed ? 'px-2' : 'px-3'}`}>
         {visibleItems.map((item) => {
           const Icon = item.icon;
           const isActive = location.pathname === item.path;
@@ -52,37 +80,104 @@ export function Sidebar() {
             <button
               key={item.label}
               onClick={() => navigate(item.path)}
-              className={`relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-0.5 transition-all ${
-                isActive
-                  ? 'bg-[#2a4a7f] text-white'
-                  : 'text-white/70 hover:bg-white/10 hover:text-white'
+              title={collapsed ? item.label : undefined}
+              aria-label={collapsed ? item.label : undefined}
+              className={`relative w-full flex items-center rounded-lg mb-0.5 transition-all ${
+                collapsed ? 'justify-center px-0 py-2.5 h-10' : 'gap-3 px-3 py-2.5'
               }`}
+              style={{
+                background: isActive ? 'var(--sidebar-item-active)' : 'transparent',
+                color: isActive ? 'var(--sidebar-fg)' : 'var(--sidebar-fg-muted)',
+              }}
+              onMouseEnter={(e) => {
+                if (!isActive) {
+                  (e.currentTarget as HTMLButtonElement).style.background = 'var(--sidebar-item-hover)';
+                  (e.currentTarget as HTMLButtonElement).style.color = 'var(--sidebar-fg)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isActive) {
+                  (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                  (e.currentTarget as HTMLButtonElement).style.color = 'var(--sidebar-fg-muted)';
+                }
+              }}
             >
               {/* Accent Bar for Active State */}
               {isActive && (
-                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-[#204EA7] rounded-r"></div>
+                <div
+                  className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r"
+                  style={{ background: 'var(--accent)' }}
+                />
               )}
-              <Icon className="w-5 h-5" />
-              <span className="text-sm font-medium">{item.label}</span>
+              <Icon className="w-5 h-5 flex-shrink-0" />
+              {!collapsed && (
+                <span className="text-sm font-medium truncate">{item.label}</span>
+              )}
               {item.badge && item.badge > 0 && (
-                <span className="ml-auto bg-[#204EA7] text-white text-xs font-semibold px-2 py-0.5 rounded-full min-w-[20px] text-center">
-                  {item.badge}
-                </span>
+                collapsed ? (
+                  <span
+                    className="absolute top-1 right-1 w-2 h-2 rounded-full"
+                    style={{ background: 'var(--accent)' }}
+                    aria-label={`${item.badge} unread`}
+                  />
+                ) : (
+                  <span
+                    className="ml-auto text-xs font-semibold px-2 py-0.5 rounded-full min-w-[20px] text-center"
+                    style={{ background: 'var(--accent)', color: 'var(--on-accent)' }}
+                  >
+                    {item.badge}
+                  </span>
+                )
               )}
             </button>
           );
         })}
       </nav>
 
-      {/* Role indicator at bottom */}
-      {isAdmin && (
-        <div className="px-4 py-3 border-t border-white/10">
-          <div className="flex items-center gap-2 text-xs text-white/50">
-            <Shield className="w-3.5 h-3.5" />
-            <span>Admin Access</span>
+      {/* Role indicator + Collapse toggle at bottom */}
+      <div
+        className="flex flex-col gap-1"
+        style={{ borderTop: '1px solid var(--sidebar-border)' }}
+      >
+        {isAdmin && !collapsed && (
+          <div className="px-4 pt-3">
+            <div
+              className="flex items-center gap-2 text-xs"
+              style={{ color: 'var(--sidebar-fg-muted)' }}
+            >
+              <Shield className="w-3.5 h-3.5" />
+              <span>Admin Access</span>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+        <button
+          type="button"
+          onClick={toggle}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          className={`mx-2 my-3 flex items-center rounded-lg transition-colors ${
+            collapsed ? 'justify-center h-9 w-9 self-center' : 'justify-between px-3 py-2 h-9'
+          }`}
+          style={{ color: 'var(--sidebar-fg-muted)' }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = 'var(--sidebar-item-hover)';
+            (e.currentTarget as HTMLButtonElement).style.color = 'var(--sidebar-fg)';
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+            (e.currentTarget as HTMLButtonElement).style.color = 'var(--sidebar-fg-muted)';
+          }}
+        >
+          {collapsed ? (
+            <ChevronRight className="w-4 h-4" />
+          ) : (
+            <>
+              <span className="text-xs font-medium">Collapse</span>
+              <ChevronLeft className="w-4 h-4" />
+            </>
+          )}
+        </button>
+      </div>
     </aside>
   );
 }

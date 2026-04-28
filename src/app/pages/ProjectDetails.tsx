@@ -211,10 +211,10 @@ function formatReadableUserId(value: string): string {
 }
 
 const formControlClassName =
-  'flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm outline-none transition-[border-color,box-shadow] hover:border-gray-400 hover:shadow-md focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50';
+  'flex h-10 w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm shadow-sm outline-none transition-[border-color,box-shadow] hover:border-border-strong hover:shadow-md focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50';
 
 const textAreaClassName =
-  'min-h-24 rounded-md border border-gray-300 bg-white shadow-sm transition-[border-color,box-shadow] hover:border-gray-400 hover:shadow-md focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50';
+  'min-h-24 rounded-md border border-border-strong bg-surface shadow-sm transition-[border-color,box-shadow] hover:border-border-strong hover:shadow-md focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50';
 
 export function ProjectDetails() {
   const { projectId = '' } = useParams();
@@ -499,27 +499,27 @@ export function ProjectDetails() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F7F8FA]">
+    <div className="min-h-screen bg-canvas">
       <Sidebar />
       <TopBar />
 
-      <main className="ml-56 p-8 pt-16">
-        <div className="mb-4 flex items-center gap-2 text-sm text-gray-600">
-          <Link to="/projects" className="transition-colors hover:text-[#204EA7]">
+      <main className="p-8 pt-16 transition-[margin] duration-200 ease-out" style={{ marginLeft: 'var(--sidebar-width)' }}>
+        <div className="mb-4 flex items-center gap-2 text-sm text-text-secondary">
+          <Link to="/projects" className="transition-colors hover:text-accent">
             Projects
           </Link>
           <ChevronRight className="h-4 w-4" />
-          <span className="font-medium text-gray-900">{project?.name ?? 'Project Details'}</span>
+          <span className="font-medium text-text-primary">{project?.name ?? 'Project Details'}</span>
         </div>
 
         {isLoading ? (
-          <div className="rounded-2xl border border-gray-100 bg-white p-8 text-gray-600 shadow-sm">
+          <div className="rounded-2xl border border-divider bg-surface p-8 text-text-secondary shadow-sm">
             Loading project details...
           </div>
         ) : error ? (
-          <div className="rounded-2xl border border-red-100 bg-white p-8 shadow-sm">
+          <div className="rounded-2xl border border-red-100 bg-surface p-8 shadow-sm">
             <h1
-              className="mb-2 text-2xl font-semibold text-gray-900"
+              className="mb-2 text-2xl font-semibold text-text-primary"
               style={{ fontFamily: 'Space Grotesk, sans-serif' }}
             >
               Project unavailable
@@ -528,7 +528,7 @@ export function ProjectDetails() {
           </div>
         ) : project ? (
           <div className="space-y-6">
-            <section className="rounded-2xl border border-gray-100 bg-white p-8 shadow-sm">
+            <section className="rounded-2xl border border-divider bg-surface p-8 shadow-sm">
               <div className="flex items-start justify-between gap-6">
                 <div>
                   <h1
@@ -537,16 +537,16 @@ export function ProjectDetails() {
                   >
                     {project.name}
                   </h1>
-                  <p className="max-w-3xl text-gray-600">
+                  <p className="max-w-3xl text-text-secondary">
                     {project.description || 'No description has been added for this project yet.'}
                   </p>
                 </div>
-                <div className="hidden size-16 items-center justify-center rounded-2xl bg-[#204EA7]/8 text-[#204EA7] lg:flex">
+                <div className="hidden size-16 items-center justify-center rounded-2xl bg-accent/8 text-accent lg:flex">
                   <FolderKanban className="h-8 w-8" />
                 </div>
               </div>
 
-              <div className="mt-6 flex justify-end border-t border-gray-100 pt-6">
+              <div className="mt-6 flex justify-end border-t border-divider pt-6">
                 <Button
                   type="button"
                   variant="outline"
@@ -568,28 +568,28 @@ export function ProjectDetails() {
             </section>
 
             <section className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]">
-              <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+              <div className="rounded-2xl border border-divider bg-surface p-6 shadow-sm">
                 <div className="mb-5 flex items-center justify-between gap-4">
                   <button
                     type="button"
                     onClick={() => setIsMembersExpanded((current) => !current)}
-                    className="flex min-w-0 flex-1 items-center justify-between gap-4 rounded-xl px-1 py-1 text-left transition-colors hover:bg-gray-50"
+                    className="flex min-w-0 flex-1 items-center justify-between gap-4 rounded-xl px-1 py-1 text-left transition-colors hover:bg-surface-sunken"
                   >
                     <div>
                       <h2
-                        className="text-lg font-semibold text-gray-900"
+                        className="text-lg font-semibold text-text-primary"
                         style={{ fontFamily: 'Space Grotesk, sans-serif' }}
                       >
                         Team Members
                       </h2>
-                      <p className="mt-1 text-sm text-gray-500">
+                      <p className="mt-1 text-sm text-text-tertiary">
                         {isMembersExpanded
                           ? 'Manage the people assigned to this project.'
                           : `${members.length} member${members.length === 1 ? '' : 's'} assigned to this project.`}
                       </p>
                     </div>
                     <ChevronRight
-                      className={`h-5 w-5 shrink-0 text-gray-400 transition-transform ${
+                      className={`h-5 w-5 shrink-0 text-text-tertiary transition-transform ${
                         isMembersExpanded ? 'rotate-90' : ''
                       }`}
                     />
@@ -598,7 +598,7 @@ export function ProjectDetails() {
                     <Button
                       type="button"
                       onClick={openAddMemberModal}
-                      className="bg-[#204EA7] text-white hover:bg-[#1a3d8a]"
+                      className="bg-accent text-white hover:bg-accent-hover"
                     >
                       <UserPlus className="h-4 w-4" />
                       Add Member
@@ -608,10 +608,10 @@ export function ProjectDetails() {
 
                 {isMembersExpanded ? (
                   members.length === 0 ? (
-                    <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-5 py-10 text-center">
+                    <div className="rounded-xl border border-dashed border-border-subtle bg-surface-sunken px-5 py-10 text-center">
                       <Users className="mx-auto mb-3 h-10 w-10 text-gray-300" />
-                      <p className="font-medium text-gray-900">No team members yet</p>
-                      <p className="mt-1 text-sm text-gray-500">
+                      <p className="font-medium text-text-primary">No team members yet</p>
+                      <p className="mt-1 text-sm text-text-tertiary">
                         Add teammates to start collaborating on this project.
                       </p>
                     </div>
@@ -624,23 +624,23 @@ export function ProjectDetails() {
                         return (
                           <div
                             key={member.id}
-                            className="flex items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm"
+                            className="flex items-center justify-between gap-4 rounded-xl border border-border-subtle bg-surface px-4 py-3 shadow-sm"
                           >
                             <div className="flex min-w-0 items-center gap-3">
-                              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#204EA7]/10 text-sm font-semibold text-[#204EA7]">
+                              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent/10 text-sm font-semibold text-accent">
                                 {getMemberInitial(member)}
                               </div>
                               <div className="min-w-0">
-                                <p className="truncate font-medium text-gray-900">{memberLabel}</p>
-                                <p className="truncate text-sm text-gray-500">
+                                <p className="truncate font-medium text-text-primary">{memberLabel}</p>
+                                <p className="truncate text-sm text-text-tertiary">
                                   {member.email || member.user_id}
                                 </p>
                                 <div className="mt-2 flex flex-wrap items-center gap-2">
-                                  <span className="rounded-full bg-[#204EA7]/10 px-2.5 py-1 text-xs font-medium text-[#204EA7]">
+                                  <span className="rounded-full bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent">
                                     {member.role}
                                   </span>
                                   {member.is_creator ? (
-                                    <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
+                                    <span className="rounded-full bg-surface-hover px-2.5 py-1 text-xs font-medium text-text-secondary">
                                       Creator
                                     </span>
                                   ) : null}
@@ -666,30 +666,30 @@ export function ProjectDetails() {
                 ) : null}
               </div>
 
-              <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+              <div className="rounded-2xl border border-divider bg-surface p-6 shadow-sm">
                 <h2
-                  className="mb-4 text-lg font-semibold text-gray-900"
+                  className="mb-4 text-lg font-semibold text-text-primary"
                   style={{ fontFamily: 'Space Grotesk, sans-serif' }}
                 >
                   Details
                 </h2>
                 <div className="space-y-4 text-sm">
                   <div>
-                    <p className="mb-1 text-gray-500">Created By</p>
-                    <p className="font-medium text-gray-900">{project.created_by || 'Unknown'}</p>
+                    <p className="mb-1 text-text-tertiary">Created By</p>
+                    <p className="font-medium text-text-primary">{project.created_by || 'Unknown'}</p>
                   </div>
                   <div>
-                    <p className="mb-1 text-gray-500">Start Date</p>
-                    <p className="font-medium text-gray-900">{new Date(project.start_date).toLocaleDateString()}</p>
+                    <p className="mb-1 text-text-tertiary">Start Date</p>
+                    <p className="font-medium text-text-primary">{new Date(project.start_date).toLocaleDateString()}</p>
                   </div>
                   <div>
-                    <p className="mb-1 text-gray-500">Due Date</p>
-                    <p className="font-medium text-gray-900">
+                    <p className="mb-1 text-text-tertiary">Due Date</p>
+                    <p className="font-medium text-text-primary">
                       {project.due_date ? new Date(project.due_date).toLocaleDateString() : 'Not set'}
                     </p>
                   </div>
                   <div>
-                    <p className="mb-1 text-gray-500">Priority</p>
+                    <p className="mb-1 text-text-tertiary">Priority</p>
                     <span
                       className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${getProjectPriorityBadgeClasses(project.priority)}`}
                     >
@@ -697,26 +697,26 @@ export function ProjectDetails() {
                     </span>
                   </div>
                   <div>
-                    <p className="mb-1 text-gray-500">Status</p>
-                    <p className="font-medium text-gray-900">{project.status}</p>
+                    <p className="mb-1 text-text-tertiary">Status</p>
+                    <p className="font-medium text-text-primary">{project.status}</p>
                   </div>
                   <div>
-                    <p className="mb-1 text-gray-500">Department</p>
-                    <p className="font-medium text-gray-900">{project.department}</p>
+                    <p className="mb-1 text-text-tertiary">Department</p>
+                    <p className="font-medium text-text-primary">{project.department}</p>
                   </div>
                   <div>
-                    <p className="mb-1 text-gray-500">Tags</p>
-                    <p className="font-medium text-gray-900">
+                    <p className="mb-1 text-text-tertiary">Tags</p>
+                    <p className="font-medium text-text-primary">
                       {project.tags.length > 0 ? project.tags.join(', ') : 'No tags'}
                     </p>
                   </div>
                   <div>
-                    <p className="mb-1 text-gray-500">Created</p>
-                    <p className="font-medium text-gray-900">{new Date(project.created_at).toLocaleString()}</p>
+                    <p className="mb-1 text-text-tertiary">Created</p>
+                    <p className="font-medium text-text-primary">{new Date(project.created_at).toLocaleString()}</p>
                   </div>
                   <div>
-                    <p className="mb-1 text-gray-500">Last Updated</p>
-                    <p className="font-medium text-gray-900">{new Date(project.updated_at).toLocaleString()}</p>
+                    <p className="mb-1 text-text-tertiary">Last Updated</p>
+                    <p className="font-medium text-text-primary">{new Date(project.updated_at).toLocaleString()}</p>
                   </div>
                 </div>
               </div>
@@ -727,15 +727,15 @@ export function ProjectDetails() {
 
       <Dialog open={isEditModalOpen} onOpenChange={(open) => (open ? openEditModal() : closeEditModal())}>
         <DialogContent className="w-[min(92vw,58rem)] max-h-[90vh] max-w-5xl overflow-hidden border-0 p-0 shadow-2xl">
-          <div className="max-h-[90vh] overflow-y-auto bg-white">
-            <DialogHeader className="border-b border-gray-100 px-6 pb-3 pt-5">
+          <div className="max-h-[90vh] overflow-y-auto bg-surface">
+            <DialogHeader className="border-b border-divider px-6 pb-3 pt-5">
               <DialogTitle
                 style={{ fontFamily: 'Space Grotesk, sans-serif' }}
                 className="text-2xl text-gray-950"
               >
                 Edit Project
               </DialogTitle>
-              <DialogDescription className="text-gray-600">
+              <DialogDescription className="text-text-secondary">
                 Update the project details and save your changes.
               </DialogDescription>
             </DialogHeader>
@@ -743,7 +743,7 @@ export function ProjectDetails() {
             <form onSubmit={handleEditSubmit} className="space-y-4 px-6 py-5">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="md:col-span-2">
-                  <label className="mb-1.5 block text-sm font-medium text-gray-900">
+                  <label className="mb-1.5 block text-sm font-medium text-text-primary">
                     Project Name <span className="text-red-500">*</span>
                   </label>
                   <Input
@@ -757,7 +757,7 @@ export function ProjectDetails() {
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="mb-1.5 block text-sm font-medium text-gray-900">Description</label>
+                  <label className="mb-1.5 block text-sm font-medium text-text-primary">Description</label>
                   <Textarea
                     value={editForm.description}
                     onChange={(event) => setEditField('description', event.target.value)}
@@ -767,7 +767,7 @@ export function ProjectDetails() {
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-gray-900">Start Date</label>
+                  <label className="mb-1.5 block text-sm font-medium text-text-primary">Start Date</label>
                   <Input
                     type="date"
                     value={editForm.start_date}
@@ -777,7 +777,7 @@ export function ProjectDetails() {
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-gray-900">Due Date</label>
+                  <label className="mb-1.5 block text-sm font-medium text-text-primary">Due Date</label>
                   <Input
                     type="date"
                     value={editForm.due_date}
@@ -789,7 +789,7 @@ export function ProjectDetails() {
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-gray-900">
+                  <label className="mb-1.5 block text-sm font-medium text-text-primary">
                     Priority <span className="text-red-500">*</span>
                   </label>
                   <ProjectPrioritySelect
@@ -801,7 +801,7 @@ export function ProjectDetails() {
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-gray-900">Status</label>
+                  <label className="mb-1.5 block text-sm font-medium text-text-primary">Status</label>
                   <select
                     value={editForm.status}
                     onChange={(event) => setEditField('status', event.target.value as ProjectStatus)}
@@ -816,7 +816,7 @@ export function ProjectDetails() {
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="mb-1.5 block text-sm font-medium text-gray-900">
+                  <label className="mb-1.5 block text-sm font-medium text-text-primary">
                     Department <span className="text-red-500">*</span>
                   </label>
                   <Input
@@ -832,7 +832,7 @@ export function ProjectDetails() {
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="mb-1.5 block text-sm font-medium text-gray-900">Tags</label>
+                  <label className="mb-1.5 block text-sm font-medium text-text-primary">Tags</label>
                   <Input
                     value={editForm.tags}
                     onChange={(event) => setEditField('tags', event.target.value)}
@@ -842,11 +842,11 @@ export function ProjectDetails() {
                 </div>
               </div>
 
-              <DialogFooter className="border-t border-gray-100 pt-3">
+              <DialogFooter className="border-t border-divider pt-3">
                 <Button type="button" variant="outline" onClick={closeEditModal} disabled={isSaving}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={isSaving} className="bg-[#204EA7] text-white hover:bg-[#1a3d8a]">
+                <Button type="submit" disabled={isSaving} className="bg-accent text-white hover:bg-accent-hover">
                   {isSaving ? 'Saving...' : 'Save Changes'}
                 </Button>
               </DialogFooter>
@@ -857,22 +857,22 @@ export function ProjectDetails() {
 
       <Dialog open={isAddMemberModalOpen} onOpenChange={(open) => (open ? openAddMemberModal() : closeAddMemberModal())}>
         <DialogContent className="w-[min(92vw,40rem)] max-h-[90vh] overflow-hidden border-0 p-0 shadow-2xl">
-          <div className="max-h-[90vh] overflow-y-auto bg-white">
-            <DialogHeader className="border-b border-gray-100 px-6 pb-3 pt-5">
+          <div className="max-h-[90vh] overflow-y-auto bg-surface">
+            <DialogHeader className="border-b border-divider px-6 pb-3 pt-5">
               <DialogTitle
                 style={{ fontFamily: 'Space Grotesk, sans-serif' }}
                 className="text-2xl text-gray-950"
               >
                 Add Team Member
               </DialogTitle>
-              <DialogDescription className="text-gray-600">
+              <DialogDescription className="text-text-secondary">
                 Add an existing user to this project, or use email to match an existing profile.
               </DialogDescription>
             </DialogHeader>
 
             <form onSubmit={handleAddMemberSubmit} className="space-y-4 px-6 py-5">
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-gray-900">Existing User</label>
+                <label className="mb-1.5 block text-sm font-medium text-text-primary">Existing User</label>
                 <Popover open={isCandidatePopoverOpen} onOpenChange={setIsCandidatePopoverOpen}>
                   <PopoverTrigger asChild>
                     <div className="relative">
@@ -897,7 +897,7 @@ export function ProjectDetails() {
                         aria-expanded={isCandidatePopoverOpen}
                         className={`${formControlClassName} pr-10`}
                       />
-                      <ChevronsUpDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                      <ChevronsUpDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
                     </div>
                   </PopoverTrigger>
                   <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
@@ -929,10 +929,10 @@ export function ProjectDetails() {
                                 }`}
                               />
                               <div className="min-w-0">
-                                <p className="truncate font-medium text-gray-900">
+                                <p className="truncate font-medium text-text-primary">
                                   {getCandidatePrimaryLabel(candidate)}
                                 </p>
-                                <p className="truncate text-xs text-gray-500">
+                                <p className="truncate text-xs text-text-tertiary">
                                   {getCandidateSecondaryLabel(candidate)}
                                 </p>
                               </div>
@@ -946,7 +946,7 @@ export function ProjectDetails() {
               </div>
 
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-gray-900">Email</label>
+                <label className="mb-1.5 block text-sm font-medium text-text-primary">Email</label>
                 <Input
                   type="email"
                   value={addMemberForm.email}
@@ -963,14 +963,14 @@ export function ProjectDetails() {
                   placeholder="Enter an existing user's email"
                   className={formControlClassName}
                 />
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-1 text-xs text-text-tertiary">
                   If the email matches an existing user, they&apos;ll be added immediately. Pending invitations
                   are not available yet.
                 </p>
               </div>
 
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-gray-900">
+                <label className="mb-1.5 block text-sm font-medium text-text-primary">
                   Role <span className="text-red-500">*</span>
                 </label>
                 <select
@@ -990,11 +990,11 @@ export function ProjectDetails() {
 
               {addMemberErrors.member ? <p className="text-sm text-red-600">{addMemberErrors.member}</p> : null}
 
-              <DialogFooter className="border-t border-gray-100 pt-3">
+              <DialogFooter className="border-t border-divider pt-3">
                 <Button type="button" variant="outline" onClick={closeAddMemberModal} disabled={isAddingMember}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={isAddingMember} className="bg-[#204EA7] text-white hover:bg-[#1a3d8a]">
+                <Button type="submit" disabled={isAddingMember} className="bg-accent text-white hover:bg-accent-hover">
                   {isAddingMember ? 'Adding...' : 'Add Member'}
                 </Button>
               </DialogFooter>
@@ -1021,7 +1021,7 @@ export function ProjectDetails() {
                 void handleDeleteProject();
               }}
               disabled={isDeleting}
-              className="border border-red-700 bg-white text-red-700 transition-all duration-200 hover:bg-red-700 hover:text-white hover:shadow-sm"
+              className="border border-red-700 bg-surface text-red-700 transition-all duration-200 hover:bg-red-700 hover:text-white hover:shadow-sm"
             >
               {isDeleting ? 'Deleting...' : 'Delete Project'}
             </AlertDialogAction>

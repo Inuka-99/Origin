@@ -26,6 +26,7 @@ import { SettingsMobile } from './pages/SettingsMobile';
 import { Admin } from './pages/Admin';
 import { ActivityLog } from './pages/ActivityLog';
 import { ActivityLogMobile } from './pages/ActivityLogMobile';
+import { DataIntegrity } from './pages/DataIntegrity';
 
 export const router = createBrowserRouter([
   // ─── Public routes (no auth required) ────────────────────────────
@@ -139,6 +140,10 @@ export const router = createBrowserRouter([
       {
         path: '/admin',
         Component: Admin,
+      },
+      {
+        path: '/data-integrity',
+        Component: DataIntegrity,
       },
       {
         path: '/settings-mobile',

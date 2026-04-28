@@ -52,10 +52,21 @@ export class GoogleCalendarService {
   }> {
     const conn = await this.connections.findByUserId(userId);
     if (conn) {
+      // Existing connections may carry a "unknown@google" placeholder
+      // from the older OAuth flow that didn't request the email scope.
+      // Heal that lazily: ask Google's userinfo endpoint with a fresh
+      // access token and persist the real address. We swallow failures
+      // because this is a UX nicety — never block the status response.
+      let googleEmail = conn.google_email;
+      if (this.looksLikePlaceholderEmail(googleEmail)) {
+        const real = await this.refreshConnectedEmail(userId);
+        if (real) googleEmail = real;
+      }
+
       return {
         connected: !conn.needs_reconnect,
         source: conn.source,
-        googleEmail: conn.google_email,
+        googleEmail,
         calendarId: conn.calendar_id,
         needsReconnect: conn.needs_reconnect,
       };
@@ -76,14 +87,38 @@ export class GoogleCalendarService {
     const client = await this.clientFactory.forUser(userId);
     if (!client) return [];
 
-    const res = await client.calendar.calendarList.list({ maxResults: 100 });
-    return (res.data.items ?? []).map((c: calendar_v3.Schema$CalendarListEntry) => ({
-      id: c.id!,
-      summary: c.summary ?? c.id!,
-      primary: Boolean(c.primary),
-      accessRole: c.accessRole ?? undefined,
-      backgroundColor: c.backgroundColor ?? undefined,
-    }));
+    try {
+      const res = await client.calendar.calendarList.list({ maxResults: 100 });
+      return (res.data.items ?? []).map((c) => ({
+        id: c.id!,
+        summary: c.summary ?? c.id!,
+        primary: Boolean(c.primary),
+        accessRole: c.accessRole ?? undefined,
+        backgroundColor: c.backgroundColor ?? undefined,
+      }));
+    } catch (err: any) {
+      // calendarList.list requires `calendar.readonly` (or broader) on
+      // top of `calendar.events`. Older grants connected before that
+      // scope was added will get a 403 here. We surface that as an
+      // empty list rather than a 500 — the UI defaults to "primary"
+      // when the list is empty, so the integration still works for
+      // sync; it just can't enumerate other calendars until reconnect.
+      const status = err?.code ?? err?.response?.status;
+      // 403 here means the connection was made before we requested
+      // calendar.readonly. That's expected — log at debug level so
+      // we don't flood the warning stream. Anything else stays a
+      // warning because it's actually unusual.
+      if (status === 403) {
+        this.logger.debug(
+          `calendarList.list 403 for user ${userId} — needs reconnect for calendar.readonly scope`,
+        );
+      } else {
+        this.logger.warn(
+          `calendarList.list failed (status=${status}) for user ${userId}: ${(err as Error).message}`,
+        );
+      }
+      return [];
+    }
   }
 
   async setCalendarId(userId: string, calendarId: string): Promise<void> {
@@ -176,6 +211,68 @@ export class GoogleCalendarService {
   // ---------------------------------------------------------------------------
   // Internals
   // ---------------------------------------------------------------------------
+
+  /**
+   * `unknown@google` was the old fallback string when the OAuth flow
+   * didn't request the email scope. Anything that looks like a
+   * placeholder triggers a userinfo refresh.
+   */
+  private looksLikePlaceholderEmail(email: string | null | undefined): boolean {
+    if (!email) return true;
+    if (email === 'unknown@google') return true;
+    // Auth0 management fallback writes "<google-user-id>@google" — those
+    // also aren't real addresses and should be refreshed.
+    return email.endsWith('@google');
+  }
+
+  /**
+   * Hit Google's userinfo endpoint with a fresh access token, persist
+   * the resulting email on the connection row, and return it. Returns
+   * null on any failure so callers can fall back gracefully.
+   */
+  private async refreshConnectedEmail(userId: string): Promise<string | null> {
+    const client = await this.clientFactory.forUser(userId);
+    if (!client) return null;
+
+    // The googleapis client doesn't expose userinfo directly, but the
+    // OAuth client it was built from does have the access token. We
+    // use a plain fetch to avoid pulling in another googleapis surface.
+    try {
+      const credentials = (client.calendar.context._options.auth as any)?.credentials;
+      const accessToken: string | undefined = credentials?.access_token;
+      if (!accessToken) return null;
+
+      const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!res.ok) {
+        // 401 means the access token doesn't carry the email scope —
+        // expected for connections made before we requested it.
+        // Anything else stays a warning.
+        if (res.status === 401) {
+          this.logger.debug(
+            `userinfo 401 for user ${userId} — needs reconnect for email scope`,
+          );
+        } else {
+          this.logger.warn(
+            `userinfo refresh failed (${res.status}) for user ${userId}`,
+          );
+        }
+        return null;
+      }
+      const body = (await res.json()) as { email?: string };
+      const email = body.email;
+      if (!email) return null;
+
+      await this.connections.updateGoogleEmail(userId, email);
+      return email;
+    } catch (err) {
+      this.logger.warn(
+        `userinfo refresh threw for user ${userId}: ${(err as Error).message}`,
+      );
+      return null;
+    }
+  }
 
   private async insertFresh(
     calendar: calendar_v3.Calendar,
