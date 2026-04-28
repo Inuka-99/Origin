@@ -24,7 +24,7 @@ export function ResetPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F7F8FA] flex items-center justify-center p-8">
+    <div className="min-h-screen bg-canvas flex items-center justify-center p-8">
       <div className="w-full max-w-md">
         {/* Logo and Title */}
         <div className="text-center mb-10">
@@ -33,23 +33,23 @@ export function ResetPasswordPage() {
           </div>
           <h1 
             className="text-3xl mb-2 font-semibold" 
-            style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}
+            style={{ fontFamily: 'Space Grotesk, sans-serif', color: 'var(--text-primary)' }}
           >
             Reset password
           </h1>
-          <p className="text-sm text-[#676769] font-normal">
+          <p className="text-sm text-text-secondary font-normal">
             Enter your new password below
           </p>
         </div>
 
         {/* Reset Password Card */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-8">
+        <div className="bg-surface rounded-lg shadow-sm border border-divider p-8">
           <form onSubmit={handleSubmit}>
             {/* New Password Input */}
             <div className="mb-6">
               <label 
                 htmlFor="password" 
-                className="block text-sm font-medium text-[#676769] mb-2"
+                className="block text-sm font-medium text-text-secondary mb-2"
               >
                 New Password
               </label>
@@ -59,7 +59,7 @@ export function ResetPasswordPage() {
                   id="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-lg border border-gray-200 focus:border-[#204EA7] focus:ring-2 focus:ring-[#204EA7]/10 outline-none transition-all text-sm pr-10 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full px-4 py-2.5 rounded-lg border border-border-subtle focus:border-accent focus:ring-2 focus:ring-accent/10 outline-none transition-all text-sm pr-10 disabled:opacity-50 disabled:cursor-not-allowed"
                   placeholder="Enter new password"
                   required
                   disabled={isLoading}
@@ -67,7 +67,7 @@ export function ResetPasswordPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors disabled:cursor-not-allowed"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-text-tertiary hover:text-text-secondary transition-colors disabled:cursor-not-allowed"
                   disabled={isLoading}
                 >
                   {showPassword ? (
@@ -83,7 +83,7 @@ export function ResetPasswordPage() {
             <div className="mb-8">
               <label 
                 htmlFor="confirmPassword" 
-                className="block text-sm font-medium text-[#676769] mb-2"
+                className="block text-sm font-medium text-text-secondary mb-2"
               >
                 Confirm Password
               </label>
@@ -93,7 +93,7 @@ export function ResetPasswordPage() {
                   id="confirmPassword"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-lg border border-gray-200 focus:border-[#204EA7] focus:ring-2 focus:ring-[#204EA7]/10 outline-none transition-all text-sm pr-10 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full px-4 py-2.5 rounded-lg border border-border-subtle focus:border-accent focus:ring-2 focus:ring-accent/10 outline-none transition-all text-sm pr-10 disabled:opacity-50 disabled:cursor-not-allowed"
                   placeholder="Re-enter new password"
                   required
                   disabled={isLoading}
@@ -101,7 +101,7 @@ export function ResetPasswordPage() {
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors disabled:cursor-not-allowed"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-text-tertiary hover:text-text-secondary transition-colors disabled:cursor-not-allowed"
                   disabled={isLoading}
                 >
                   {showConfirmPassword ? (
@@ -111,7 +111,7 @@ export function ResetPasswordPage() {
                   )}
                 </button>
               </div>
-              <p className="text-xs text-[#676769] mt-2">
+              <p className="text-xs text-text-secondary mt-2">
                 Must be at least 8 characters with a mix of letters and numbers
               </p>
             </div>
@@ -119,7 +119,7 @@ export function ResetPasswordPage() {
             {/* Reset Password Button */}
             <button
               type="submit"
-              className="w-full bg-[#204EA7] text-white py-2.5 rounded-lg hover:bg-[#1a3d8a] transition-colors font-medium text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-accent text-white py-2.5 rounded-lg hover:bg-accent-hover transition-colors font-medium text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={isLoading}
             >
               {isLoading ? (
@@ -135,11 +135,11 @@ export function ResetPasswordPage() {
         </div>
 
         {/* Back to Sign In Link */}
-        <p className="text-center text-sm text-[#676769] mt-6">
+        <p className="text-center text-sm text-text-secondary mt-6">
           Remember your password?{' '}
           <button
             onClick={() => navigate('/')}
-            className="text-[#204EA7] hover:text-[#1a3d8a] font-medium transition-colors"
+            className="text-accent hover:text-[#1a3d8a] font-medium transition-colors"
           >
             Sign in
           </button>

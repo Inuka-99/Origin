@@ -16,17 +16,9 @@ import {
   UserSyncInterceptor,
   type AuthenticatedUser,
 } from '../auth';
-import {
-  TasksService,
-  type BulkUpdateTasksDto,
-  type CreateTaskDto,
-  type TaskDueDateFilter,
-  type TaskPriorityFilter,
-  type UpdateTaskDto,
-  type TaskSortOption,
-  type TaskStatusFilter,
-} from './tasks.service';
+import { TasksService, type CreateTaskDto, type UpdateTaskDto } from './tasks.service';
 import { SupabaseService } from '../supabase';
+import { UserRoleCache } from '../users';
 
 @Controller('tasks')
 @UseGuards(JwtAuthGuard)
@@ -35,46 +27,51 @@ export class TasksController {
   constructor(
     private readonly tasksService: TasksService,
     private readonly supabase: SupabaseService,
+    private readonly roleCache: UserRoleCache,
   ) {}
 
+  /**
+   * Resolve the user's global role, hitting the cache first.
+   *
+   * Before this cache, every request to /tasks made an extra
+   * Supabase round-trip just to read the role. The cache cuts
+   * that out for the common case (role unchanged) while
+   * UsersService.updateRole() handles invalidation.
+   */
   private async getUserRole(userId: string): Promise<string> {
+    const cached = this.roleCache.get(userId);
+    if (cached) return cached;
+
     const { data } = await this.supabase
       .getClient()
       .from('profiles')
       .select('role')
       .eq('id', userId)
       .single();
-    return data?.role ?? 'member';
+    const role = data?.role ?? 'member';
+    this.roleCache.set(userId, role);
+    return role;
   }
 
   @Get()
   async list(
     @CurrentUser() user: AuthenticatedUser,
-    @Query('search') search?: string,
-    @Query('status') status?: TaskStatusFilter,
-    @Query('priority') priority?: TaskPriorityFilter,
-    @Query('dueDate') dueDate?: TaskDueDateFilter,
-    @Query('sortBy') sortBy?: TaskSortOption,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
     const role = await this.getUserRole(user.userId);
-    return this.tasksService.listForUser(
-      user.userId,
-      role,
-      search,
-      status,
-      priority,
-      dueDate,
-      sortBy,
-    );
+    return this.tasksService.listForUser(user.userId, role, page, limit);
   }
 
   @Get('project/:projectId')
   async listByProject(
     @Param('projectId') projectId: string,
     @CurrentUser() user: AuthenticatedUser,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
     const role = await this.getUserRole(user.userId);
-    return this.tasksService.listByProject(projectId, user.userId, role);
+    return this.tasksService.listByProject(projectId, user.userId, role, page, limit);
   }
 
   @Post()
@@ -92,15 +89,6 @@ export class TasksController {
   ) {
     const role = await this.getUserRole(user.userId);
     return this.tasksService.getById(id, user.userId, role);
-  }
-
-  @Patch('bulk')
-  async bulkUpdate(
-    @Body() dto: BulkUpdateTasksDto,
-    @CurrentUser() user: AuthenticatedUser,
-  ) {
-    const role = await this.getUserRole(user.userId);
-    return this.tasksService.bulkUpdate(dto, user.userId, role);
   }
 
   @Patch(':id')

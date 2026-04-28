@@ -33,11 +33,11 @@ import {
 } from '../auth';
 import {
   ProjectsService,
-  type AddProjectMemberDto,
   type CreateProjectDto,
   type UpdateProjectDto,
 } from './projects.service';
 import { SupabaseService } from '../supabase';
+import { UserRoleCache } from '../users';
 
 @Controller('projects')
 @UseGuards(JwtAuthGuard)
@@ -46,26 +46,37 @@ export class ProjectsController {
   constructor(
     private readonly projectsService: ProjectsService,
     private readonly supabase: SupabaseService,
+    private readonly roleCache: UserRoleCache,
   ) {}
 
-  /** Helper: get the user's global role from their Supabase profile */
+  /**
+   * Helper: get the user's global role from their Supabase profile,
+   * cached for the duration of the role TTL to avoid an extra DB
+   * round-trip on every authenticated request.
+   */
   private async getUserRole(userId: string): Promise<string> {
+    const cached = this.roleCache.get(userId);
+    if (cached) return cached;
+
     const { data } = await this.supabase
       .getClient()
       .from('profiles')
       .select('role')
       .eq('id', userId)
       .single();
-    return data?.role ?? 'member';
+    const role = data?.role ?? 'member';
+    this.roleCache.set(userId, role);
+    return role;
   }
 
   @Get()
   async list(
     @CurrentUser() user: AuthenticatedUser,
-    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
     const role = await this.getUserRole(user.userId);
-    return this.projectsService.listForUser(user.userId, role, search);
+    return this.projectsService.listForUser(user.userId, role, page, limit);
   }
 
   @Post()

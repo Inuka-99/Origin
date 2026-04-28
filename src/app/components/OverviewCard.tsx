@@ -17,15 +17,15 @@ export function OverviewCard({
   value,
   icon: Icon,
   trend,
-  iconBgColor = 'bg-[#204EA7]/10',
-  iconColor = 'text-[#204EA7]',
+  iconBgColor = 'bg-accent/10',
+  iconColor = 'text-accent',
 }: OverviewCardProps) {
   return (
-    <div className="bg-white rounded-lg p-6 border border-gray-200" style={{ boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)' }}>
+    <div className="bg-surface rounded-lg p-6 border border-border-subtle" style={{ boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)' }}>
       <div className="flex items-start justify-between">
         <div className="flex-1">
-          <p className="text-sm text-gray-600 mb-2">{title}</p>
-          <p className="text-4xl font-semibold text-gray-900" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+          <p className="text-sm text-text-secondary mb-2">{title}</p>
+          <p className="text-4xl font-semibold text-text-primary" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
             {value}
           </p>
           {trend && (

@@ -45,6 +45,27 @@ export class UsersController {
   }
 
   /**
+   * PATCH /users/me
+   * Updates the authenticated user's editable profile fields.
+   * Role is intentionally not editable here — that's admin-only via
+   * PATCH /users/:id/role.
+   */
+  @Patch('me')
+  async updateMe(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body()
+    body: {
+      full_name?: string;
+      email?: string;
+      avatar_url?: string | null;
+      job_title?: string | null;
+      bio?: string | null;
+    },
+  ) {
+    return this.usersService.updateProfile(user.userId, body);
+  }
+
+  /**
    * GET /users
    * Returns all user profiles. Admin only.
    */

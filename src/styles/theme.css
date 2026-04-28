@@ -1,84 +1,223 @@
+/*
+ * theme.css — Origin design tokens
+ *
+ * Two themes (`:root` is light, `.dark` is dark) defined as CSS
+ * variables. Components should consume these tokens via Tailwind
+ * utilities (`bg-canvas`, `text-primary`, …) which map onto the
+ * variables through `@theme inline` below. Hardcoded hex values are
+ * the exception — every common surface, text role, and border has a
+ * named token here.
+ *
+ * The dark palette is intentionally Apple-flavored: deep grays
+ * (#000 / #1c1c1e / #2c2c2e), hairline borders, vivid accent blue,
+ * generous use of translucent overlays. The light palette stays
+ * close to the existing Origin look so day-mode users see no churn.
+ */
+
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  /* ---- Brand & font sizing ----------------------------------- */
   --font-size: 16px;
-  --background: #F7F8FA;
-  --foreground: #676769;
-  --card: #ffffff;
-  --card-foreground: #676769;
-  --popover: #ffffff;
-  --popover-foreground: #676769;
-  --primary: #204EA7;
-  --primary-foreground: #ffffff;
-  --secondary: #F7F8FA;
-  --secondary-foreground: #676769;
-  --muted: #F7F8FA;
-  --muted-foreground: #676769;
-  --accent: #204EA7;
-  --accent-foreground: #ffffff;
-  --destructive: #d4183d;
-  --destructive-foreground: #ffffff;
-  --border: rgba(0, 0, 0, 0.08);
-  --input: transparent;
-  --input-background: #ffffff;
-  --switch-background: #cbced4;
   --font-weight-medium: 500;
   --font-weight-normal: 400;
-  --ring: #204EA7;
+  --radius: 0.625rem;
+
+  /* ---- Origin semantic tokens (LIGHT) ------------------------ */
+  /* Page canvas — what you see behind cards. */
+  --canvas:           #F7F8FA;
+  /* Surfaces — the cards, panels, modals. */
+  --surface:          #FFFFFF;
+  --surface-elevated: #FFFFFF;
+  --surface-sunken:   #F1F2F5;
+  --surface-hover:    #F0F2F5;
+
+  /* Text. */
+  --text-primary:   #1A1A1A;
+  --text-secondary: #4D4F54;
+  --text-tertiary:  #8A8C92;
+  --text-inverse:   #FFFFFF;
+  --text-disabled:  #B5B7BD;
+
+  /* Borders + dividers (use rgba so they read on any surface). */
+  --border-subtle: rgba(0, 0, 0, 0.08);
+  --border-strong: rgba(0, 0, 0, 0.16);
+  --divider:       rgba(0, 0, 0, 0.06);
+
+  /* Accent (Origin blue). */
+  --accent:         #204EA7;
+  --accent-hover:   #1A3D8A;
+  --accent-pressed: #15326F;
+  --accent-soft:    #EAF0FB;
+  --on-accent:      #FFFFFF;
+  --focus-ring:     #204EA7;
+
+  /* App chrome — sidebar + topbar. */
+  --sidebar-bg:           #203D70;
+  --sidebar-fg:           #FFFFFF;
+  --sidebar-fg-muted:     rgba(255, 255, 255, 0.72);
+  --sidebar-item-hover:   rgba(255, 255, 255, 0.10);
+  --sidebar-item-active:  #2A4A7F;
+  --sidebar-border:       rgba(255, 255, 255, 0.08);
+
+  --topbar-bg:     #FFFFFF;
+  --topbar-fg:     #1A1A1A;
+  --topbar-border: rgba(0, 0, 0, 0.06);
+
+  /* Status colors — same family across themes; lights read well on
+     light surfaces. Dark mode swaps to brighter equivalents below. */
+  --status-success: #16A34A;
+  --status-warning: #D97706;
+  --status-danger:  #DC2626;
+  --status-info:    #0891B2;
+
+  --status-success-soft: #DCFCE7;
+  --status-warning-soft: #FEF3C7;
+  --status-danger-soft:  #FEE2E2;
+  --status-info-soft:    #CFFAFE;
+
+  /* Shadows — Apple-ish: soft, low-contrast. */
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.06), 0 2px 4px rgba(15, 23, 42, 0.04);
+  --shadow-lg: 0 12px 32px rgba(15, 23, 42, 0.10), 0 4px 12px rgba(15, 23, 42, 0.06);
+
+  /* ---- Legacy / shadcn aliases — keep mapped to the new tokens
+         so existing components keep working. -------------------- */
+  --background:          var(--canvas);
+  --foreground:          var(--text-secondary);
+  --card:                var(--surface);
+  --card-foreground:     var(--text-secondary);
+  --popover:             var(--surface);
+  --popover-foreground:  var(--text-primary);
+  --primary:             var(--accent);
+  --primary-foreground:  var(--on-accent);
+  --secondary:           var(--surface-sunken);
+  --secondary-foreground: var(--text-secondary);
+  --muted:               var(--surface-sunken);
+  --muted-foreground:    var(--text-tertiary);
+  --destructive:         var(--status-danger);
+  --destructive-foreground: var(--on-accent);
+  --border:              var(--border-subtle);
+  --input:               transparent;
+  --input-background:    var(--surface);
+  --switch-background:   #cbced4;
+  --ring:                var(--focus-ring);
+
   --chart-1: #204EA7;
   --chart-2: #5B8CDB;
   --chart-3: #92B4E8;
   --chart-4: #203D70;
   --chart-5: #3A6BA5;
-  --radius: 0.5rem;
-  --sidebar: #203D70;
-  --sidebar-foreground: #ffffff;
-  --sidebar-primary: #204EA7;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: rgba(255, 255, 255, 0.1);
-  --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: rgba(255, 255, 255, 0.1);
-  --sidebar-ring: #204EA7;
+
+  --sidebar:                       var(--sidebar-bg);
+  --sidebar-foreground:            var(--sidebar-fg);
+  --sidebar-primary:               var(--accent);
+  --sidebar-primary-foreground:    var(--on-accent);
+  --sidebar-accent:                var(--sidebar-item-hover);
+  --sidebar-accent-foreground:     var(--sidebar-fg);
+  --sidebar-ring:                  var(--accent);
+
+  /* `--accent` was already used for Tailwind's accent token, but
+     legacy components also expect a brand "accent" alias. */
+  --accent-foreground: var(--on-accent);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.145 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.145 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.985 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.396 0.141 25.723);
-  --destructive-foreground: oklch(0.637 0.237 25.331);
-  --border: oklch(0.269 0 0);
-  --input: oklch(0.269 0 0);
-  --ring: oklch(0.439 0 0);
-  --font-weight-medium: 500;
-  --font-weight-normal: 400;
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.269 0 0);
-  --sidebar-ring: oklch(0.439 0 0);
+  /* ---- Origin semantic tokens (DARK — iOS flavored) ---------- */
+  /* Three surface levels mirroring iOS's elevation system. */
+  --canvas:           #000000;
+  --surface:          #1C1C1E;
+  --surface-elevated: #2C2C2E;
+  --surface-sunken:   #0F0F10;
+  --surface-hover:    #2A2A2C;
+
+  /* Text uses Apple's translucent-on-dark approach. */
+  --text-primary:   #FFFFFF;
+  --text-secondary: rgba(235, 235, 245, 0.72);
+  --text-tertiary:  rgba(235, 235, 245, 0.45);
+  --text-inverse:   #000000;
+  --text-disabled:  rgba(235, 235, 245, 0.30);
+
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --divider:       rgba(255, 255, 255, 0.06);
+
+  /* iOS system blue, brightened for dark backgrounds. */
+  --accent:         #0A84FF;
+  --accent-hover:   #2C95FF;
+  --accent-pressed: #0066D6;
+  --accent-soft:    rgba(10, 132, 255, 0.16);
+  --on-accent:      #FFFFFF;
+  --focus-ring:     #0A84FF;
+
+  /* App chrome flattens into the dark surface system rather than
+     keeping the navy sidebar — looks far cleaner in dark mode. */
+  --sidebar-bg:          #1C1C1E;
+  --sidebar-fg:          #FFFFFF;
+  --sidebar-fg-muted:    rgba(235, 235, 245, 0.55);
+  --sidebar-item-hover:  rgba(255, 255, 255, 0.06);
+  --sidebar-item-active: rgba(10, 132, 255, 0.18);
+  --sidebar-border:      rgba(255, 255, 255, 0.06);
+
+  --topbar-bg:     rgba(28, 28, 30, 0.72);
+  --topbar-fg:     #FFFFFF;
+  --topbar-border: rgba(255, 255, 255, 0.06);
+
+  /* iOS-style brighter status colors so they pop on dark grays. */
+  --status-success: #30D158;
+  --status-warning: #FF9F0A;
+  --status-danger:  #FF453A;
+  --status-info:    #64D2FF;
+
+  --status-success-soft: rgba(48, 209, 88, 0.16);
+  --status-warning-soft: rgba(255, 159, 10, 0.16);
+  --status-danger-soft:  rgba(255, 69, 58, 0.16);
+  --status-info-soft:    rgba(100, 210, 255, 0.16);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --shadow-md: 0 6px 16px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 18px 40px rgba(0, 0, 0, 0.65);
+
+  /* ---- Legacy / shadcn aliases (DARK) ------------------------ */
+  --background:          var(--canvas);
+  --foreground:          var(--text-primary);
+  --card:                var(--surface);
+  --card-foreground:     var(--text-primary);
+  --popover:             var(--surface-elevated);
+  --popover-foreground:  var(--text-primary);
+  --primary:             var(--accent);
+  --primary-foreground:  var(--on-accent);
+  --secondary:           var(--surface-elevated);
+  --secondary-foreground: var(--text-primary);
+  --muted:               var(--surface-elevated);
+  --muted-foreground:    var(--text-tertiary);
+  --destructive:         var(--status-danger);
+  --destructive-foreground: var(--on-accent);
+  --border:              var(--border-subtle);
+  --input:               var(--surface-elevated);
+  --input-background:    var(--surface-elevated);
+  --switch-background:   #48484A;
+  --ring:                var(--focus-ring);
+
+  --chart-1: #5B8CDB;
+  --chart-2: #30D158;
+  --chart-3: #FF9F0A;
+  --chart-4: #BF5AF2;
+  --chart-5: #FF375F;
+
+  --sidebar:                       var(--sidebar-bg);
+  --sidebar-foreground:            var(--sidebar-fg);
+  --sidebar-primary:               var(--accent);
+  --sidebar-primary-foreground:    var(--on-accent);
+  --sidebar-accent:                var(--sidebar-item-hover);
+  --sidebar-accent-foreground:     var(--sidebar-fg);
+  --sidebar-ring:                  var(--accent);
+
+  --accent-foreground: var(--on-accent);
 }
 
 @theme inline {
+  /* Existing shadcn-mapped colors. */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -117,6 +256,47 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  /* New Origin semantic colors — usable as Tailwind utilities like
+     `bg-canvas`, `text-primary`, `border-subtle`, etc. */
+  --color-canvas:            var(--canvas);
+  --color-surface:           var(--surface);
+  --color-surface-elevated:  var(--surface-elevated);
+  --color-surface-sunken:    var(--surface-sunken);
+  --color-surface-hover:     var(--surface-hover);
+
+  --color-text-primary:   var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary:  var(--text-tertiary);
+  --color-text-inverse:   var(--text-inverse);
+  --color-text-disabled:  var(--text-disabled);
+
+  --color-border-subtle: var(--border-subtle);
+  --color-border-strong: var(--border-strong);
+  --color-divider:       var(--divider);
+
+  --color-accent-hover:   var(--accent-hover);
+  --color-accent-pressed: var(--accent-pressed);
+  --color-accent-soft:    var(--accent-soft);
+  --color-on-accent:      var(--on-accent);
+
+  --color-status-success: var(--status-success);
+  --color-status-warning: var(--status-warning);
+  --color-status-danger:  var(--status-danger);
+  --color-status-info:    var(--status-info);
+
+  --color-status-success-soft: var(--status-success-soft);
+  --color-status-warning-soft: var(--status-warning-soft);
+  --color-status-danger-soft:  var(--status-danger-soft);
+  --color-status-info-soft:    var(--status-info-soft);
+
+  --color-sidebar-fg-muted:    var(--sidebar-fg-muted);
+  --color-sidebar-item-hover:  var(--sidebar-item-hover);
+  --color-sidebar-item-active: var(--sidebar-item-active);
+
+  --color-topbar-bg:     var(--topbar-bg);
+  --color-topbar-fg:     var(--topbar-fg);
+  --color-topbar-border: var(--topbar-border);
 }
 
 @layer base {
@@ -125,145 +305,114 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    background: var(--canvas);
+    color: var(--text-primary);
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    transition: background-color 220ms ease, color 220ms ease;
   }
 
   h1, h2, h3, h4, h5, h6 {
+    color: var(--text-primary);
     font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
   }
-
-  /**
-  * Default typography styles for HTML elements (h1-h4, p, label, button, input).
-  * These are in @layer base, so Tailwind utility classes (like text-sm, text-lg) automatically override them.
-  */
 
   html {
     font-size: var(--font-size);
   }
 
-  h1 {
-    font-size: var(--text-2xl);
-    font-weight: var(--font-weight-medium);
-    line-height: 1.5;
+  h1 { font-size: var(--text-2xl); font-weight: var(--font-weight-medium); line-height: 1.5; }
+  h2 { font-size: var(--text-xl);  font-weight: var(--font-weight-medium); line-height: 1.5; }
+  h3 { font-size: var(--text-lg);  font-weight: var(--font-weight-medium); line-height: 1.5; }
+  h4 { font-size: var(--text-base);font-weight: var(--font-weight-medium); line-height: 1.5; }
+
+  label  { font-size: var(--text-base); }
+  button { color: inherit; }
+
+  input, textarea, select {
+    background: var(--input-background);
+    color: var(--text-primary);
   }
 
-  h2 {
-    font-size: var(--text-xl);
-    font-weight: var(--font-weight-medium);
-    line-height: 1.5;
+  /* Smooth color transitions everywhere when we toggle the .dark class. */
+  *,
+  *::before,
+  *::after {
+    transition-property: background-color, border-color, color, fill, stroke, box-shadow;
+    transition-duration: 180ms;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}
+
+@layer utilities {
+  /* Apple-style frosted glass — used for the topbar in dark mode. */
+  .surface-glass {
+    background: var(--topbar-bg);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
   }
 
-  h3 {
-    font-size: var(--text-lg);
-    font-weight: var(--font-weight-medium);
-    line-height: 1.5;
-  }
+  /* Hairline borders that adapt automatically. */
+  .hairline    { border-color: var(--border-subtle); }
+  .hairline-t  { border-top:    1px solid var(--border-subtle); }
+  .hairline-b  { border-bottom: 1px solid var(--border-subtle); }
+  .hairline-l  { border-left:   1px solid var(--border-subtle); }
+  .hairline-r  { border-right:  1px solid var(--border-subtle); }
 
-  h4 {
-    font-size: var(--text-base);
-    font-weight: var(--font-weight-medium);
-    line-height: 1.5;
-  }
+  /* iOS-style card shadow. */
+  .shadow-card     { box-shadow: var(--shadow-sm); }
+  .shadow-card-md  { box-shadow: var(--shadow-md); }
+  .shadow-card-lg  { box-shadow: var(--shadow-lg); }
 
-  label {
-    font-size: var(--text-base);
-    font-weight: var(--font-weight-medium);
-    line-height: 1.5;
-  }
-
-  button {
-    font-size: var(--text-base);
-    font-weight: var(--font-weight-medium);
-    line-height: 1.5;
-  }
-
-  input {
-    font-size: var(--text-base);
-    font-weight: var(--font-weight-normal);
-    line-height: 1.5;
-  }
-
-  /* Custom Scrollbar Styling */
-  *::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-  }
-
-  *::-webkit-scrollbar-track {
-    background: rgba(247, 248, 250, 0.5);
-    border-radius: 4px;
-  }
-
-  *::-webkit-scrollbar-thumb {
-    background: rgba(203, 206, 212, 0.6);
-    border-radius: 4px;
-    transition: background 0.2s;
-  }
-
-  *::-webkit-scrollbar-thumb:hover {
-    background: rgba(203, 206, 212, 0.8);
-  }
-
-  /* Firefox Scrollbar Styling */
-  * {
-    scrollbar-width: thin;
-    scrollbar-color: rgba(203, 206, 212, 0.6) rgba(247, 248, 250, 0.5);
-  }
-
-  /* Hide scrollbar utility */
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
-  }
-
+  /* Hide scrollbar utility (was previously here). */
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
   .scrollbar-hide {
-    -ms-overflow-style: none;  /* IE and Edge */
-    scrollbar-width: none;  /* Firefox */
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
 
-  /* Kanban Board Scrollbar Styles */
-  .kanban-scrollbar::-webkit-scrollbar {
-    width: 6px;
+  /* Themed scrollbars — adapt automatically via vars. */
+  .styled-scrollbar::-webkit-scrollbar      { width: 8px; height: 8px; }
+  .styled-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
   }
+  .styled-scrollbar::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 4px;
+  }
+  .styled-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: var(--text-tertiary);
+  }
+  .styled-scrollbar { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
 
+  /* Kanban-specific scrollbar (kept for back-compat). */
+  .kanban-scrollbar::-webkit-scrollbar       { width: 6px; }
   .kanban-scrollbar::-webkit-scrollbar-track {
-    background: rgba(229, 231, 235, 0.4);
+    background: var(--surface-sunken);
     border-radius: 3px;
   }
-
   .kanban-scrollbar::-webkit-scrollbar-thumb {
-    background: rgba(156, 163, 175, 0.5);
+    background: var(--border-strong);
     border-radius: 3px;
     transition: background 0.2s;
   }
-
   .kanban-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: rgba(156, 163, 175, 0.7);
+    background: var(--text-tertiary);
   }
+  .kanban-scrollbar { scrollbar-width: thin; scrollbar-color: var(--border-strong) var(--surface-sunken); }
 
-  /* Firefox Kanban Scrollbar */
-  .kanban-scrollbar {
-    scrollbar-width: thin;
-    scrollbar-color: rgba(156, 163, 175, 0.5) rgba(229, 231, 235, 0.4);
-  }
-
-  /* Horizontal Kanban Board Scrollbar */
-  .kanban-horizontal-scroll::-webkit-scrollbar {
-    height: 8px;
-  }
-
+  .kanban-horizontal-scroll::-webkit-scrollbar       { height: 8px; }
   .kanban-horizontal-scroll::-webkit-scrollbar-track {
-    background: rgba(229, 231, 235, 0.4);
+    background: var(--surface-sunken);
     border-radius: 4px;
   }
-
   .kanban-horizontal-scroll::-webkit-scrollbar-thumb {
-    background: rgba(156, 163, 175, 0.5);
+    background: var(--border-strong);
     border-radius: 4px;
     transition: background 0.2s;
   }
-
   .kanban-horizontal-scroll::-webkit-scrollbar-thumb:hover {
-    background: rgba(156, 163, 175, 0.7);
+    background: var(--text-tertiary);
   }
 }

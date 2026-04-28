@@ -137,22 +137,22 @@ export function GoogleCalendarCard() {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm p-6">
+    <div className="bg-surface rounded-lg shadow-sm p-6">
       <div className="flex items-center gap-4 mb-6">
-        <CalendarIcon className="w-6 h-6 text-[#204EA7]" />
+        <CalendarIcon className="w-6 h-6 text-accent" />
         <div>
           <h2
             className="text-xl font-semibold"
-            style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}
+            style={{ fontFamily: 'Space Grotesk, sans-serif', color: 'var(--text-primary)' }}
           >
             Google Calendar Integration
           </h2>
-          <p className="text-sm text-gray-600">Sync task due dates to your Google Calendar.</p>
+          <p className="text-sm text-text-secondary">Sync task due dates to your Google Calendar.</p>
         </div>
       </div>
 
       {loading && (
-        <div className="flex items-center gap-2 text-sm text-gray-600">
+        <div className="flex items-center gap-2 text-sm text-text-secondary">
           <Loader2 className="w-4 h-4 animate-spin" />
           Loading integration status…
         </div>
@@ -162,7 +162,7 @@ export function GoogleCalendarCard() {
         <button
           onClick={handleConnect}
           disabled={busy}
-          className="px-6 py-2.5 bg-[#204EA7] text-white rounded-lg hover:bg-[#1a3d8a] transition-colors font-medium disabled:opacity-50"
+          className="px-6 py-2.5 bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors font-medium disabled:opacity-50"
         >
           {busy ? 'Opening Google…' : 'Connect Google Calendar'}
         </button>
@@ -171,27 +171,54 @@ export function GoogleCalendarCard() {
       {!loading && status?.connected && (
         <div className="space-y-4">
           {status.needsReconnect && (
-            <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+            <div className="flex items-start gap-2 p-3 bg-status-warning-soft border border-status-warning rounded-lg text-sm text-status-warning">
               <AlertTriangle className="w-4 h-4 mt-0.5" />
               Google refused the stored credentials. Please reconnect.
             </div>
           )}
 
-          <div className="flex items-center gap-2 text-sm text-gray-700">
-            <Check className="w-4 h-4 text-green-600" />
-            Connected as <span className="font-medium">{status.googleEmail}</span>
-            <span className="text-xs text-gray-500">
+          <div className="flex items-center gap-2 text-sm text-text-secondary flex-wrap">
+            <Check className="w-4 h-4 text-status-success" />
+            <span>Connected as</span>
+            <span className="font-medium">
+              {status.googleEmail && !status.googleEmail.endsWith('@google')
+                ? status.googleEmail
+                : 'your Google account'}
+            </span>
+            <span className="text-xs text-text-tertiary">
               ({status.source === 'auth0_federated' ? 'via Auth0 Google login' : 'standalone OAuth'})
             </span>
           </div>
+          {(() => {
+            const emailMissing = !!status.googleEmail && status.googleEmail.endsWith('@google');
+            const calendarsEmpty = calendars.length === 0;
+            // Both conditions are symptoms of a legacy grant with
+            // narrow scopes. We collapse them into a single, more
+            // useful prompt so the user only sees one explanation.
+            if (!emailMissing && !calendarsEmpty) return null;
+            const missingPieces: string[] = [];
+            if (emailMissing)    missingPieces.push('display the connected email address');
+            if (calendarsEmpty)  missingPieces.push('list your calendars for selection');
+            return (
+              <div className="flex items-start gap-2 text-xs text-status-warning bg-status-warning-soft border border-status-warning rounded-lg px-3 py-2">
+                <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                <div>
+                  This connection was made before we requested broader
+                  permissions. Click <span className="font-medium">Disconnect</span>{' '}
+                  and reconnect to {missingPieces.join(' and ')}. Existing task
+                  sync keeps working in the meantime.
+                </div>
+              </div>
+            );
+          })()}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Target calendar</label>
+            <label className="block text-sm font-medium text-text-secondary mb-2">Target calendar</label>
             <select
               value={status.calendarId ?? 'primary'}
               onChange={(e) => handleChangeCalendar(e.target.value)}
               disabled={busy || calendars.length === 0}
-              className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7]"
+              className="w-full px-4 py-2.5 bg-surface-sunken border border-border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent"
             >
               {calendars.length === 0 && <option value={status.calendarId ?? 'primary'}>primary</option>}
               {calendars.map((c) => (
@@ -207,14 +234,14 @@ export function GoogleCalendarCard() {
             <button
               onClick={handleBackfill}
               disabled={busy}
-              className="px-4 py-2 bg-[#204EA7] text-white rounded-lg hover:bg-[#1a3d8a] transition-colors text-sm font-medium disabled:opacity-50"
+              className="px-4 py-2 bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors text-sm font-medium disabled:opacity-50"
             >
               Sync all existing tasks
             </button>
             <button
               onClick={handleDisconnect}
               disabled={busy}
-              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium disabled:opacity-50"
+              className="px-4 py-2 bg-surface-hover text-text-secondary rounded-lg hover:bg-surface-hover transition-colors text-sm font-medium disabled:opacity-50"
             >
               Disconnect
             </button>
@@ -225,7 +252,7 @@ export function GoogleCalendarCard() {
       {message && (
         <p
           className={`mt-4 text-sm ${
-            message.kind === 'error' ? 'text-red-600' : 'text-gray-700'
+            message.kind === 'error' ? 'text-status-danger' : 'text-text-secondary'
           }`}
         >
           {message.text}

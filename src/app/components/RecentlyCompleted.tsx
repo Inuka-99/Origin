@@ -20,7 +20,7 @@ const sampleCompletedTasks: CompletedTask[] = [
   {
     id: '1',
     title: 'Design system color palette update',
-    project: { id: '1', name: 'Design System', color: '#204EA7' },
+    project: { id: '1', name: 'Design System', color: 'var(--accent)' },
     updated_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString() // 2 hours ago
   },
   {
@@ -69,11 +69,11 @@ export function RecentlyCompleted({ tasks, loading = false }: RecentlyCompletedP
     }
   };
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-100 flex flex-col" style={{ height: '480px' }}>
+    <div className="bg-surface rounded-lg shadow-sm border border-divider flex flex-col" style={{ height: '480px' }}>
       {/* Header */}
-      <div className="flex-shrink-0 px-6 pt-5 pb-4 border-b border-gray-100">
+      <div className="flex-shrink-0 px-6 pt-5 pb-4 border-b border-divider">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
+          <h2 className="text-lg font-semibold" style={{ fontFamily: 'Space Grotesk, sans-serif', color: 'var(--text-primary)' }}>
             Recently Completed
           </h2>
           <CheckCircle2 className="w-5 h-5 text-green-500" />
@@ -84,7 +84,7 @@ export function RecentlyCompleted({ tasks, loading = false }: RecentlyCompletedP
       <div className="flex-1 overflow-y-auto px-6 py-3">
         {loading ? (
           <div className="flex items-center justify-center h-32">
-            <div className="text-sm text-gray-500">Loading completed tasks...</div>
+            <div className="text-sm text-text-tertiary">Loading completed tasks...</div>
           </div>
         ) : (
           <div className="space-y-2">
@@ -98,7 +98,7 @@ export function RecentlyCompleted({ tasks, loading = false }: RecentlyCompletedP
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-sm font-medium text-gray-400 mb-1 line-through">
+                  <h3 className="text-sm font-medium text-text-tertiary mb-1 line-through">
                     {task.title}
                   </h3>
                   <div className="flex items-center gap-2 flex-wrap">
@@ -113,7 +113,7 @@ export function RecentlyCompleted({ tasks, loading = false }: RecentlyCompletedP
                         {task.project.name}
                       </span>
                     )}
-                    <span className="text-xs text-gray-400">
+                    <span className="text-xs text-text-tertiary">
                       {formatTimeAgo(task.updated_at)}
                     </span>
                   </div>

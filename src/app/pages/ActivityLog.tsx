@@ -92,7 +92,7 @@ function getActionColor(action: string): string {
   if (action.includes('status') || action.includes('updated')) return 'bg-blue-100 text-blue-600';
   if (action.includes('assigned') || action.includes('member')) return 'bg-purple-100 text-purple-600';
   if (action.includes('priority')) return 'bg-amber-100 text-amber-600';
-  return 'bg-gray-100 text-gray-600';
+  return 'bg-surface-hover text-text-secondary';
 }
 
 function getActionLabel(action: string): string {
@@ -205,28 +205,28 @@ export function ActivityLog() {
     : entries;
 
   return (
-    <div className="min-h-screen bg-[#F7F8FA]">
+    <div className="min-h-screen bg-canvas">
       <Sidebar />
       <TopBar />
 
-      <main className="ml-56 pt-16">
+      <main className="pt-16 transition-[margin] duration-200 ease-out" style={{ marginLeft: 'var(--sidebar-width)' }}>
         <div className="p-8">
           {/* Header */}
           <div className="mb-6">
             <div className="flex items-center justify-between">
               <div>
                 <div className="flex items-center gap-3 mb-1">
-                  <div className="w-10 h-10 bg-[#204EA7] rounded-xl flex items-center justify-center">
+                  <div className="w-10 h-10 bg-accent rounded-xl flex items-center justify-center">
                     <Activity className="w-5 h-5 text-white" />
                   </div>
                   <div>
                     <h1
-                      className="text-2xl font-semibold text-gray-900"
+                      className="text-2xl font-semibold text-text-primary"
                       style={{ fontFamily: 'Space Grotesk, sans-serif' }}
                     >
                       Activity Log
                     </h1>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-text-tertiary">
                       Track edits, status changes, and assignments for transparency.
                     </p>
                   </div>
@@ -239,21 +239,21 @@ export function ActivityLog() {
                   onClick={() => setShowFilters(!showFilters)}
                   className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
                     showFilters
-                      ? 'bg-[#204EA7] text-white border-[#204EA7]'
-                      : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                      ? 'bg-accent text-white border-accent'
+                      : 'bg-surface text-text-secondary border-border-subtle hover:bg-surface-sunken'
                   }`}
                 >
                   <Filter className="w-4 h-4" />
                   Filters
                   {(entityType || action) && (
-                    <span className="bg-white/20 text-xs px-1.5 py-0.5 rounded-full">
+                    <span className="bg-surface/20 text-xs px-1.5 py-0.5 rounded-full">
                       {[entityType, action].filter(Boolean).length}
                     </span>
                   )}
                 </button>
                 <button
                   onClick={fetchLogs}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-white border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-surface border border-border-subtle text-text-secondary text-sm font-medium hover:bg-surface-sunken transition-colors"
                 >
                   <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                   Refresh
@@ -265,19 +265,19 @@ export function ActivityLog() {
           {/* Filters Bar */}
           {showFilters && (
             <div
-              className="bg-white rounded-xl border border-gray-200 p-4 mb-6"
+              className="bg-surface rounded-xl border border-border-subtle p-4 mb-6"
               style={{ boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)' }}
             >
               <div className="flex items-center gap-4 flex-wrap">
                 {/* Search */}
                 <div className="relative flex-1 min-w-[240px]">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-tertiary" />
                   <input
                     type="text"
                     placeholder="Search activity..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7]/20 focus:border-[#204EA7]"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-border-subtle text-sm focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
                   />
                 </div>
 
@@ -289,7 +289,7 @@ export function ActivityLog() {
                       setEntityType(e.target.value);
                       setPage(1);
                     }}
-                    className="appearance-none bg-white border border-gray-200 rounded-lg px-4 py-2.5 pr-10 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#204EA7]/20 focus:border-[#204EA7] cursor-pointer"
+                    className="appearance-none bg-surface border border-border-subtle rounded-lg px-4 py-2.5 pr-10 text-sm text-text-secondary focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent cursor-pointer"
                   >
                     {entityTypeOptions.map((opt) => (
                       <option key={opt.value} value={opt.value}>
@@ -297,7 +297,7 @@ export function ActivityLog() {
                       </option>
                     ))}
                   </select>
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-tertiary pointer-events-none" />
                 </div>
 
                 {/* Action Filter */}
@@ -308,7 +308,7 @@ export function ActivityLog() {
                       setAction(e.target.value);
                       setPage(1);
                     }}
-                    className="appearance-none bg-white border border-gray-200 rounded-lg px-4 py-2.5 pr-10 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#204EA7]/20 focus:border-[#204EA7] cursor-pointer"
+                    className="appearance-none bg-surface border border-border-subtle rounded-lg px-4 py-2.5 pr-10 text-sm text-text-secondary focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent cursor-pointer"
                   >
                     {actionOptions.map((opt) => (
                       <option key={opt.value} value={opt.value}>
@@ -316,7 +316,7 @@ export function ActivityLog() {
                       </option>
                     ))}
                   </select>
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-tertiary pointer-events-none" />
                 </div>
 
                 {/* Clear Filters */}
@@ -328,7 +328,7 @@ export function ActivityLog() {
                       setSearchQuery('');
                       setPage(1);
                     }}
-                    className="text-sm text-[#204EA7] font-medium hover:underline"
+                    className="text-sm text-accent font-medium hover:underline"
                   >
                     Clear all
                   </button>
@@ -339,21 +339,21 @@ export function ActivityLog() {
 
           {/* Activity List */}
           <div
-            className="bg-white rounded-xl border border-gray-200 overflow-hidden"
+            className="bg-surface rounded-xl border border-border-subtle overflow-hidden"
             style={{ boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)' }}
           >
             {/* Table Header */}
-            <div className="grid grid-cols-[1fr_140px_140px_100px] gap-4 px-6 py-3 bg-gray-50 border-b border-gray-200">
-              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Activity</span>
-              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Action</span>
-              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Type</span>
-              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide text-right">Time</span>
+            <div className="grid grid-cols-[1fr_140px_140px_100px] gap-4 px-6 py-3 bg-surface-sunken border-b border-border-subtle">
+              <span className="text-xs font-semibold text-text-tertiary uppercase tracking-wide">Activity</span>
+              <span className="text-xs font-semibold text-text-tertiary uppercase tracking-wide">Action</span>
+              <span className="text-xs font-semibold text-text-tertiary uppercase tracking-wide">Type</span>
+              <span className="text-xs font-semibold text-text-tertiary uppercase tracking-wide text-right">Time</span>
             </div>
 
             {/* Loading State */}
             {loading && (
               <div className="flex items-center justify-center py-16">
-                <div className="flex items-center gap-3 text-gray-500">
+                <div className="flex items-center gap-3 text-text-tertiary">
                   <RefreshCw className="w-5 h-5 animate-spin" />
                   <span className="text-sm">Loading activity...</span>
                 </div>
@@ -366,11 +366,11 @@ export function ActivityLog() {
                 <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-3">
                   <Activity className="w-6 h-6 text-red-500" />
                 </div>
-                <p className="text-sm text-gray-600 mb-2">Failed to load activity</p>
-                <p className="text-xs text-gray-400 mb-4">{error}</p>
+                <p className="text-sm text-text-secondary mb-2">Failed to load activity</p>
+                <p className="text-xs text-text-tertiary mb-4">{error}</p>
                 <button
                   onClick={fetchLogs}
-                  className="text-sm text-[#204EA7] font-medium hover:underline"
+                  className="text-sm text-accent font-medium hover:underline"
                 >
                   Try again
                 </button>
@@ -380,11 +380,11 @@ export function ActivityLog() {
             {/* Empty State */}
             {!loading && !error && filteredEntries.length === 0 && (
               <div className="flex flex-col items-center justify-center py-16 px-6">
-                <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mb-3">
-                  <Activity className="w-6 h-6 text-gray-400" />
+                <div className="w-12 h-12 bg-surface-hover rounded-full flex items-center justify-center mb-3">
+                  <Activity className="w-6 h-6 text-text-tertiary" />
                 </div>
-                <p className="text-sm font-medium text-gray-700 mb-1">No activity yet</p>
-                <p className="text-xs text-gray-400">
+                <p className="text-sm font-medium text-text-secondary mb-1">No activity yet</p>
+                <p className="text-xs text-text-tertiary">
                   Activity will appear here as changes are made across your workspace.
                 </p>
               </div>
@@ -402,8 +402,8 @@ export function ActivityLog() {
                 return (
                   <div
                     key={entry.id}
-                    className={`grid grid-cols-[1fr_140px_140px_100px] gap-4 px-6 py-4 items-center hover:bg-gray-50 transition-colors ${
-                      index < filteredEntries.length - 1 ? 'border-b border-gray-100' : ''
+                    className={`grid grid-cols-[1fr_140px_140px_100px] gap-4 px-6 py-4 items-center hover:bg-surface-sunken transition-colors ${
+                      index < filteredEntries.length - 1 ? 'border-b border-divider' : ''
                     }`}
                   >
                     {/* Activity Details */}
@@ -415,15 +415,15 @@ export function ActivityLog() {
                           className="w-9 h-9 rounded-full object-cover flex-shrink-0"
                         />
                       ) : (
-                        <div className="w-9 h-9 bg-[#204EA7] rounded-full flex items-center justify-center text-white text-xs font-medium flex-shrink-0">
+                        <div className="w-9 h-9 bg-accent rounded-full flex items-center justify-center text-white text-xs font-medium flex-shrink-0">
                           {initials}
                         </div>
                       )}
                       <div className="min-w-0">
-                        <p className="text-sm text-gray-900 truncate">
+                        <p className="text-sm text-text-primary truncate">
                           <span className="font-medium">{userName}</span>
                         </p>
-                        <p className="text-xs text-gray-500 truncate">{entry.description}</p>
+                        <p className="text-xs text-text-tertiary truncate">{entry.description}</p>
                       </div>
                     </div>
 
@@ -439,14 +439,14 @@ export function ActivityLog() {
 
                     {/* Entity Type */}
                     <div>
-                      <span className="text-xs text-gray-500 capitalize bg-gray-100 px-2.5 py-1 rounded-full">
+                      <span className="text-xs text-text-tertiary capitalize bg-surface-hover px-2.5 py-1 rounded-full">
                         {entry.entity_type}
                       </span>
                     </div>
 
                     {/* Time */}
                     <div className="text-right" title={formatDate(entry.created_at)}>
-                      <span className="text-xs text-gray-400">{timeAgo(entry.created_at)}</span>
+                      <span className="text-xs text-text-tertiary">{timeAgo(entry.created_at)}</span>
                     </div>
                   </div>
                 );
@@ -456,14 +456,14 @@ export function ActivityLog() {
           {/* Pagination */}
           {!loading && totalPages > 1 && (
             <div className="flex items-center justify-between mt-4">
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-text-tertiary">
                 Showing {(page - 1) * limit + 1}–{Math.min(page * limit, total)} of {total} entries
               </p>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page <= 1}
-                  className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  className="p-2 rounded-lg border border-border-subtle text-text-tertiary hover:bg-surface-sunken disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
@@ -484,8 +484,8 @@ export function ActivityLog() {
                       onClick={() => setPage(pageNum)}
                       className={`w-9 h-9 rounded-lg text-sm font-medium transition-colors ${
                         pageNum === page
-                          ? 'bg-[#204EA7] text-white'
-                          : 'text-gray-600 hover:bg-gray-100'
+                          ? 'bg-accent text-white'
+                          : 'text-text-secondary hover:bg-surface-hover'
                       }`}
                     >
                       {pageNum}
@@ -495,7 +495,7 @@ export function ActivityLog() {
                 <button
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   disabled={page >= totalPages}
-                  className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  className="p-2 rounded-lg border border-border-subtle text-text-tertiary hover:bg-surface-sunken disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   <ChevronRight className="w-4 h-4" />
                 </button>
