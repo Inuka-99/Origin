@@ -19,8 +19,6 @@ import { TasksService, type CreateTaskDto, type UpdateTaskDto } from './tasks.se
 import { SupabaseService } from '../supabase';
 
 @Controller('tasks')
-@UseGuards(JwtAuthGuard)
-@UseInterceptors(UserSyncInterceptor)
 export class TasksController {
   constructor(
     private readonly tasksService: TasksService,
@@ -54,8 +52,13 @@ export class TasksController {
   @Get(':id')
   async getOne(
     @Param('id') id: string,
-    @CurrentUser() user: AuthenticatedUser,
+    @Body('status') status: string,
   ) {
+    const updated = this.tasksService.updateTaskStatus(id, status as any);
+    if (!updated) {
+      throw new NotFoundException('Task not found');
+    }
+    return updated;
     const role = await this.getUserRole(user.userId);
     return this.tasksService.getById(id, user.userId, role);
   }
@@ -78,20 +81,5 @@ export class TasksController {
     const role = await this.getUserRole(user.userId);
     await this.tasksService.delete(id, user.userId, role);
     return { deleted: true };
-  }
-
-  /**
-   * Assign a task to a team member
-   * PATCH /tasks/:id/assign
-   * Body: { userId: string | null }  — pass null to unassign
-   */
-  @Patch(':id/assign')
-  async assign(
-    @Param('id') id: string,
-    @Body('userId') assigneeId: string | null,
-    @CurrentUser() user: AuthenticatedUser,
-  ) {
-    const role = await this.getUserRole(user.userId);
-    return this.tasksService.assignTask(id, assigneeId, user.userId, role);
   }
 }

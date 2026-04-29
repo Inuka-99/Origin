@@ -7,6 +7,19 @@ import {
 } from '@nestjs/common';
 import { SupabaseService } from '../supabase';
 
+export interface TaskAttachment {
+  id: string;
+  task_id: string;
+  activity_log_id: string | null;
+  uploaded_by: string;
+  storage_path: string;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+  created_at: string;
+  deleted_at: string | null;
+}
+
 export interface Task {
   id: string;
   project_id: string | null;
@@ -19,6 +32,7 @@ export interface Task {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  attachments?: TaskAttachment[]; // Task file attachments
 }
 
 export interface CreateTaskDto {
@@ -280,6 +294,38 @@ export class TasksService {
     userRole: string,
   ): Promise<Task> {
     return this.update(id, { assigned_to: assigneeId }, userId, userRole);
+  }
+
+  private async attachTaskAttachments(tasks: Task[]): Promise<Task[]> {
+    if (tasks.length === 0) return tasks;
+
+    const taskIds = tasks.map((task) => task.id);
+    const { data, error } = await this.client
+      .from('task_attachments')
+      .select('*')
+      .in('task_id', taskIds)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      this.logger.warn(`Failed to fetch task attachments: ${error.message}`);
+      return tasks;
+    }
+
+    const attachmentsByTask = (data ?? []).reduce<Record<string, any[]>>((map, attachment: any) => {
+      if (attachment?.task_id) {
+        if (!map[attachment.task_id]) {
+          map[attachment.task_id] = [];
+        }
+        map[attachment.task_id].push(attachment);
+      }
+      return map;
+    }, {});
+
+    return tasks.map((task) => ({
+      ...task,
+      attachments: attachmentsByTask[task.id] ?? [],
+    }));
   }
 
   private async assertProjectMember(projectId: string, userId: string): Promise<void> {
