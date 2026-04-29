@@ -23,7 +23,7 @@ export function LoginButton({
       onClick={() => loginWithRedirect()}
       className={
         className ??
-        'bg-[#204EA7] text-white px-6 py-2.5 rounded-lg hover:bg-[#1a3d8a] transition-colors font-medium text-sm'
+        'bg-accent text-white px-6 py-2.5 rounded-lg hover:bg-accent-hover transition-colors font-medium text-sm'
       }
     >
       {label}

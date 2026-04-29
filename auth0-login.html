@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+  <title>ORIGIN — Sign In</title>
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0"
+  />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet"
+  />
+  <style>
+    :root {
+      --bg: #f0f2f5;
+      --card: #ffffff;
+      --text: #16181d;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --border-focus: #2956b8;
+      --primary: #2956b8;
+      --primary-hover: #1e4494;
+      --shadow: 0 4px 24px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.04);
+      --radius-card: 20px;
+      --radius-input: 10px;
+      --radius-button: 10px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      min-height: 100%;
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 16px 40px;
+    }
+
+    /* ── Page wrapper ── */
+    .origin-page {
+      width: 100%;
+      max-width: 440px;
+    }
+
+    /* ── Logo area ── */
+    .origin-brand {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .origin-brand img {
+      width: 100%;
+      max-width: 260px;
+      height: auto;
+      display: block;
+      margin: 0 auto 14px;
+      object-fit: contain;
+    }
+
+    .origin-brand p {
+      font-size: 15px;
+      line-height: 1.5;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    /* ── Card ── */
+    .origin-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-card);
+      box-shadow: var(--shadow);
+      padding: 32px 28px 28px;
+    }
+
+    /* ── Footer ── */
+    .origin-footer {
+      text-align: center;
+      margin-top: 24px;
+      font-size: 14px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    .origin-footer a {
+      color: var(--primary);
+      font-weight: 700;
+      text-decoration: none;
+    }
+
+    .origin-footer a:hover { text-decoration: underline; }
+
+    /* ─────────────────────────────────────────────
+       Lock container — reset all default styling
+       ───────────────────────────────────────────── */
+    #auth0-lock-container .auth0-lock.auth0-lock {
+      margin: 0 auto;
+      box-shadow: none !important;
+    }
+
+    #auth0-lock-container .auth0-lock.auth0-lock .auth0-lock-widget {
+      width: 100% !important;
+      max-width: none !important;
+      box-shadow: none !important;
+      border: 0 !important;
+      background: transparent !important;
+    }
+
+    #auth0-lock-container .auth0-lock.auth0-lock .auth0-lock-container {
+      box-shadow: none !important;
+    }
+
+    #auth0-lock-container .auth0-lock-header,
+    #auth0-lock-container .auth0-lock-header-bg,
+    #auth0-lock-container .auth0-lock-name,
+    #auth0-lock-container .auth0-lock-tabs {
+      display: none !important;
+    }
+
+    #auth0-lock-container .auth0-lock-center    { padding: 0 !important; }
+    #auth0-lock-container .auth0-lock-content   { padding: 0 !important; }
+    #auth0-lock-container .auth0-lock-body-content { padding: 0 !important; }
+    #auth0-lock-container .auth0-lock-form      { margin: 0 !important; }
+
+    #auth0-lock-container .auth0-lock-global-message {
+      margin: 0 0 18px !important;
+      border-radius: 10px !important;
+    }
+
+    /* Hide Lock's own helper/footer text */
+    #auth0-lock-container .auth0-lock-alternative,
+    #auth0-lock-container .auth0-lock-bottom,
+    #auth0-lock-container .auth0-lock-terms {
+      display: none !important;
+    }
+
+    /* ── Inputs ── */
+    #auth0-lock-container .auth0-lock-input-block {
+      margin-bottom: 16px !important;
+    }
+
+    #auth0-lock-container .auth0-lock-input-wrap {
+      height: 48px !important;
+      border: 1.5px solid var(--border) !important;
+      border-radius: var(--radius-input) !important;
+      background: #fafafa !important;
+      box-shadow: none !important;
+      transition: border-color 0.15s, box-shadow 0.15s, background 0.15s !important;
+    }
+
+    #auth0-lock-container .auth0-lock-input-wrap:focus-within {
+      border-color: var(--border-focus) !important;
+      box-shadow: 0 0 0 3px rgba(41, 86, 184, 0.1) !important;
+      background: #fff !important;
+    }
+
+    #auth0-lock-container .auth0-lock-input-wrap input {
+      height: 46px !important;
+      padding: 0 14px !important;
+      font-size: 15px !important;
+      color: #111827 !important;
+      background: transparent !important;
+      font-family: "Inter", sans-serif !important;
+      font-weight: 500 !important;
+    }
+
+    #auth0-lock-container .auth0-lock-input-wrap input::placeholder {
+      color: #b0b5bf !important;
+      font-weight: 400 !important;
+    }
+
+    #auth0-lock-container .auth0-lock-input-wrap .auth0-lock-icon {
+      top: 13px !important;
+    }
+
+    /* ── Submit button ── */
+    #auth0-lock-container .auth0-lock-submit {
+      height: 48px !important;
+      min-height: 48px !important;
+      border-radius: var(--radius-button) !important;
+      background: var(--primary) !important;
+      box-shadow: 0 1px 2px rgba(41, 86, 184, 0.2) !important;
+      border: none !important;
+      margin: 4px 0 0 !important;
+      transition: background 0.15s, box-shadow 0.15s, transform 0.1s !important;
+    }
+
+    #auth0-lock-container .auth0-lock-submit:hover {
+      background: var(--primary-hover) !important;
+      box-shadow: 0 2px 6px rgba(41, 86, 184, 0.3) !important;
+    }
+
+    #auth0-lock-container .auth0-lock-submit:active {
+      transform: scale(0.985) !important;
+    }
+
+    #auth0-lock-container .auth0-lock-submit .auth0-lock-submit-text {
+      font-size: 15px !important;
+      font-weight: 700 !important;
+      font-family: "Inter", sans-serif !important;
+      letter-spacing: 0.01em !important;
+    }
+
+    /* ── Social buttons — pushed to bottom via flex order ── */
+    #auth0-lock-container .auth0-lock-cred-pane-internal-wrapper {
+      display: flex !important;
+      flex-direction: column !important;
+    }
+
+    #auth0-lock-container .auth0-lock-social-buttons-pane {
+      order: 99 !important;
+      display: flex !important;
+      gap: 10px !important;
+      flex-wrap: wrap !important;
+      margin-top: 0 !important;
+    }
+
+    #auth0-lock-container .auth0-lock-social-button {
+      flex: 1 1 100% !important;
+      min-width: 0 !important;
+      height: 48px !important;
+      border: 1.5px solid var(--border) !important;
+      border-radius: var(--radius-button) !important;
+      background: #fff !important;
+      box-shadow: none !important;
+      overflow: hidden !important;
+      transition: background 0.15s, border-color 0.15s !important;
+    }
+
+    #auth0-lock-container .auth0-lock-social-button:hover {
+      background: #f9fafb !important;
+      border-color: #d1d5db !important;
+    }
+
+    #auth0-lock-container .auth0-lock-social-button-icon {
+      background: transparent !important;
+    }
+
+    #auth0-lock-container .auth0-lock-social-button-text {
+      color: var(--text) !important;
+      font-size: 14px !important;
+      font-weight: 600 !important;
+      font-family: "Inter", sans-serif !important;
+    }
+
+    /* ── Custom field labels ── */
+    .origin-field-label {
+      display: block;
+      margin: 0 0 8px;
+      font-size: 13px;
+      line-height: 1.2;
+      font-weight: 600;
+      color: #374151;
+      letter-spacing: 0.01em;
+    }
+
+    /* ── Options row (remember me / forgot password) ── */
+    .origin-options-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      margin: 2px 0 16px;
+    }
+
+    .origin-remember {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--muted);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .origin-remember input {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--primary);
+      margin: 0;
+      border-radius: 4px;
+    }
+
+    .origin-forgot {
+      color: var(--primary);
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .origin-forgot:hover { text-decoration: underline; }
+
+    /* ── Divider ── */
+    .origin-social-divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 22px 0 16px;
+      color: #9ca3af;
+      font-size: 13px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .origin-social-divider::before,
+    .origin-social-divider::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 640px) {
+      body { padding: 22px 14px 28px; }
+
+      .origin-brand img {
+        max-width: 220px;
+        margin-bottom: 10px;
+      }
+
+      .origin-card {
+        padding: 24px 20px 22px;
+        border-radius: 16px;
+      }
+    }
+
+    @media (max-width: 420px) {
+      .origin-options-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="origin-page">
+    <!-- Brand — logo only, no heading -->
+    <div class="origin-brand">
+      <img
+        src="https://i.ibb.co/bM7w5t9D/origin-logo-secondary-horizontal.png"
+        alt="ORIGIN"
+      />
+      <p>Sign in to access your workspace</p>
+    </div>
+
+    <!-- Card wrapping Lock widget -->
+    <div class="origin-card">
+      <div id="auth0-lock-container"></div>
+    </div>
+
+    <div class="origin-footer">
+      Don't have an account?
+      <a href="#" id="origin-show-signup">Sign up for free</a>
+    </div>
+  </div>
+
+  <!--[if IE 8]>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/ie8/0.2.5/ie8.js"></script>
+  <![endif]-->
+  <!--[if lte IE 9]>
+    <script src="https://cdn.auth0.com/js/base64.js"></script>
+    <script src="https://cdn.auth0.com/js/es5-shim.min.js"></script>
+  <![endif]-->
+
+  <script src="https://cdn.auth0.com/js/lock/14.2.3/lock.min.js"></script>
+  <script>
+    var config = JSON.parse(
+      decodeURIComponent(escape(window.atob('@@config@@')))
+    );
+    config.extraParams = config.extraParams || {};
+    var connection = config.connection;
+    var prompt = config.prompt;
+    var loginHint = config.extraParams.login_hint;
+    var colors = config.colors || {};
+
+    var language;
+    var languageDictionary = {};
+    if (config.dict && config.dict.signin && config.dict.signin.title) {
+      languageDictionary.title = config.dict.signin.title;
+    } else if (typeof config.dict === 'string') {
+      language = config.dict;
+    }
+
+    languageDictionary = Object.assign({}, languageDictionary, {
+      title: '',
+      emailInputPlaceholder: 'you@company.com',
+      usernameInputPlaceholder: 'you@company.com',
+      passwordInputPlaceholder: 'Enter your password',
+      signInSubmitLabel: 'LOG IN',
+      socialLoginInstructions: '',
+      databaseEnterpriseAlternativeLoginInstructions: '',
+    });
+
+    var lock = new Auth0Lock(config.clientID, config.auth0Domain, {
+      container: 'auth0-lock-container',
+      auth: {
+        redirectUrl: config.callbackURL,
+        responseType:
+          (config.internalOptions || {}).response_type ||
+          (config.callbackOnLocationHash ? 'token' : 'code'),
+        params: config.internalOptions,
+      },
+      configurationBaseUrl: config.clientConfigurationBaseUrl,
+      overrides: {
+        __tenant: config.auth0Tenant,
+        __token_issuer: config.authorizationServer.issuer,
+      },
+      assetsUrl: config.assetsUrl,
+      allowedConnections: connection ? [connection] : null,
+      rememberLastLogin: false,
+      allowAutocomplete: true,
+      allowShowPassword: true,
+      allowSignUp: true,
+      allowForgotPassword: true,
+      language: language,
+      languageBaseUrl: config.languageBaseUrl,
+      languageDictionary: languageDictionary,
+      theme: {
+        primaryColor: colors.primary ? colors.primary : '#2956b8',
+      },
+      prefill: loginHint
+        ? { email: loginHint, username: loginHint }
+        : null,
+      closable: false,
+      defaultADUsernameFromEmailPrefix: false,
+      autofocus: true,
+    });
+
+    /* ── Helpers ── */
+    function createLabel(text, extraClass) {
+      var el = document.createElement('label');
+      el.className = 'origin-field-label ' + (extraClass || '');
+      el.textContent = text;
+      return el;
+    }
+
+    /* ── Decorate Lock after render ── */
+    function decorateLock() {
+      var container = document.getElementById('auth0-lock-container');
+      if (!container) return;
+      var form = container.querySelector('.auth0-lock-form');
+      if (!form) return;
+
+      var emailInput =
+        form.querySelector('input[type="email"]') ||
+        form.querySelector('input[name="email"]') ||
+        form.querySelector('input[name="username"]') ||
+        form.querySelector('input[type="text"]');
+      var passwordInput = form.querySelector('input[type="password"]');
+      var emailBlock =
+        emailInput && emailInput.closest('.auth0-lock-input-block');
+      var passwordBlock =
+        passwordInput && passwordInput.closest('.auth0-lock-input-block');
+      var submitButton = form.querySelector('.auth0-lock-submit');
+
+      /* Field labels */
+      if (emailBlock && !form.querySelector('.origin-email-label')) {
+        form.insertBefore(
+          createLabel('Email address', 'origin-email-label'),
+          emailBlock
+        );
+      }
+      if (passwordBlock && !form.querySelector('.origin-password-label')) {
+        form.insertBefore(
+          createLabel('Password', 'origin-password-label'),
+          passwordBlock
+        );
+      }
+
+      /* Options row */
+      var existingOptions = form.querySelector('.origin-options-row');
+      if (emailInput && passwordInput && submitButton && !existingOptions) {
+        var row = document.createElement('div');
+        row.className = 'origin-options-row';
+        row.innerHTML =
+          '<label class="origin-remember">' +
+          '<input type="checkbox" id="origin-remember-me" />' +
+          '<span>Remember me</span>' +
+          '</label>' +
+          '<a href="#" class="origin-forgot" id="origin-forgot-link">Forgot password?</a>';
+        form.insertBefore(row, submitButton);
+
+        var forgotLink = document.getElementById('origin-forgot-link');
+        if (forgotLink) {
+          forgotLink.addEventListener('click', function (e) {
+            e.preventDefault();
+            lock.show({ initialScreen: 'forgotPassword' });
+          });
+        }
+      }
+
+      /* Remove options row on non-login screens */
+      if ((!emailInput || !passwordInput) && existingOptions) {
+        existingOptions.remove();
+      }
+
+      /* Social divider — placed before the social pane (which is order: 99) */
+      var socialPane = container.querySelector(
+        '.auth0-lock-social-buttons-pane'
+      );
+      if (socialPane && !form.querySelector('.origin-social-divider')) {
+        var divider = document.createElement('div');
+        divider.className = 'origin-social-divider';
+        divider.textContent = 'or';
+        socialPane.parentNode.insertBefore(divider, socialPane);
+        /* Give divider same flex order so it sits right above social */
+        divider.style.order = '98';
+      }
+
+      /* Remember me persistence */
+      var rememberCheckbox = form.querySelector('#origin-remember-me');
+      if (emailInput && rememberCheckbox) {
+        var saved = window.localStorage.getItem('originRememberedEmail');
+        if (saved && !emailInput.value) {
+          emailInput.value = saved;
+          rememberCheckbox.checked = true;
+          var ev = document.createEvent('HTMLEvents');
+          ev.initEvent('input', true, true);
+          emailInput.dispatchEvent(ev);
+        }
+
+        if (!rememberCheckbox.dataset.bound) {
+          rememberCheckbox.dataset.bound = 'true';
+          rememberCheckbox.addEventListener('change', function () {
+            if (this.checked) {
+              window.localStorage.setItem(
+                'originRememberedEmail',
+                emailInput.value || ''
+              );
+            } else {
+              window.localStorage.removeItem('originRememberedEmail');
+            }
+          });
+        }
+
+        if (!emailInput.dataset.boundRemember) {
+          emailInput.dataset.boundRemember = 'true';
+          emailInput.addEventListener('input', function () {
+            if (rememberCheckbox.checked) {
+              window.localStorage.setItem(
+                'originRememberedEmail',
+                emailInput.value || ''
+              );
+            }
+          });
+        }
+      }
+    }
+
+    /* Run decorateLock on various timings to catch Lock's async rendering */
+    lock.on('show', function () {
+      setTimeout(decorateLock, 0);
+      setTimeout(decorateLock, 200);
+      setTimeout(decorateLock, 600);
+    });
+
+    var observer = new MutationObserver(function () {
+      decorateLock();
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    document
+      .getElementById('origin-show-signup')
+      .addEventListener('click', function (e) {
+        e.preventDefault();
+        lock.show({ initialScreen: 'signUp' });
+      });
+
+    if (colors.page_background) {
+      var css =
+        '.auth0-lock.auth0-lock .auth0-lock-overlay { background: ' +
+        colors.page_background +
+        ' }';
+      var style = document.createElement('style');
+      style.appendChild(document.createTextNode(css));
+      document.body.appendChild(style);
+    }
+
+    lock.show();
+  </script>
+</body>
+</html>

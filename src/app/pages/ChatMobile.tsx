@@ -117,17 +117,17 @@ export function ChatMobile() {
 
   if (view === 'conversation' && selectedChat) {
     return (
-      <div className="min-h-screen bg-[#F7F8FA] flex flex-col">
+      <div className="min-h-screen bg-canvas flex flex-col">
         {/* Conversation Header */}
-        <div className="bg-white border-b border-gray-200 px-4 py-3">
+        <div className="bg-surface border-b border-border-subtle px-4 py-3">
           <div className="flex items-center gap-3">
-            <button onClick={handleBackToList} className="p-2 -ml-2 hover:bg-gray-100 rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center">
-              <ArrowLeft className="w-5 h-5 text-gray-700" />
+            <button onClick={handleBackToList} className="p-2 -ml-2 hover:bg-surface-hover rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center">
+              <ArrowLeft className="w-5 h-5 text-text-secondary" />
             </button>
             
             {/* Avatar */}
             <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold ${
-              selectedChat.type === 'group' ? 'bg-[#204EA7]' : 'bg-[#9333EA]'
+              selectedChat.type === 'group' ? 'bg-accent' : 'bg-[#9333EA]'
             }`}>
               {selectedChat.type === 'group' ? (
                 <Users className="w-5 h-5" />
@@ -141,10 +141,10 @@ export function ChatMobile() {
                 {selectedChat.name}
               </h2>
               {selectedChat.type === 'group' && selectedChat.members && (
-                <p className="text-xs text-gray-500">{selectedChat.members} members</p>
+                <p className="text-xs text-text-tertiary">{selectedChat.members} members</p>
               )}
               {selectedChat.type === 'dm' && (
-                <p className="text-xs text-gray-500 flex items-center gap-1.5">
+                <p className="text-xs text-text-tertiary flex items-center gap-1.5">
                   <span className={`w-2 h-2 rounded-full ${selectedChat.online ? 'bg-green-500' : 'bg-gray-400'}`}></span>
                   {selectedChat.online ? 'Online' : 'Offline'}
                 </p>
@@ -171,18 +171,18 @@ export function ChatMobile() {
                 {/* Message Content */}
                 <div className="flex flex-col gap-1">
                   {!message.isOwn && (
-                    <span className="text-xs font-medium text-gray-700">{message.sender}</span>
+                    <span className="text-xs font-medium text-text-secondary">{message.sender}</span>
                   )}
                   <div
                     className={`px-4 py-2.5 rounded-lg ${
                       message.isOwn
-                        ? 'bg-[#204EA7] text-white'
-                        : 'bg-white text-gray-900'
+                        ? 'bg-accent text-white'
+                        : 'bg-surface text-text-primary'
                     }`}
                   >
                     <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
                   </div>
-                  <span className={`text-xs text-gray-500 ${message.isOwn ? 'text-right' : 'text-left'}`}>
+                  <span className={`text-xs text-text-tertiary ${message.isOwn ? 'text-right' : 'text-left'}`}>
                     {message.timestamp}
                   </span>
                 </div>
@@ -195,7 +195,7 @@ export function ChatMobile() {
             <div className="w-8 h-8 rounded-full bg-[#9333EA] flex items-center justify-center text-white text-xs font-semibold">
               AM
             </div>
-            <div className="bg-white px-4 py-3 rounded-lg">
+            <div className="bg-surface px-4 py-3 rounded-lg">
               <div className="flex gap-1">
                 <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
                 <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
@@ -206,9 +206,9 @@ export function ChatMobile() {
         </div>
 
         {/* Input Area */}
-        <div className="bg-white border-t border-gray-200 p-4">
+        <div className="bg-surface border-t border-border-subtle p-4">
           <div className="flex items-end gap-2">
-            <div className="flex-1 bg-gray-50 border border-gray-200 rounded-lg overflow-hidden">
+            <div className="flex-1 bg-surface-sunken border border-border-subtle rounded-lg overflow-hidden">
               <textarea
                 value={messageInput}
                 onChange={(e) => setMessageInput(e.target.value)}
@@ -218,18 +218,18 @@ export function ChatMobile() {
                 style={{ maxHeight: '80px' }}
               />
               <div className="flex items-center gap-2 px-3 pb-2">
-                <button className="p-2 hover:bg-gray-200 rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center">
-                  <Paperclip className="w-5 h-5 text-gray-600" />
+                <button className="p-2 hover:bg-surface-hover rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center">
+                  <Paperclip className="w-5 h-5 text-text-secondary" />
                 </button>
-                <button className="p-2 hover:bg-gray-200 rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center">
-                  <Smile className="w-5 h-5 text-gray-600" />
+                <button className="p-2 hover:bg-surface-hover rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center">
+                  <Smile className="w-5 h-5 text-text-secondary" />
                 </button>
               </div>
             </div>
             <button
               onClick={handleSendMessage}
               disabled={!messageInput.trim()}
-              className="p-3 bg-[#204EA7] text-white rounded-lg hover:bg-[#1a3d8a] transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] min-w-[44px] flex items-center justify-center"
+              className="p-3 bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] min-w-[44px] flex items-center justify-center"
             >
               <Send className="w-5 h-5" />
             </button>
@@ -240,25 +240,25 @@ export function ChatMobile() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F7F8FA]">
+    <div className="min-h-screen bg-canvas">
       <MobileTopBar />
 
       <main className="pt-14">
         <div className="p-4">
           {/* Header */}
-          <h1 className="text-2xl font-semibold mb-4" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
+          <h1 className="text-2xl font-semibold mb-4" style={{ fontFamily: 'Space Grotesk, sans-serif', color: 'var(--text-primary)' }}>
             Messages
           </h1>
 
           {/* Search Bar */}
           <div className="relative mb-4">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-tertiary" />
             <input
               type="text"
               placeholder="Search conversations..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-11 pr-4 py-3 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7] focus:border-transparent min-h-[44px]"
+              className="w-full pl-11 pr-4 py-3 bg-surface border border-border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent min-h-[44px]"
             />
           </div>
 
@@ -268,8 +268,8 @@ export function ChatMobile() {
               onClick={() => setActiveTab('groups')}
               className={`flex-1 px-4 py-3 rounded-lg text-sm font-medium transition-colors min-h-[44px] ${
                 activeTab === 'groups'
-                  ? 'bg-[#204EA7] text-white'
-                  : 'bg-white text-gray-600 border border-gray-200'
+                  ? 'bg-accent text-white'
+                  : 'bg-surface text-text-secondary border border-border-subtle'
               }`}
             >
               Groups
@@ -278,8 +278,8 @@ export function ChatMobile() {
               onClick={() => setActiveTab('direct')}
               className={`flex-1 px-4 py-3 rounded-lg text-sm font-medium transition-colors min-h-[44px] ${
                 activeTab === 'direct'
-                  ? 'bg-[#204EA7] text-white'
-                  : 'bg-white text-gray-600 border border-gray-200'
+                  ? 'bg-accent text-white'
+                  : 'bg-surface text-text-secondary border border-border-subtle'
               }`}
             >
               Direct
@@ -288,7 +288,7 @@ export function ChatMobile() {
 
           {/* Action Buttons */}
           <div className="flex gap-2 mb-6">
-            <button className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-[#204EA7] text-white rounded-lg hover:bg-[#1a3d8a] transition-colors text-sm font-medium min-h-[44px]">
+            <button className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors text-sm font-medium min-h-[44px]">
               <Plus className="w-5 h-5" />
               New {activeTab === 'groups' ? 'Group' : 'Message'}
             </button>
@@ -300,12 +300,12 @@ export function ChatMobile() {
               <button
                 key={chat.id}
                 onClick={() => handleSelectChat(chat)}
-                className="w-full flex items-start gap-3 p-4 bg-white rounded-lg hover:bg-gray-50 transition-colors text-left min-h-[76px] border border-gray-100"
+                className="w-full flex items-start gap-3 p-4 bg-surface rounded-lg hover:bg-surface-sunken transition-colors text-left min-h-[76px] border border-divider"
               >
                 {/* Avatar */}
                 <div className="relative flex-shrink-0">
                   <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold ${
-                    chat.type === 'group' ? 'bg-[#204EA7]' : 'bg-[#9333EA]'
+                    chat.type === 'group' ? 'bg-accent' : 'bg-[#9333EA]'
                   }`}>
                     {chat.type === 'group' ? (
                       <Users className="w-6 h-6" />
@@ -314,7 +314,7 @@ export function ChatMobile() {
                     )}
                   </div>
                   {chat.type === 'dm' && chat.online && (
-                    <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-white rounded-full"></div>
+                    <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-surface rounded-full"></div>
                   )}
                 </div>
 
@@ -322,26 +322,26 @@ export function ChatMobile() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between mb-1">
                     <h3 className={`text-base font-semibold truncate ${
-                      chat.unread > 0 ? 'text-gray-900' : 'text-gray-700'
+                      chat.unread > 0 ? 'text-text-primary' : 'text-text-secondary'
                     }`} style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
                       {chat.name}
                     </h3>
-                    <span className="text-xs text-gray-500 flex-shrink-0 ml-2">{chat.timestamp}</span>
+                    <span className="text-xs text-text-tertiary flex-shrink-0 ml-2">{chat.timestamp}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <p className={`text-sm truncate ${
-                      chat.unread > 0 ? 'text-gray-700 font-medium' : 'text-gray-500'
+                      chat.unread > 0 ? 'text-text-secondary font-medium' : 'text-text-tertiary'
                     }`}>
                       {chat.lastMessage}
                     </p>
                     {chat.unread > 0 && (
-                      <span className="ml-2 bg-[#204EA7] text-white text-xs font-semibold px-2 py-1 rounded-full min-w-[24px] text-center flex-shrink-0">
+                      <span className="ml-2 bg-accent text-white text-xs font-semibold px-2 py-1 rounded-full min-w-[24px] text-center flex-shrink-0">
                         {chat.unread}
                       </span>
                     )}
                   </div>
                   {chat.type === 'group' && chat.members && (
-                    <p className="text-xs text-gray-400 mt-1">{chat.members} members</p>
+                    <p className="text-xs text-text-tertiary mt-1">{chat.members} members</p>
                   )}
                 </div>
               </button>
@@ -349,7 +349,7 @@ export function ChatMobile() {
           </div>
 
           {filteredConversations.length === 0 && (
-            <div className="p-8 text-center text-gray-500 text-sm">
+            <div className="p-8 text-center text-text-tertiary text-sm">
               No conversations found
             </div>
           )}
