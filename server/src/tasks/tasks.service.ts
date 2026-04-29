@@ -61,7 +61,7 @@ export class TasksService {
   private async broadcastTaskEvent(event: string, payload: unknown): Promise<void> {
     try {
       const channel = this.client.channel('tasks');
-      await channel.send({ type: 'broadcast', event, payload });
+      await channel.httpSend(event, payload);
     } catch (error) {
       this.logger.warn(`Realtime broadcast failed for ${event}: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -438,5 +438,4 @@ export class TasksService {
     if (!data || data.role !== 'admin') {
       throw new ForbiddenException('Only project admins can perform this action');
     }
-  }
-}
+  }}
