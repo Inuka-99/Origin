@@ -1,6 +1,5 @@
 import { Clock, Filter, ChevronDown, Plus } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
-import { useClickOutside } from '../lib/useClickOutside';
+import { useState } from 'react';
 
 interface Task {
   id: string;
@@ -19,74 +18,59 @@ interface TodaysFocusProps {
   loading?: boolean;
 }
 
-type SortOption = 'time-asc' | 'time-desc' | 'title-asc';
-
-const sortLabels: Record<SortOption, string> = {
-  'time-asc': 'Earliest First',
-  'time-desc': 'Latest First',
-  'title-asc': 'Title A-Z',
-};
-
 const sampleTasks: Task[] = [
   {
     id: '1',
     title: 'Review Q1 performance metrics',
-    project: { id: '1', name: 'Analytics Dashboard', color: '#204EA7' },
+    project: { id: '1', name: 'Analytics Dashboard', color: 'var(--accent)' },
     due_date: '2024-04-20T10:00:00Z',
-    status: 'todo',
+    status: 'todo'
   },
   {
     id: '2',
     title: 'Update client presentation slides',
     project: { id: '2', name: 'Client Portal', color: '#9333EA' },
     due_date: '2024-04-20T14:00:00Z',
-    status: 'todo',
+    status: 'todo'
   },
   {
     id: '3',
     title: 'Code review for authentication module',
     project: { id: '3', name: 'ORIGIN Platform', color: '#16A34A' },
     due_date: '2024-04-20T16:30:00Z',
-    status: 'todo',
+    status: 'todo'
   },
   {
     id: '4',
     title: 'Team standup meeting',
     project: { id: '4', name: 'Engineering', color: '#DC2626' },
     due_date: '2024-04-20T09:30:00Z',
-    status: 'todo',
+    status: 'todo'
   },
   {
     id: '5',
     title: 'Update documentation for API endpoints',
     project: { id: '5', name: 'Backend Infrastructure', color: '#16A34A' },
     due_date: '2024-04-20T15:00:00Z',
-    status: 'todo',
+    status: 'todo'
   },
   {
     id: '6',
     title: 'Design review with product team',
-    project: { id: '6', name: 'Design System', color: '#204EA7' },
+    project: { id: '6', name: 'Design System', color: 'var(--accent)' },
     due_date: '2024-04-20T11:30:00Z',
-    status: 'todo',
-  },
+    status: 'todo'
+  }
 ];
 
 export function TodaysFocus({ tasks, loading = false }: TodaysFocusProps) {
   const [activeTab, setActiveTab] = useState('today');
-  const [projectFilter, setProjectFilter] = useState('all');
-  const [sortBy, setSortBy] = useState<SortOption>('time-asc');
-  const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [isSortOpen, setIsSortOpen] = useState(false);
-  const filterRef = useRef<HTMLDivElement | null>(null);
-  const sortRef = useRef<HTMLDivElement | null>(null);
 
-  useClickOutside(filterRef, () => setIsFilterOpen(false));
-  useClickOutside(sortRef, () => setIsSortOpen(false));
-
+  // Use provided tasks or fallback to sample
   const displayTasks = tasks.length > 0 ? tasks : sampleTasks;
 
-  const baseTasks = useMemo(() => {
+  // Filter tasks based on active tab
+  const getFilteredTasks = () => {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const tomorrow = new Date(today);
@@ -94,167 +78,79 @@ export function TodaysFocus({ tasks, loading = false }: TodaysFocusProps) {
 
     switch (activeTab) {
       case 'today':
-        return displayTasks.filter((task) => {
+        return displayTasks.filter(task => {
           if (!task.due_date) return false;
           const dueDate = new Date(task.due_date);
           return dueDate >= today && dueDate < tomorrow && task.status !== 'done';
         });
       case 'overdue':
-        return displayTasks.filter((task) => {
+        return displayTasks.filter(task => {
           if (!task.due_date) return false;
           const dueDate = new Date(task.due_date);
           return dueDate < today && task.status !== 'done';
         });
       case 'upcoming':
-        return displayTasks.filter((task) => {
+        return displayTasks.filter(task => {
           if (!task.due_date) return false;
           const dueDate = new Date(task.due_date);
           return dueDate >= tomorrow && task.status !== 'done';
         });
       case 'unscheduled':
-        return displayTasks.filter((task) => !task.due_date && task.status !== 'done');
+        return displayTasks.filter(task => !task.due_date && task.status !== 'done');
       default:
-        return displayTasks.filter((task) => task.status !== 'done');
+        return displayTasks.filter(task => task.status !== 'done');
     }
-  }, [activeTab, displayTasks]);
+  };
 
-  const tabs = useMemo(() => {
-    const countTasks = (bucket: 'today' | 'overdue' | 'upcoming' | 'unscheduled') => {
-      const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const tomorrow = new Date(today);
+  const filteredTasks = getFilteredTasks();
+
+  const tabs = [
+    { id: 'today', label: 'Today', count: displayTasks.filter(task => {
+      if (!task.due_date) return false;
+      const dueDate = new Date(task.due_date);
+      const today = new Date();
+      const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const todayEnd = new Date(todayStart);
+      todayEnd.setDate(todayEnd.getDate() + 1);
+      return dueDate >= todayStart && dueDate < todayEnd && task.status !== 'done';
+    }).length },
+    { id: 'overdue', label: 'Overdue', count: displayTasks.filter(task => {
+      if (!task.due_date) return false;
+      const dueDate = new Date(task.due_date);
+      const today = new Date();
+      return dueDate < new Date(today.getFullYear(), today.getMonth(), today.getDate()) && task.status !== 'done';
+    }).length },
+    { id: 'upcoming', label: 'Upcoming', count: displayTasks.filter(task => {
+      if (!task.due_date) return false;
+      const dueDate = new Date(task.due_date);
+      const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
-
-      return displayTasks.filter((task) => {
-        if (task.status === 'done') {
-          return false;
-        }
-
-        if (bucket === 'unscheduled') {
-          return !task.due_date;
-        }
-
-        if (!task.due_date) {
-          return false;
-        }
-
-        const dueDate = new Date(task.due_date);
-
-        if (bucket === 'today') return dueDate >= today && dueDate < tomorrow;
-        if (bucket === 'overdue') return dueDate < today;
-        return dueDate >= tomorrow;
-      }).length;
-    };
-
-    return [
-      { id: 'today', label: 'Today', count: countTasks('today') },
-      { id: 'overdue', label: 'Overdue', count: countTasks('overdue') },
-      { id: 'upcoming', label: 'Upcoming', count: countTasks('upcoming') },
-      { id: 'unscheduled', label: 'Unscheduled', count: countTasks('unscheduled') },
-    ];
-  }, [displayTasks]);
-
-  const projectOptions = useMemo(
-    () => ['all', ...new Set(displayTasks.map((task) => task.project?.name).filter(Boolean))],
-    [displayTasks],
-  );
-
-  const visibleTasks = useMemo(() => {
-    const matchingTasks = baseTasks.filter((task) => {
-      return projectFilter === 'all' || task.project?.name === projectFilter;
-    });
-
-    return [...matchingTasks].sort((left, right) => {
-      if (sortBy === 'title-asc') {
-        return left.title.localeCompare(right.title);
-      }
-
-      const leftTime = left.due_date ? new Date(left.due_date).getTime() : Number.POSITIVE_INFINITY;
-      const rightTime = right.due_date ? new Date(right.due_date).getTime() : Number.POSITIVE_INFINITY;
-
-      if (sortBy === 'time-desc') {
-        return rightTime - leftTime;
-      }
-
-      return leftTime - rightTime;
-    });
-  }, [baseTasks, projectFilter, sortBy]);
+      return dueDate >= tomorrow && task.status !== 'done';
+    }).length },
+    { id: 'unscheduled', label: 'Unscheduled', count: displayTasks.filter(task => !task.due_date && task.status !== 'done').length }
+  ];
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-100 flex flex-col" style={{ height: '480px' }}>
-      <div className="flex-shrink-0 border-b border-gray-100">
+    <div className="bg-surface rounded-lg shadow-sm border border-divider flex flex-col" style={{ height: '480px' }}>
+      {/* Sticky Header */}
+      <div className="flex-shrink-0 border-b border-divider">
+        {/* Title Row */}
         <div className="flex items-center justify-between px-6 pt-5 pb-4">
-          <h2 className="text-lg font-semibold" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
+          <h2 className="text-lg font-semibold" style={{ fontFamily: 'Space Grotesk, sans-serif', color: 'var(--text-primary)' }}>
             Today's Focus
           </h2>
           <div className="flex items-center gap-2">
-            <div ref={filterRef} className="relative">
-              <button
-                onClick={() => {
-                  setIsFilterOpen((previous) => !previous);
-                  setIsSortOpen(false);
-                }}
-                className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-gray-100 rounded-lg transition-colors text-sm text-gray-700"
-              >
-                <Filter className="w-4 h-4 text-gray-600" />
-                {projectFilter === 'all' ? 'All Projects' : projectFilter}
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isFilterOpen ? 'rotate-180' : ''}`} />
-              </button>
-
-              {isFilterOpen && (
-                <div className="absolute right-0 mt-2 w-52 rounded-lg border border-gray-200 bg-white py-2 shadow-lg z-20">
-                  {projectOptions.map((option) => (
-                    <button
-                      key={option}
-                      onClick={() => {
-                        setProjectFilter(option);
-                        setIsFilterOpen(false);
-                      }}
-                      className={`w-full px-4 py-2 text-left text-sm transition-colors ${
-                        projectFilter === option ? 'bg-[#204EA7]/10 text-[#204EA7]' : 'text-gray-700 hover:bg-gray-50'
-                      }`}
-                    >
-                      {option === 'all' ? 'All Projects' : option}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div ref={sortRef} className="relative">
-              <button
-                onClick={() => {
-                  setIsSortOpen((previous) => !previous);
-                  setIsFilterOpen(false);
-                }}
-                className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-gray-100 rounded-lg transition-colors text-sm text-gray-700"
-              >
-                {sortLabels[sortBy]}
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isSortOpen ? 'rotate-180' : ''}`} />
-              </button>
-
-              {isSortOpen && (
-                <div className="absolute right-0 mt-2 w-44 rounded-lg border border-gray-200 bg-white py-2 shadow-lg z-20">
-                  {(['time-asc', 'time-desc', 'title-asc'] as SortOption[]).map((option) => (
-                    <button
-                      key={option}
-                      onClick={() => {
-                        setSortBy(option);
-                        setIsSortOpen(false);
-                      }}
-                      className={`w-full px-4 py-2 text-left text-sm transition-colors ${
-                        sortBy === option ? 'bg-[#204EA7]/10 text-[#204EA7]' : 'text-gray-700 hover:bg-gray-50'
-                      }`}
-                    >
-                      {sortLabels[option]}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            <button className="p-2 hover:bg-surface-hover rounded-lg transition-colors">
+              <Filter className="w-4 h-4 text-text-secondary" />
+            </button>
+            <button className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-surface-hover rounded-lg transition-colors text-sm text-text-secondary">
+              Sort
+              <ChevronDown className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
 
+        {/* Tabs */}
         <div className="flex items-center gap-1 px-6 pb-3 overflow-x-auto scrollbar-hide">
           {tabs.map((tab) => (
             <button
@@ -262,8 +158,8 @@ export function TodaysFocus({ tasks, loading = false }: TodaysFocusProps) {
               onClick={() => setActiveTab(tab.id)}
               className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0 ${
                 activeTab === tab.id
-                  ? 'bg-[#204EA7] text-white'
-                  : 'text-gray-600 hover:bg-gray-100'
+                  ? 'bg-accent text-white'
+                  : 'text-text-secondary hover:bg-surface-hover'
               }`}
             >
               {tab.label}
@@ -275,40 +171,43 @@ export function TodaysFocus({ tasks, loading = false }: TodaysFocusProps) {
         </div>
       </div>
 
+      {/* Scrollable Task List */}
       <div className="flex-1 overflow-y-auto px-6 py-2">
         {loading ? (
           <div className="flex items-center justify-center h-32">
-            <div className="text-sm text-gray-500">Loading tasks...</div>
+            <div className="text-sm text-text-tertiary">Loading tasks...</div>
           </div>
         ) : (
           <div className="space-y-2">
-            {visibleTasks.map((task) => (
+            {filteredTasks.map((task) => (
               <div
                 key={task.id}
-                className="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer group"
+                className="flex items-start gap-3 p-3 rounded-lg hover:bg-surface-sunken transition-colors cursor-pointer group"
               >
                 <div className="mt-0.5">
-                  <div className="w-5 h-5 rounded border-2 border-gray-300 group-hover:border-[#204EA7] transition-colors flex items-center justify-center" />
+                  <div className="w-5 h-5 rounded border-2 border-border-strong group-hover:border-accent transition-colors flex items-center justify-center">
+                    {/* Empty checkbox */}
+                  </div>
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-sm font-medium text-gray-900 mb-1">
+                  <h3 className="text-sm font-medium text-text-primary mb-1">
                     {task.title}
                   </h3>
                   <div className="flex items-center gap-2 flex-wrap">
                     {task.project && (
                       <span
                         className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
-                        style={{
+                        style={{ 
                           backgroundColor: `${task.project.color || '#204EA7'}15`,
-                          color: task.project.color || '#204EA7',
+                          color: task.project.color || '#204EA7'
                         }}
                       >
                         {task.project.name}
                       </span>
                     )}
                     {task.due_date && (
-                      <span className="flex items-center gap-1 text-xs text-gray-500">
+                      <span className="flex items-center gap-1 text-xs text-text-tertiary">
                         <Clock className="w-3 h-3" />
                         {new Date(task.due_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
@@ -317,18 +216,13 @@ export function TodaysFocus({ tasks, loading = false }: TodaysFocusProps) {
                 </div>
               </div>
             ))}
-
-            {visibleTasks.length === 0 && (
-              <div className="py-12 text-center text-sm text-gray-500">
-                No tasks match the selected filters.
-              </div>
-            )}
           </div>
         )}
       </div>
 
-      <div className="flex-shrink-0 border-t border-gray-100 p-4">
-        <button className="w-full flex items-center justify-center gap-2 text-[#204EA7] text-sm font-medium py-2 rounded-lg hover:bg-[#204EA7]/5 transition-colors">
+      {/* Add Task Button */}
+      <div className="flex-shrink-0 border-t border-divider p-4">
+        <button className="w-full flex items-center justify-center gap-2 text-accent text-sm font-medium py-2 rounded-lg hover:bg-accent/5 transition-colors">
           <Plus className="w-4 h-4" />
           Add Task
         </button>

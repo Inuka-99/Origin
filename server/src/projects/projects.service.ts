@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import { SupabaseService } from '../supabase';
 import { ActivityLogService, ActivityActions } from '../activity-log';
+import { type Paginated, parsePagination } from '../common/pagination';
 
 const PROJECT_PRIORITIES = ['Low', 'Medium', 'High', 'Urgent'] as const;
 const PROJECT_STATUSES = [
@@ -139,54 +140,78 @@ export class ProjectsService {
     return project as Project;
   }
 
-  /** List all projects the user is a member of. Admins see all projects. */
+  /**
+   * List all projects the user is a member of. Admins see all projects.
+   *
+   * Pagination is now mandatory at the data layer to prevent the
+   * "return every project in the database" footgun that existed
+   * before. Callers that don't pass page/limit get the first page
+   * with the default size.
+   */
   async listForUser(
     userId: string,
     userRole: string,
-    search?: string,
-  ): Promise<Project[]> {
+    rawPage?: string | number,
+    rawLimit?: string | number,
+  ): Promise<Paginated<Project>> {
     const client = this.supabase.getClient();
-    const normalizedSearch = search?.trim().toLowerCase();
+    const pagination = parsePagination(rawPage, rawLimit);
 
     if (userRole === 'admin') {
-      // Global admins see all projects
-      const { data, error } = await client
+      const { data, error, count } = await client
         .from('projects')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .select('*', { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .range(pagination.from, pagination.to);
 
       if (error) throw new BadRequestException(error.message);
       const projects = (data ?? []).map((project) => ({
         ...project,
-        user_role: 'admin' as const,
+        user_role: 'admin',
       })) as Project[];
-      return this.filterProjectsBySearch(projects, normalizedSearch);
+
+      return {
+        data: projects,
+        total: count ?? 0,
+        page: pagination.page,
+        limit: pagination.limit,
+      };
     }
 
-    // Regular members see only projects they belong to
+    // Regular members see only projects they belong to.
+    // We fetch all the user's memberships first (one row per
+    // project) — bounded by the realistic per-user project count —
+    // then page over the projects table itself.
     const { data: memberships } = await client
       .from('project_members')
       .select('project_id, role')
       .eq('user_id', userId);
 
     const projectIds = (memberships ?? []).map((m) => m.project_id);
-    if (projectIds.length === 0) return [];
+    if (projectIds.length === 0) {
+      return { data: [], total: 0, page: pagination.page, limit: pagination.limit };
+    }
 
-    const { data, error } = await client
+    const { data, error, count } = await client
       .from('projects')
-      .select('*')
+      .select('*', { count: 'exact' })
       .in('id', projectIds)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .range(pagination.from, pagination.to);
 
     if (error) throw new BadRequestException(error.message);
 
-    // Add user role to each project
-    const projectsWithRoles = (data ?? []).map(project => {
-      const membership = memberships?.find(m => m.project_id === project.id);
+    const projectsWithRoles = (data ?? []).map((project) => {
+      const membership = memberships?.find((m) => m.project_id === project.id);
       return { ...project, user_role: membership?.role || null };
     });
 
-    return this.filterProjectsBySearch(projectsWithRoles as Project[], normalizedSearch);
+    return {
+      data: projectsWithRoles as Project[],
+      total: count ?? 0,
+      page: pagination.page,
+      limit: pagination.limit,
+    };
   }
 
   /** Get a single project by ID. */
@@ -269,8 +294,6 @@ export class ProjectsService {
 
   /** List members of a project. Only project members or admins can view. */
   async listMembers(projectId: string, userId: string, globalRole: string): Promise<ProjectMember[]> {
-    const project = await this.getById(projectId);
-
     // Check if user is a member or admin
     if (globalRole !== 'admin') {
       const { data: membership } = await this.supabase
@@ -285,6 +308,8 @@ export class ProjectsService {
         throw new ForbiddenException('You are not a member of this project');
       }
     }
+
+    const project = await this.getById(projectId);
 
     const { data, error } = await this.supabase
       .getClient()
@@ -365,6 +390,23 @@ export class ProjectsService {
     }
   }
 
+  /**
+   * Search profiles that aren't already members of the project.
+   *
+   * The previous implementation pulled the entire profiles table
+   * into memory and filtered with String.includes — fine for a
+   * dev workspace but it falls over the moment the org has a few
+   * thousand users. We now:
+   *
+   *   1. Push the text filter into Postgres via `or(ilike, ilike)`.
+   *      The trigram indexes added by the scalability migration
+   *      make those ILIKE patterns index-backed.
+   *   2. Cap the SQL result at a small constant. The candidate
+   *      picker only renders 20 suggestions; even with two passes
+   *      to drop existing members we never need more than ~50.
+   *   3. Fetch existing members separately and filter the SQL
+   *      result in JS — small set, cheap operation.
+   */
   async searchMemberCandidates(
     projectId: string,
     query: string | undefined,
@@ -374,38 +416,46 @@ export class ProjectsService {
     await this.assertProjectAccess(projectId, actingUserId, globalRole);
 
     const client = this.supabase.getClient();
-    const search = query?.trim().toLowerCase();
+    const search = query?.trim();
 
-    const [{ data: members, error: membersError }, { data: profiles, error: profilesError }] = await Promise.all([
-      client
-        .from('project_members')
-        .select('user_id')
-        .eq('project_id', projectId),
-      client
-        .from('profiles')
-        .select('id, full_name, email, avatar_url')
-        .order('full_name', { ascending: true }),
-    ]);
-
+    // Pull existing members first so we can subtract them from the
+    // candidate list. The project membership table is small per
+    // project (typically <100 rows), so this is fine.
+    const { data: members, error: membersError } = await client
+      .from('project_members')
+      .select('user_id')
+      .eq('project_id', projectId);
     if (membersError) throw new BadRequestException(membersError.message);
-    if (profilesError) throw new BadRequestException(profilesError.message);
+    const existingMemberIds = new Set(
+      (members ?? []).map((member) => member.user_id as string),
+    );
 
-    const existingMemberIds = new Set((members ?? []).map((member) => member.user_id as string));
+    // Build the profile query with DB-side filtering. We over-fetch
+    // a little (50) to leave room for the in-memory membership
+    // filter to drop entries before we slice down to 20.
+    const FETCH_CAP = 50;
+    const RETURN_CAP = 20;
+
+    let profileQuery = client
+      .from('profiles')
+      .select('id, full_name, email, avatar_url')
+      .order('full_name', { ascending: true })
+      .limit(FETCH_CAP);
+
+    if (search) {
+      const escaped = search.replace(/[%_]/g, (m) => `\\${m}`);
+      const pattern = `%${escaped}%`;
+      profileQuery = profileQuery.or(
+        `full_name.ilike.${pattern},email.ilike.${pattern}`,
+      );
+    }
+
+    const { data: profiles, error: profilesError } = await profileQuery;
+    if (profilesError) throw new BadRequestException(profilesError.message);
 
     return (profiles ?? [])
       .filter((profile) => !existingMemberIds.has(profile.id as string))
-      .filter((profile) => {
-        if (!search) {
-          return true;
-        }
-
-        const fullName = String(profile.full_name ?? '').toLowerCase();
-        const email = String(profile.email ?? '').toLowerCase();
-        const id = String(profile.id ?? '').toLowerCase();
-
-        return fullName.includes(search) || email.includes(search) || id.includes(search);
-      })
-      .slice(0, 20)
+      .slice(0, RETURN_CAP)
       .map((profile) => ({
         id: profile.id as string,
         full_name: (profile.full_name as string | null) ?? null,
@@ -695,25 +745,5 @@ export class ProjectsService {
 
   private getTodayDateString(): string {
     return new Date().toISOString().slice(0, 10);
-  }
-
-  private filterProjectsBySearch(projects: Project[], search?: string): Project[] {
-    if (!search) {
-      return projects;
-    }
-
-    return projects.filter((project) => {
-      const name = project.name.toLowerCase();
-      const description = project.description?.toLowerCase() ?? '';
-      const department = project.department.toLowerCase();
-      const tags = project.tags.map((tag) => tag.toLowerCase());
-
-      return (
-        name.includes(search)
-        || description.includes(search)
-        || department.includes(search)
-        || tags.some((tag) => tag.includes(search))
-      );
-    });
   }
 }

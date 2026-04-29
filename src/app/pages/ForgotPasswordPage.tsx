@@ -23,7 +23,7 @@ export function ForgotPasswordPage() {
 
   if (isSubmitted) {
     return (
-      <div className="min-h-screen bg-[#F7F8FA] flex items-center justify-center p-8">
+      <div className="min-h-screen bg-canvas flex items-center justify-center p-8">
         <div className="w-full max-w-md">
           {/* Logo and Title */}
           <div className="text-center mb-10">
@@ -32,29 +32,29 @@ export function ForgotPasswordPage() {
             </div>
             <h1 
               className="text-3xl mb-2 font-semibold" 
-              style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}
+              style={{ fontFamily: 'Space Grotesk, sans-serif', color: 'var(--text-primary)' }}
             >
               Check your email
             </h1>
-            <p className="text-sm text-[#676769] font-normal">
+            <p className="text-sm text-text-secondary font-normal">
               We've sent a password reset link to {email}
             </p>
           </div>
 
           {/* Success Card */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-8">
+          <div className="bg-surface rounded-lg shadow-sm border border-divider p-8">
             <div className="text-center">
               <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-green-100 mb-4">
                 <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               </div>
-              <p className="text-sm text-[#676769] mb-6">
+              <p className="text-sm text-text-secondary mb-6">
                 Click the link in the email to reset your password. If you don't see the email, check your spam folder.
               </p>
               <button
                 onClick={() => navigate('/')}
-                className="w-full bg-[#204EA7] text-white py-2.5 rounded-lg hover:bg-[#1a3d8a] transition-colors font-medium text-sm"
+                className="w-full bg-accent text-white py-2.5 rounded-lg hover:bg-accent-hover transition-colors font-medium text-sm"
               >
                 Back to Sign In
               </button>
@@ -66,7 +66,7 @@ export function ForgotPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F7F8FA] flex items-center justify-center p-8">
+    <div className="min-h-screen bg-canvas flex items-center justify-center p-8">
       <div className="w-full max-w-md">
         {/* Logo and Title */}
         <div className="text-center mb-10">
@@ -79,23 +79,23 @@ export function ForgotPasswordPage() {
           </div>
           <h1 
             className="text-3xl mb-2 font-semibold" 
-            style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}
+            style={{ fontFamily: 'Space Grotesk, sans-serif', color: 'var(--text-primary)' }}
           >
             Forgot password?
           </h1>
-          <p className="text-sm text-[#676769] font-normal">
+          <p className="text-sm text-text-secondary font-normal">
             No worries, we'll send you reset instructions
           </p>
         </div>
 
         {/* Forgot Password Card */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-8">
+        <div className="bg-surface rounded-lg shadow-sm border border-divider p-8">
           <form onSubmit={handleSubmit}>
             {/* Email Input */}
             <div className="mb-8">
               <label 
                 htmlFor="email" 
-                className="block text-sm font-medium text-[#676769] mb-2"
+                className="block text-sm font-medium text-text-secondary mb-2"
               >
                 Email Address
               </label>
@@ -104,12 +104,12 @@ export function ForgotPasswordPage() {
                 id="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-lg border border-gray-200 focus:border-[#204EA7] focus:ring-2 focus:ring-[#204EA7]/10 outline-none transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full px-4 py-2.5 rounded-lg border border-border-subtle focus:border-accent focus:ring-2 focus:ring-accent/10 outline-none transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 placeholder="sarah@company.com"
                 required
                 disabled={isLoading}
               />
-              <p className="text-xs text-[#676769] mt-2">
+              <p className="text-xs text-text-secondary mt-2">
                 Enter the email address associated with your account
               </p>
             </div>
@@ -117,7 +117,7 @@ export function ForgotPasswordPage() {
             {/* Send Reset Link Button */}
             <button
               type="submit"
-              className="w-full bg-[#204EA7] text-white py-2.5 rounded-lg hover:bg-[#1a3d8a] transition-colors font-medium text-sm mb-4 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-accent text-white py-2.5 rounded-lg hover:bg-accent-hover transition-colors font-medium text-sm mb-4 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={isLoading}
             >
               {isLoading ? (
@@ -134,7 +134,7 @@ export function ForgotPasswordPage() {
             <button
               type="button"
               onClick={() => navigate('/')}
-              className="w-full flex items-center justify-center gap-2 text-sm text-[#676769] hover:text-[#204EA7] transition-colors font-medium"
+              className="w-full flex items-center justify-center gap-2 text-sm text-text-secondary hover:text-accent transition-colors font-medium"
               disabled={isLoading}
             >
               <ArrowLeft className="w-4 h-4" />

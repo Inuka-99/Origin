@@ -88,7 +88,7 @@ export function MFAVerificationPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F7F8FA] flex items-center justify-center p-8">
+    <div className="min-h-screen bg-canvas flex items-center justify-center p-8">
       <div className="w-full max-w-md">
         {/* Logo and Title */}
         <div className="text-center mb-10">
@@ -97,21 +97,21 @@ export function MFAVerificationPage() {
           </div>
           <h1 
             className="text-3xl mb-2 font-semibold" 
-            style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}
+            style={{ fontFamily: 'Space Grotesk, sans-serif', color: 'var(--text-primary)' }}
           >
             Two-factor authentication
           </h1>
-          <p className="text-sm text-[#676769] font-normal">
+          <p className="text-sm text-text-secondary font-normal">
             Enter the 6-digit code sent to your device
           </p>
         </div>
 
         {/* MFA Card */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-8">
+        <div className="bg-surface rounded-lg shadow-sm border border-divider p-8">
           <form onSubmit={handleSubmit}>
             {/* Code Input */}
             <div className="mb-8">
-              <label className="block text-sm font-medium text-[#676769] mb-4 text-center">
+              <label className="block text-sm font-medium text-text-secondary mb-4 text-center">
                 Verification Code
               </label>
               <div className="flex gap-3 justify-center" onPaste={handlePaste}>
@@ -125,12 +125,12 @@ export function MFAVerificationPage() {
                     value={digit}
                     onChange={(e) => handleChange(index, e.target.value)}
                     onKeyDown={(e) => handleKeyDown(index, e)}
-                    className="w-12 h-12 text-center text-lg font-semibold rounded-lg border border-gray-200 focus:border-[#204EA7] focus:ring-2 focus:ring-[#204EA7]/10 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-12 h-12 text-center text-lg font-semibold rounded-lg border border-border-subtle focus:border-accent focus:ring-2 focus:ring-accent/10 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={isLoading}
                   />
                 ))}
               </div>
-              <p className="text-xs text-[#676769] mt-4 text-center">
+              <p className="text-xs text-text-secondary mt-4 text-center">
                 The code expires in 10 minutes
               </p>
             </div>
@@ -138,7 +138,7 @@ export function MFAVerificationPage() {
             {/* Verify Button */}
             <button
               type="submit"
-              className="w-full bg-[#204EA7] text-white py-2.5 rounded-lg hover:bg-[#1a3d8a] transition-colors font-medium text-sm mb-4 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-accent text-white py-2.5 rounded-lg hover:bg-accent-hover transition-colors font-medium text-sm mb-4 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={isLoading || code.some(digit => !digit)}
             >
               {isLoading ? (
@@ -158,8 +158,8 @@ export function MFAVerificationPage() {
                 onClick={handleResend}
                 className={`text-sm font-medium transition-colors ${
                   canResend
-                    ? 'text-[#204EA7] hover:text-[#1a3d8a] cursor-pointer'
-                    : 'text-gray-400 cursor-not-allowed'
+                    ? 'text-accent hover:text-[#1a3d8a] cursor-pointer'
+                    : 'text-text-tertiary cursor-not-allowed'
                 }`}
                 disabled={!canResend}
               >
@@ -174,11 +174,11 @@ export function MFAVerificationPage() {
         </div>
 
         {/* Back to Sign In Link */}
-        <p className="text-center text-sm text-[#676769] mt-6">
+        <p className="text-center text-sm text-text-secondary mt-6">
           Having trouble?{' '}
           <button
             onClick={() => navigate('/')}
-            className="text-[#204EA7] hover:text-[#1a3d8a] font-medium transition-colors"
+            className="text-accent hover:text-[#1a3d8a] font-medium transition-colors"
           >
             Back to Sign In
           </button>
