@@ -19,12 +19,12 @@ export function MobileTopBar() {
   return (
     <>
       {/* Top Bar */}
-      <header className="fixed top-0 left-0 right-0 h-14 bg-white border-b border-gray-200 z-50">
+      <header className="fixed top-0 left-0 right-0 h-14 bg-surface border-b border-border-subtle z-50">
         <div className="h-full px-4 flex items-center justify-between">
           {/* Left: Hamburger Menu */}
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="w-11 h-11 flex items-center justify-center text-[#676769] hover:bg-gray-100 rounded-lg transition-colors"
+            className="w-11 h-11 flex items-center justify-center text-text-secondary hover:bg-surface-hover rounded-lg transition-colors"
           >
             <Menu className="w-5 h-5" />
           </button>
@@ -35,7 +35,7 @@ export function MobileTopBar() {
           </div>
 
           {/* Right: Notifications */}
-          <button className="w-11 h-11 flex items-center justify-center text-[#676769] hover:bg-gray-100 rounded-lg transition-colors relative">
+          <button className="w-11 h-11 flex items-center justify-center text-text-secondary hover:bg-surface-hover rounded-lg transition-colors relative">
             <Bell className="w-5 h-5" />
             <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></span>
           </button>
@@ -52,9 +52,9 @@ export function MobileTopBar() {
           ></div>
 
           {/* Slide-out Menu */}
-          <div className="fixed top-0 left-0 bottom-0 w-72 bg-[#203D70] z-50 flex flex-col">
+          <div className="fixed top-0 left-0 bottom-0 w-72 bg-sidebar z-50 flex flex-col">
             {/* Menu Header */}
-            <div className="h-14 px-4 flex items-center justify-between border-b border-white/10">
+            <div className="h-14 px-4 flex items-center justify-between border-b border-surface/10">
               <div className="flex items-center gap-2">
                 <img 
                   src={originLogo} 
@@ -65,16 +65,16 @@ export function MobileTopBar() {
               </div>
               <button
                 onClick={() => setIsMenuOpen(false)}
-                className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 rounded transition-colors"
+                className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-surface/10 rounded transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* User Info */}
-            <div className="p-4 border-b border-white/10">
+            <div className="p-4 border-b border-surface/10">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-[#204EA7] flex items-center justify-center text-white font-medium text-sm">
+                <div className="w-10 h-10 rounded-full bg-accent flex items-center justify-center text-white font-medium text-sm">
                   SJ
                 </div>
                 <div>
@@ -90,13 +90,13 @@ export function MobileTopBar() {
                 <a
                   key={index}
                   href={item.path}
-                  className="flex items-center gap-3 px-4 py-3 text-white/70 hover:text-white hover:bg-white/5 transition-colors min-h-[44px] relative"
+                  className="flex items-center gap-3 px-4 py-3 text-white/70 hover:text-white hover:bg-surface/5 transition-colors min-h-[44px] relative"
                   onClick={() => setIsMenuOpen(false)}
                 >
                   <item.icon className="w-5 h-5" />
                   <span className="text-sm font-medium">{item.label}</span>
                   {item.badge > 0 && (
-                    <span className="ml-auto bg-[#204EA7] text-white text-xs font-semibold px-2 py-0.5 rounded-full min-w-[20px] text-center">
+                    <span className="ml-auto bg-accent text-white text-xs font-semibold px-2 py-0.5 rounded-full min-w-[20px] text-center">
                       {item.badge}
                     </span>
                   )}
@@ -105,10 +105,10 @@ export function MobileTopBar() {
             </nav>
 
             {/* Sign Out */}
-            <div className="p-4 border-t border-white/10">
+            <div className="p-4 border-t border-surface/10">
               <button
                 onClick={() => window.location.href = '/'}
-                className="flex items-center gap-3 px-4 py-3 text-white/70 hover:text-white hover:bg-white/5 transition-colors rounded-lg w-full min-h-[44px]"
+                className="flex items-center gap-3 px-4 py-3 text-white/70 hover:text-white hover:bg-surface/5 transition-colors rounded-lg w-full min-h-[44px]"
               >
                 <LogOut className="w-5 h-5" />
                 <span className="text-sm font-medium">Sign Out</span>

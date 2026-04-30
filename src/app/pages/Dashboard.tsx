@@ -5,10 +5,14 @@ import { RecentlyCompleted } from '../components/RecentlyCompleted';
 import { AssignedToMe } from '../components/AssignedToMe';
 import { Settings, ChevronDown, BarChart3, Activity, TrendingUp as TrendingUpIcon, Calendar } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useAuthUser } from '../auth/useAuthUser';
+import { useTasks } from '../lib/useTasks';
 
 export function Dashboard() {
   const [showWidgetMenu, setShowWidgetMenu] = useState(false);
   const [greeting, setGreeting] = useState('Good afternoon');
+  const { user } = useAuthUser();
+  const { tasks, loading: tasksLoading, error: tasksError } = useTasks();
 
   useEffect(() => {
     const hour = new Date().getHours();
@@ -29,27 +33,27 @@ export function Dashboard() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#F7F8FA]">
+    <div className="min-h-screen bg-canvas">
       <Sidebar />
       <TopBar />
 
       {/* Main Content */}
-      <main className="ml-56 pt-16">
+      <main className="pt-16 transition-[margin] duration-200 ease-out" style={{ marginLeft: 'var(--sidebar-width)' }}>
         <div className="p-8">
           {/* Personalized Greeting Section */}
           <div className="mb-8">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm text-gray-500 font-medium mb-1">{greeting}, Sarah</p>
-                <h1 className="text-4xl mb-2 font-semibold" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
+                <p className="text-sm text-text-tertiary font-medium mb-1">{greeting}, {user?.name || 'User'}</p>
+                <h1 className="text-4xl mb-2 font-semibold" style={{ fontFamily: 'Space Grotesk, sans-serif', color: 'var(--text-primary)' }}>
                   What are we working on today?
                 </h1>
-                <p className="text-sm text-gray-500 font-normal">Here's a quick overview of your tasks.</p>
+                <p className="text-sm text-text-tertiary font-normal">Here's a quick overview of your tasks.</p>
               </div>
               <div className="relative">
                 <button 
                   onClick={() => setShowWidgetMenu(!showWidgetMenu)}
-                  className="bg-white border border-gray-200 text-gray-700 px-4 py-2.5 rounded-lg flex items-center gap-2 hover:bg-gray-50 transition-colors font-medium shadow-sm"
+                  className="bg-surface border border-border-subtle text-text-secondary px-4 py-2.5 rounded-lg flex items-center gap-2 hover:bg-surface-sunken transition-colors font-medium shadow-sm"
                 >
                   <Settings className="w-4 h-4" />
                   Customize Dashboard
@@ -58,21 +62,21 @@ export function Dashboard() {
 
                 {/* Dropdown Menu */}
                 {showWidgetMenu && (
-                  <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-10">
-                    <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  <div className="absolute right-0 mt-2 w-64 bg-surface rounded-lg shadow-lg border border-border-subtle py-2 z-10">
+                    <div className="px-3 py-2 text-xs font-semibold text-text-tertiary uppercase tracking-wide">
                       Add Widget
                     </div>
                     {widgetOptions.map((widget) => (
                       <button
                         key={widget.id}
-                        className="w-full px-3 py-2.5 flex items-center gap-3 hover:bg-gray-50 transition-colors text-left"
+                        className="w-full px-3 py-2.5 flex items-center gap-3 hover:bg-surface-sunken transition-colors text-left"
                         onClick={() => {
                           // Placeholder for adding widget
                           setShowWidgetMenu(false);
                         }}
                       >
-                        <widget.icon className="w-4 h-4 text-gray-600" />
-                        <span className="text-sm text-gray-700 font-medium">{widget.name}</span>
+                        <widget.icon className="w-4 h-4 text-text-secondary" />
+                        <span className="text-sm text-text-secondary font-medium">{widget.name}</span>
                       </button>
                     ))}
                   </div>
@@ -81,15 +85,26 @@ export function Dashboard() {
             </div>
           </div>
 
+          {/* Error Display */}
+          {tasksError && (
+            <div className="mb-8 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 text-red-500">⚠️</div>
+                <p className="text-sm text-red-700 font-medium">Failed to load dashboard data</p>
+              </div>
+              <p className="text-sm text-red-600 mt-1">{tasksError}</p>
+            </div>
+          )}
+
           {/* Today's Focus and Recently Completed */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            <TodaysFocus />
-            <RecentlyCompleted />
+            <TodaysFocus tasks={tasks} loading={tasksLoading} />
+            <RecentlyCompleted tasks={tasks.filter(task => task.status === 'done')} loading={tasksLoading} />
           </div>
 
           {/* Assigned to Me - Full Width */}
           <div className="mb-8">
-            <AssignedToMe />
+            <AssignedToMe tasks={tasks} loading={tasksLoading} />
           </div>
         </div>
       </main>

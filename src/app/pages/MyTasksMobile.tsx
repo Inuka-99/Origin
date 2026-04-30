@@ -87,9 +87,9 @@ export function MyTasksMobile() {
   const getStatusColor = (status: Task['status']) => {
     switch (status) {
       case 'To Do':
-        return 'text-gray-600 bg-gray-100';
+        return 'text-text-secondary bg-surface-hover';
       case 'In Progress':
-        return 'text-blue-600 bg-blue-50';
+        return 'text-blue-600 bg-accent-soft';
       case 'In Review':
         return 'text-purple-600 bg-purple-50';
       case 'Done':
@@ -111,7 +111,7 @@ export function MyTasksMobile() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F7F8FA]">
+    <div className="min-h-screen bg-canvas">
       <MobileTopBar />
 
       <main className="pt-14">
@@ -119,41 +119,41 @@ export function MyTasksMobile() {
           {/* Header */}
           <div className="flex items-start justify-between mb-4">
             <div>
-              <h1 className="text-2xl font-semibold mb-1" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
+              <h1 className="text-2xl font-semibold mb-1" style={{ fontFamily: 'Space Grotesk, sans-serif', color: 'var(--text-primary)' }}>
                 My Tasks
               </h1>
-              <p className="text-sm text-gray-600">Track all your tasks</p>
+              <p className="text-sm text-text-secondary">Track all your tasks</p>
             </div>
-            <button className="p-3 bg-[#204EA7] text-white rounded-lg hover:bg-[#1a3d8a] transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center">
+            <button className="p-3 bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center">
               <Plus className="w-5 h-5" />
             </button>
           </div>
 
           {/* Search Bar */}
           <div className="relative mb-4">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-tertiary" />
             <input
               type="text"
               placeholder="Search tasks..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-11 pr-4 py-3 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7] focus:border-transparent min-h-[44px]"
+              className="w-full pl-11 pr-4 py-3 bg-surface border border-border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent min-h-[44px]"
             />
           </div>
 
           {/* Stats Cards */}
           <div className="grid grid-cols-2 gap-3 mb-4">
-            <div className="bg-white rounded-lg p-4 shadow-sm">
-              <div className="text-2xl font-semibold mb-1" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
+            <div className="bg-surface rounded-lg p-4 shadow-sm">
+              <div className="text-2xl font-semibold mb-1" style={{ fontFamily: 'Space Grotesk, sans-serif', color: 'var(--text-primary)' }}>
                 {mockTasks.filter(t => t.status !== 'Done').length}
               </div>
-              <div className="text-xs text-gray-600">Active</div>
+              <div className="text-xs text-text-secondary">Active</div>
             </div>
-            <div className="bg-white rounded-lg p-4 shadow-sm">
-              <div className="text-2xl font-semibold mb-1" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
+            <div className="bg-surface rounded-lg p-4 shadow-sm">
+              <div className="text-2xl font-semibold mb-1" style={{ fontFamily: 'Space Grotesk, sans-serif', color: 'var(--text-primary)' }}>
                 {mockTasks.filter(t => t.dueDate === 'Today').length}
               </div>
-              <div className="text-xs text-gray-600">Due Today</div>
+              <div className="text-xs text-text-secondary">Due Today</div>
             </div>
           </div>
 
@@ -163,8 +163,8 @@ export function MyTasksMobile() {
               onClick={() => setActiveTab('all')}
               className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-colors flex-shrink-0 min-h-[44px] ${
                 activeTab === 'all'
-                  ? 'bg-[#204EA7] text-white'
-                  : 'bg-white text-gray-600 border border-gray-200'
+                  ? 'bg-accent text-white'
+                  : 'bg-surface text-text-secondary border border-border-subtle'
               }`}
             >
               All
@@ -173,8 +173,8 @@ export function MyTasksMobile() {
               onClick={() => setActiveTab('To Do')}
               className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-colors flex-shrink-0 min-h-[44px] ${
                 activeTab === 'To Do'
-                  ? 'bg-[#204EA7] text-white'
-                  : 'bg-white text-gray-600 border border-gray-200'
+                  ? 'bg-accent text-white'
+                  : 'bg-surface text-text-secondary border border-border-subtle'
               }`}
             >
               To Do
@@ -183,8 +183,8 @@ export function MyTasksMobile() {
               onClick={() => setActiveTab('In Progress')}
               className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-colors flex-shrink-0 min-h-[44px] ${
                 activeTab === 'In Progress'
-                  ? 'bg-[#204EA7] text-white'
-                  : 'bg-white text-gray-600 border border-gray-200'
+                  ? 'bg-accent text-white'
+                  : 'bg-surface text-text-secondary border border-border-subtle'
               }`}
             >
               In Progress
@@ -193,8 +193,8 @@ export function MyTasksMobile() {
               onClick={() => setActiveTab('Done')}
               className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-colors flex-shrink-0 min-h-[44px] ${
                 activeTab === 'Done'
-                  ? 'bg-[#204EA7] text-white'
-                  : 'bg-white text-gray-600 border border-gray-200'
+                  ? 'bg-accent text-white'
+                  : 'bg-surface text-text-secondary border border-border-subtle'
               }`}
             >
               Done
@@ -206,17 +206,17 @@ export function MyTasksMobile() {
             {filteredTasks.map((task) => (
               <div
                 key={task.id}
-                className="bg-white rounded-lg p-4 shadow-sm border border-gray-100 min-h-[100px]"
+                className="bg-surface rounded-lg p-4 shadow-sm border border-divider min-h-[100px]"
               >
                 {/* Task Header */}
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1 pr-2">
-                    <h3 className="font-semibold text-gray-900 mb-1 text-sm" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+                    <h3 className="font-semibold text-text-primary mb-1 text-sm" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
                       {task.name}
                     </h3>
-                    <p className="text-xs text-gray-600">{task.project}</p>
+                    <p className="text-xs text-text-secondary">{task.project}</p>
                   </div>
-                  <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                  <ChevronRight className="w-5 h-5 text-text-tertiary flex-shrink-0" />
                 </div>
 
                 {/* Task Details */}
@@ -231,7 +231,7 @@ export function MyTasksMobile() {
                 </div>
 
                 {/* Due Date */}
-                <div className="flex items-center gap-1.5 text-xs text-gray-600">
+                <div className="flex items-center gap-1.5 text-xs text-text-secondary">
                   <Calendar className="w-3.5 h-3.5" />
                   <span className={task.dueDate === 'Today' ? 'text-red-600 font-medium' : ''}>
                     Due {task.dueDate}
@@ -242,14 +242,14 @@ export function MyTasksMobile() {
           </div>
 
           {filteredTasks.length === 0 && (
-            <div className="bg-white rounded-lg p-12 text-center shadow-sm">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <CheckCircle2 className="w-8 h-8 text-gray-400" />
+            <div className="bg-surface rounded-lg p-12 text-center shadow-sm">
+              <div className="w-16 h-16 bg-surface-hover rounded-full flex items-center justify-center mx-auto mb-4">
+                <CheckCircle2 className="w-8 h-8 text-text-tertiary" />
               </div>
-              <h3 className="text-base font-semibold text-gray-900 mb-2" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+              <h3 className="text-base font-semibold text-text-primary mb-2" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
                 No tasks found
               </h3>
-              <p className="text-sm text-gray-600">Try adjusting your filters</p>
+              <p className="text-sm text-text-secondary">Try adjusting your filters</p>
             </div>
           )}
         </div>

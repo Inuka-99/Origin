@@ -1,10 +1,16 @@
-﻿import {
+import {
   Injectable,
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import { SupabaseService } from '../supabase';
+import {
+  type Paginated,
+  type PaginationParams,
+  parsePagination,
+} from '../common/pagination';
 
 export interface Task {
   id: string;
@@ -14,6 +20,7 @@ export interface Task {
   status: string;
   priority: string;
   due_date: string | null;
+  assigned_to: string | null; // User ID of the assigned team member
   assignee_id: string | null;
   created_by: string | null;
   created_at: string;
@@ -24,27 +31,40 @@ export interface CreateTaskDto {
   project_id?: string | null;
   title: string;
   description?: string;
-  status?: 'To Do' | 'In Progress' | 'In Review' | 'Done';
+  status?: 'todo' | 'in_progress' | 'In Review' | 'Done' | 'completed';
   priority?: 'High' | 'Medium' | 'Low';
   due_date?: string;
+  assigned_to?: string | null; // User ID to assign the task to on creation
   assignee_id?: string | null;
 }
 
 export interface UpdateTaskDto {
   title?: string;
   description?: string | null;
-  status?: 'To Do' | 'In Progress' | 'In Review' | 'Done';
+  status?: 'todo' | 'in_progress' | 'In Review' | 'Done' | 'completed';
   priority?: 'High' | 'Medium' | 'Low';
   due_date?: string | null;
+  assigned_to?: string | null; // User ID to assign (or null to unassign)
   assignee_id?: string | null;
 }
 
 @Injectable()
 export class TasksService {
+  private readonly logger = new Logger(TasksService.name);
+
   constructor(private readonly supabase: SupabaseService) {}
 
   private get client() {
     return this.supabase.getClient();
+  }
+
+  private async broadcastTaskEvent(event: string, payload: unknown): Promise<void> {
+    try {
+      const channel = this.client.channel('tasks');
+      await channel.httpSend(event, payload);
+    } catch (error) {
+      this.logger.warn(`Realtime broadcast failed for ${event}: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   async create(dto: CreateTaskDto, userId: string): Promise<Task> {
@@ -60,13 +80,14 @@ export class TasksService {
       const statusMap: Record<string, string> = {
         'to do': 'todo',
         'todo': 'todo',
+        'to_do': 'todo',
         'in progress': 'in_progress',
         'in_progress': 'in_progress',
         'in-progress': 'in_progress',
-        'in review': 'in_review',
-        'in_review': 'in_review',
-        'review': 'in_review',
-        'done': 'done',
+        'in review': 'In Review',
+        'in_review': 'In Review',
+        'review': 'In Review',
+        'done': 'Done',
       };
       const result = statusMap[normalized];
       if (!result) {
@@ -82,6 +103,7 @@ export class TasksService {
       status: convertStatus(dto.status ?? 'To Do'),
       priority: (dto.priority ?? 'Medium').toLowerCase(),
       due_date: dto.due_date ?? null,
+      assigned_to: dto.assigned_to ?? null,
       created_by: userId,
     };
 
@@ -111,20 +133,22 @@ export class TasksService {
       task.assignee_id = dto.assignee_id;
     }
 
+    await this.broadcastTaskEvent('task:created', task);
     return task;
   }
 
-  async listForUser(userId: string, userRole: string): Promise<Task[]> {
+  async listForUser(
+    userId: string,
+    userRole: string,
+    rawPage?: string | number,
+    rawLimit?: string | number,
+  ): Promise<Paginated<Task>> {
+    const pagination = parsePagination(rawPage, rawLimit);
     let tasks: Task[] = [];
+    let total = 0;
 
     if (userRole === 'admin') {
-      const { data, error } = await this.client
-        .from('tasks')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw new BadRequestException(error.message);
-      tasks = (data ?? []) as Task[];
+      ({ tasks, total } = await this.fetchTasks((q) => q, pagination));
     } else {
       const { data: memberships, error: mError } = await this.client
         .from('project_members')
@@ -135,20 +159,57 @@ export class TasksService {
 
       const projectIds = (memberships ?? []).map((m: any) => m.project_id);
 
-      let query = this.client.from('tasks').select('*').order('created_at', { ascending: false });
-
-      if (projectIds.length > 0) {
-        query = query.in('project_id', projectIds);
-      } else {
-        query = query.is('project_id', null);
-      }
-
-      const { data, error } = await query;
-      if (error) throw new BadRequestException(error.message);
-      tasks = (data ?? []) as Task[];
+      ({ tasks, total } = await this.fetchTasks((q) => {
+        if (projectIds.length > 0) {
+          return q.in('project_id', projectIds);
+        }
+        return q.is('project_id', null);
+      }, pagination));
     }
 
-    return this.attachTaskAssignees(tasks);
+    const data = await this.attachTaskAssignees(tasks);
+    return { data, total, page: pagination.page, limit: pagination.limit };
+  }
+
+  async listByProject(
+    projectId: string,
+    userId: string,
+    userRole: string,
+    rawPage?: string | number,
+    rawLimit?: string | number,
+  ): Promise<Paginated<Task>> {
+    if (userRole !== 'admin') {
+      await this.assertProjectMember(projectId, userId);
+    }
+
+    const pagination = parsePagination(rawPage, rawLimit);
+    const { tasks, total } = await this.fetchTasks(
+      (q) => q.eq('project_id', projectId),
+      pagination,
+    );
+    const data = await this.attachTaskAssignees(tasks);
+    return { data, total, page: pagination.page, limit: pagination.limit };
+  }
+
+  /**
+   * Shared helper that applies the standard ordering, range, and
+   * count-exact selection to a tasks query. The `apply` callback lets
+   * callers add their own filters (project_id, in clause, etc.)
+   * without duplicating the boilerplate.
+   */
+  private async fetchTasks(
+    apply: (q: ReturnType<typeof this.client.from> extends infer _ ? any : never) => any,
+    pagination: PaginationParams,
+  ): Promise<{ tasks: Task[]; total: number }> {
+    const base = this.client
+      .from('tasks')
+      .select('*', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(pagination.from, pagination.to);
+
+    const { data, error, count } = await apply(base);
+    if (error) throw new BadRequestException(error.message);
+    return { tasks: (data ?? []) as Task[], total: count ?? 0 };
   }
 
   private async attachTaskAssignees(tasks: Task[]): Promise<Task[]> {
@@ -231,14 +292,33 @@ export class TasksService {
     const task = existing as Task;
 
     if (userRole !== 'admin') {
-      if (task.project_id) {
-        await this.assertProjectAdmin(task.project_id, userId);
-      } else {
-        throw new ForbiddenException('Not authorized to modify a standalone task');
+      if (!task.project_id) {
+        throw new BadRequestException('Task must have an associated project');
       }
+      await this.assertProjectAdmin(task.project_id, userId);
     }
 
-    // Validate assignee is a project member if assigning to a project task
+    const updatePayload: any = { ...dto };
+    if (updatePayload.status) {
+      const normalized = updatePayload.status.trim().toLowerCase();
+      const statusMap: Record<string, string> = {
+        'to do': 'todo',
+        'todo': 'todo',
+        'to_do': 'todo',
+        'in progress': 'in_progress',
+        'in_progress': 'in_progress',
+        'in-progress': 'in_progress',
+        'in review': 'In Review',
+        'in_review': 'In Review',
+        'review': 'In Review',
+        'done': 'Done',
+      };
+      if (!statusMap[normalized]) {
+        throw new BadRequestException(`Invalid task status: ${updatePayload.status}`);
+      }
+      updatePayload.status = statusMap[normalized];
+    }
+
     if (dto.assignee_id !== undefined && task.project_id) {
       if (dto.assignee_id) {
         await this.assertProjectMember(task.project_id, dto.assignee_id);
@@ -246,26 +326,7 @@ export class TasksService {
     }
 
     const assignmentUserId = dto.assignee_id;
-    const updatePayload: any = { ...dto };
     delete updatePayload.assignee_id;
-    if (updatePayload.status) {
-      const normalized = updatePayload.status.trim().toLowerCase();
-      const statusMap: Record<string, string> = {
-        'to do': 'todo',
-        'todo': 'todo',
-        'in progress': 'in_progress',
-        'in_progress': 'in_progress',
-        'in-progress': 'in_progress',
-        'in review': 'in_review',
-        'in_review': 'in_review',
-        'review': 'in_review',
-        'done': 'done',
-      };
-      if (!statusMap[normalized]) {
-        throw new BadRequestException(`Invalid task status: ${updatePayload.status}`);
-      }
-      updatePayload.status = statusMap[normalized];
-    }
     if (updatePayload.priority) {
       updatePayload.priority = updatePayload.priority.toLowerCase();
     }
@@ -288,6 +349,7 @@ export class TasksService {
       updatedTask.assignee_id = assignmentUserId ?? null;
     }
 
+    await this.broadcastTaskEvent('task:updated', updatedTask);
     return updatedTask;
   }
 
@@ -322,11 +384,10 @@ export class TasksService {
     const task = existing as Task;
 
     if (userRole !== 'admin') {
-      if (task.project_id) {
-        await this.assertProjectAdmin(task.project_id, userId);
-      } else {
-        throw new ForbiddenException('Not authorized to delete this standalone task');
+      if (!task.project_id) {
+        throw new BadRequestException('Task must have an associated project');
       }
+      await this.assertProjectAdmin(task.project_id, userId);
     }
 
     const { error } = await this.client
@@ -337,6 +398,20 @@ export class TasksService {
     if (error) {
       throw new BadRequestException(error.message);
     }
+
+    await this.broadcastTaskEvent('task:deleted', { id });
+  }
+
+  /**
+   * Assign a task to a team member (or unassign by passing null)
+   */
+  async assignTask(
+    id: string,
+    assigneeId: string | null,
+    userId: string,
+    userRole: string,
+  ): Promise<Task> {
+    return this.update(id, { assigned_to: assigneeId }, userId, userRole);
   }
 
   private async assertProjectMember(projectId: string, userId: string): Promise<void> {
@@ -363,5 +438,4 @@ export class TasksService {
     if (!data || data.role !== 'admin') {
       throw new ForbiddenException('Only project admins can perform this action');
     }
-  }
-}
+  }}

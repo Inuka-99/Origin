@@ -1,4 +1,4 @@
-﻿import {
+import {
   Controller,
   Get,
   Post,
@@ -6,6 +6,7 @@
   Delete,
   Param,
   Body,
+  Query,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
@@ -17,6 +18,7 @@ import {
 } from '../auth';
 import { TasksService, type CreateTaskDto, type UpdateTaskDto } from './tasks.service';
 import { SupabaseService } from '../supabase';
+import { UserRoleCache } from '../users';
 
 @Controller('tasks')
 @UseGuards(JwtAuthGuard)
@@ -25,22 +27,51 @@ export class TasksController {
   constructor(
     private readonly tasksService: TasksService,
     private readonly supabase: SupabaseService,
+    private readonly roleCache: UserRoleCache,
   ) {}
 
+  /**
+   * Resolve the user's global role, hitting the cache first.
+   *
+   * Before this cache, every request to /tasks made an extra
+   * Supabase round-trip just to read the role. The cache cuts
+   * that out for the common case (role unchanged) while
+   * UsersService.updateRole() handles invalidation.
+   */
   private async getUserRole(userId: string): Promise<string> {
+    const cached = this.roleCache.get(userId);
+    if (cached) return cached;
+
     const { data } = await this.supabase
       .getClient()
       .from('profiles')
       .select('role')
       .eq('id', userId)
       .single();
-    return data?.role ?? 'member';
+    const role = data?.role ?? 'member';
+    this.roleCache.set(userId, role);
+    return role;
   }
 
   @Get()
-  async list(@CurrentUser() user: AuthenticatedUser) {
+  async list(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
     const role = await this.getUserRole(user.userId);
-    return this.tasksService.listForUser(user.userId, role);
+    return this.tasksService.listForUser(user.userId, role, page, limit);
+  }
+
+  @Get('project/:projectId')
+  async listByProject(
+    @Param('projectId') projectId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const role = await this.getUserRole(user.userId);
+    return this.tasksService.listByProject(projectId, user.userId, role, page, limit);
   }
 
   @Post()
@@ -78,5 +109,20 @@ export class TasksController {
     const role = await this.getUserRole(user.userId);
     await this.tasksService.delete(id, user.userId, role);
     return { deleted: true };
+  }
+
+  /**
+   * Assign a task to a team member
+   * PATCH /tasks/:id/assign
+   * Body: { userId: string | null }  — pass null to unassign
+   */
+  @Patch(':id/assign')
+  async assign(
+    @Param('id') id: string,
+    @Body('userId') assigneeId: string | null,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const role = await this.getUserRole(user.userId);
+    return this.tasksService.assignTask(id, assigneeId, user.userId, role);
   }
 }

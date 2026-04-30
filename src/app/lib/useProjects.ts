@@ -2,11 +2,24 @@
  * useProjects.ts
  *
  * React hook for managing projects via the backend API.
- * Provides CRUD operations with proper error handling and loading states.
+ * Provides CRUD operations with proper error handling and loading
+ * states.
+ *
+ * Scalability notes:
+ *   - The backend `/projects` endpoint now returns a paginated
+ *     envelope. We unwrap `data` so existing pages don't need to
+ *     change shape, and surface `total` for callers that want it.
+ *   - Polling cadence was reduced from 30s to 60s. Projects change
+ *     much less often than tasks, and frequent polling for a list
+ *     that rarely moves is just wasted bandwidth and DB load.
+ *   - In-flight requests are aborted on unmount / refetch to avoid
+ *     stale-state races.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useApiClient } from '../lib/api-client';
+
+const PROJECT_POLL_MS = 60_000;
 
 export interface Project {
   id: string;
@@ -41,8 +54,16 @@ export interface UpdateProjectData {
   description?: string;
 }
 
+interface PaginatedResponse<T> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
 export interface UseProjectsReturn {
   projects: Project[];
+  total: number;
   loading: boolean;
   error: string | null;
   createProject: (data: CreateProjectData) => Promise<Project>;
@@ -53,26 +74,56 @@ export interface UseProjectsReturn {
 
 export function useProjects(): UseProjectsReturn {
   const [projects, setProjects] = useState<Project[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const api = useApiClient();
+  const abortRef = useRef<AbortController | null>(null);
 
   const fetchProjects = useCallback(async () => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     try {
       setLoading(true);
       setError(null);
-      const data = await api.get<Project[]>('/projects');
-      setProjects(data);
+
+      const response = await api.get<PaginatedResponse<Project> | Project[]>(
+        '/projects',
+        { signal: controller.signal },
+      );
+
+      if (controller.signal.aborted) return;
+
+      // Tolerate both the new paginated envelope and the legacy
+      // array shape during rollout.
+      if (Array.isArray(response)) {
+        setProjects(response);
+        setTotal(response.length);
+      } else {
+        setProjects(response.data);
+        setTotal(response.total);
+      }
     } catch (err) {
+      if (
+        (err as Error)?.name === 'AbortError' ||
+        controller.signal.aborted
+      ) {
+        return;
+      }
       setError(err instanceof Error ? err.message : 'Failed to fetch projects');
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) {
+        setLoading(false);
+      }
     }
   }, [api]);
 
   const createProject = useCallback(async (data: CreateProjectData): Promise<Project> => {
     const newProject = await api.post<Project>('/projects', data);
     setProjects(prev => [newProject, ...prev]);
+    setTotal(prev => prev + 1);
     return newProject;
   }, [api]);
 
@@ -85,14 +136,25 @@ export function useProjects(): UseProjectsReturn {
   const deleteProject = useCallback(async (id: string): Promise<void> => {
     await api.delete(`/projects/${id}`);
     setProjects(prev => prev.filter(p => p.id !== id));
+    setTotal(prev => Math.max(0, prev - 1));
   }, [api]);
 
   useEffect(() => {
-    fetchProjects();
+    void fetchProjects();
+
+    // Light background refresh — projects change rarely so we don't
+    // need the aggressive 30s cadence the original hook used.
+    const interval = setInterval(() => void fetchProjects(), PROJECT_POLL_MS);
+
+    return () => {
+      clearInterval(interval);
+      abortRef.current?.abort();
+    };
   }, [fetchProjects]);
 
   return {
     projects,
+    total,
     loading,
     error,
     createProject,
@@ -116,17 +178,34 @@ export function useProjectMembers(projectId: string): UseProjectMembersReturn {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const api = useApiClient();
+  const abortRef = useRef<AbortController | null>(null);
 
   const fetchMembers = useCallback(async () => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     try {
       setLoading(true);
       setError(null);
-      const data = await api.get<ProjectMember[]>(`/projects/${projectId}/members`);
+      const data = await api.get<ProjectMember[]>(
+        `/projects/${projectId}/members`,
+        { signal: controller.signal },
+      );
+      if (controller.signal.aborted) return;
       setMembers(data);
     } catch (err) {
+      if (
+        (err as Error)?.name === 'AbortError' ||
+        controller.signal.aborted
+      ) {
+        return;
+      }
       setError(err instanceof Error ? err.message : 'Failed to fetch members');
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) {
+        setLoading(false);
+      }
     }
   }, [api, projectId]);
 
@@ -143,8 +222,11 @@ export function useProjectMembers(projectId: string): UseProjectMembersReturn {
 
   useEffect(() => {
     if (projectId) {
-      fetchMembers();
+      void fetchMembers();
     }
+    return () => {
+      abortRef.current?.abort();
+    };
   }, [fetchMembers, projectId]);
 
   return {

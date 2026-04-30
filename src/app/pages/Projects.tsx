@@ -1,9 +1,25 @@
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router';
+import {
+  Calendar,
+  ChevronDown,
+  Filter,
+  Grid3x3,
+  List,
+  Plus,
+  Search,
+  Users,
+  MoreVertical,
+  CheckSquare,
+  Loader2,
+  Trash2,
+} from 'lucide-react';
+import { toast } from 'sonner';
 import { Sidebar } from '../components/Sidebar';
 import { TopBar } from '../components/TopBar';
-import { Search, Filter, ChevronDown, Plus, Grid3x3, List, Users, Calendar, MoreVertical, CheckSquare, Loader2, Trash2 } from 'lucide-react';
-import { useState, useEffect } from 'react';
 import { useProjects, useProjectMembers, type Project as ApiProject, type ProjectMember } from '../lib/useProjects';
 import { useAuthUser } from '../auth/useAuthUser';
+import { useApiClient } from '../lib/api-client';
 
 interface Project extends ApiProject {
   progress: number;
@@ -16,7 +32,14 @@ interface Project extends ApiProject {
 }
 
 
+const formControlClassName =
+  'flex h-10 w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm shadow-sm outline-none transition-[border-color,box-shadow] hover:border-border-strong hover:shadow-md focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50';
+
+const textAreaClassName =
+  'min-h-24 rounded-md border border-border-strong bg-surface shadow-sm transition-[border-color,box-shadow] hover:border-border-strong hover:shadow-md focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50';
+
 export function Projects() {
+  const navigate = useNavigate();
   const { projects: apiProjects, loading, error, createProject, updateProject, deleteProject, refetch } = useProjects();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
@@ -34,6 +57,9 @@ export function Projects() {
   const [dropdownOpen, setDropdownOpen] = useState<string | null>(null);
   const { members, loading: membersLoading, addMember, removeMember } = useProjectMembers(selectedProject?.id || '');
   const { user } = useAuthUser();
+  const api = useApiClient();
+  const [projectTasks, setProjectTasks] = useState<Record<string, any[]>>({});
+  const [tasksLoading, setTasksLoading] = useState(false);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -46,16 +72,60 @@ export function Projects() {
     }
   }, [dropdownOpen]);
 
-  // Convert API projects to display format with placeholder stats
-  const projects: Project[] = apiProjects.map(apiProject => ({
-    ...apiProject,
-    progress: 0, // TODO: Calculate from tasks
-    tasksTotal: 0, // TODO: Fetch from tasks API
-    tasksCompleted: 0, // TODO: Fetch from tasks API
-    status: 'Active' as const, // TODO: Determine from project state
-    team: [], // TODO: Get from members
-    lastUpdated: new Date(apiProject.updated_at).toLocaleDateString(),
-  }));
+  // Fetch tasks for all projects
+  useEffect(() => {
+    const fetchProjectTasks = async () => {
+      if (apiProjects.length === 0) return;
+
+      setTasksLoading(true);
+      try {
+        const tasksMap: Record<string, any[]> = {};
+
+        // Fetch tasks for each project in parallel
+        const taskPromises = apiProjects.map(async (project) => {
+          try {
+            const tasks = await api.get(`/tasks/project/${project.id}`);
+            return { projectId: project.id, tasks };
+          } catch (err) {
+            console.error(`Failed to fetch tasks for project ${project.id}:`, err);
+            return { projectId: project.id, tasks: [] };
+          }
+        });
+
+        const results = await Promise.all(taskPromises);
+
+        results.forEach(({ projectId, tasks }) => {
+          tasksMap[projectId] = tasks;
+        });
+
+        setProjectTasks(tasksMap);
+      } catch (err) {
+        console.error('Failed to fetch project tasks:', err);
+      } finally {
+        setTasksLoading(false);
+      }
+    };
+
+    fetchProjectTasks();
+  }, [apiProjects, api]);
+
+  // Convert API projects to display format with calculated stats
+  const projects: Project[] = apiProjects.map(apiProject => {
+    const tasks = projectTasks[apiProject.id] || [];
+    const tasksTotal = tasks.length;
+    const tasksCompleted = tasks.filter(task => task.status === 'Done').length;
+    const progress = tasksTotal > 0 ? Math.round((tasksCompleted / tasksTotal) * 100) : 0;
+
+    return {
+      ...apiProject,
+      progress,
+      tasksTotal,
+      tasksCompleted,
+      status: 'Active' as const, // TODO: Determine from project state
+      team: [], // TODO: Get from members
+      lastUpdated: new Date(apiProject.updated_at).toLocaleDateString(),
+    };
+  });
 
   const filteredProjects = projects.filter(project =>
     project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -99,6 +169,13 @@ export function Projects() {
       await removeMember(memberId);
       await refetch();
 
+      // Refresh tasks after member removal
+      const updatedTasks = await api.get(`/tasks/project/${selectedProject.id}`);
+      setProjectTasks(prev => ({
+        ...prev,
+        [selectedProject.id]: updatedTasks
+      }));
+
       const removedSelf = memberId === user?.sub;
       const wasLastMember = memberRemovalConfirmation?.isLastMember;
       if (removedSelf || wasLastMember) {
@@ -137,83 +214,78 @@ export function Projects() {
       case 'Completed':
         return 'bg-blue-100 text-blue-700';
       case 'On Hold':
-        return 'bg-gray-100 text-gray-700';
+        return 'bg-surface-hover text-text-secondary';
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#F7F8FA]">
+    <div className="min-h-screen bg-canvas">
       <Sidebar />
       <TopBar />
 
-      {/* Main Content */}
-      <main className="ml-56 pt-16 p-8">
-        {/* Header */}
-        <div className="flex items-start justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-semibold mb-2" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
+      <main className="px-8 pt-20 pb-8 transition-[margin] duration-200 ease-out" style={{ marginLeft: 'var(--sidebar-width)' }}>
+        <div className="mb-10 flex items-center justify-between gap-6">
+          <div className="pt-1">
+            <h1 className="mb-3 text-3xl font-semibold" style={{ fontFamily: 'Space Grotesk, sans-serif', color: 'var(--text-primary)' }}>
               Projects
             </h1>
-            <p className="text-gray-600">Manage and track all active projects</p>
+            <p className="text-text-secondary">Manage and track all active projects</p>
           </div>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-[#204EA7] text-white rounded-lg hover:bg-[#1a3d8a] transition-colors font-medium"
+            className="flex items-center gap-2 px-4 py-2.5 bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors font-medium"
           >
             <Plus className="w-5 h-5" />
             Create Project
           </button>
         </div>
 
-        {/* Controls Bar */}
-        <div className="bg-white rounded-lg p-4 mb-6 flex items-center gap-4 shadow-sm">
-          {/* Search */}
+        <div className="bg-surface rounded-lg p-4 mb-6 flex items-center gap-4 shadow-sm">
           <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-tertiary" />
             <input
               type="text"
               placeholder="Search projects..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7] focus:border-transparent"
+              onChange={(event) => setSearchQuery(event.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 bg-surface-sunken border border-border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
             />
           </div>
 
-          {/* Filter */}
-          <button className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium">
+          <button type="button" className="flex items-center gap-2 px-4 py-2.5 bg-surface-sunken border border-border-subtle rounded-lg text-sm font-medium text-text-tertiary cursor-not-allowed">
             <Filter className="w-4 h-4" />
             Filter
             <ChevronDown className="w-4 h-4" />
           </button>
 
-          {/* Sort */}
-          <button className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium">
+          <button type="button" className="flex items-center gap-2 px-4 py-2.5 bg-surface-sunken border border-border-subtle rounded-lg text-sm font-medium text-text-tertiary cursor-not-allowed">
             Sort
             <ChevronDown className="w-4 h-4" />
           </button>
 
-          {/* View Toggle */}
-          <div className="flex items-center gap-1 bg-gray-50 rounded-lg p-1">
+          <div className="flex items-center gap-1 bg-surface-sunken rounded-lg p-1">
             <button
+              type="button"
               onClick={() => setViewMode('grid')}
-              className={`p-2 rounded ${viewMode === 'grid' ? 'bg-white shadow-sm' : 'hover:bg-gray-100'}`}
+              className={`p-2 rounded ${viewMode === 'grid' ? 'bg-surface shadow-sm' : 'hover:bg-surface-hover'}`}
             >
-              <Grid3x3 className="w-4 h-4 text-gray-700" />
+              <Grid3x3 className="w-4 h-4 text-text-secondary" />
             </button>
             <button
+              type="button"
               onClick={() => setViewMode('list')}
-              className={`p-2 rounded ${viewMode === 'list' ? 'bg-white shadow-sm' : 'hover:bg-gray-100'}`}
+              className={`p-2 rounded ${viewMode === 'list' ? 'bg-surface shadow-sm' : 'hover:bg-surface-hover'}`}
             >
-              <List className="w-4 h-4 text-gray-700" />
+              <List className="w-4 h-4 text-text-secondary" />
             </button>
           </div>
         </div>
 
         {/* Projects Grid/List */}
         {loading ? (
-          <div className="bg-white rounded-lg p-12 text-center shadow-sm">
-            <Loader2 className="w-8 h-8 animate-spin text-[#204EA7] mx-auto mb-4" />
-            <p className="text-gray-600">Loading projects...</p>
+          <div className="bg-surface rounded-lg p-12 text-center shadow-sm">
+            <Loader2 className="w-8 h-8 animate-spin text-accent mx-auto mb-4" />
+            <p className="text-text-secondary">Loading projects...</p>
           </div>
         ) : error ? (
           <div className="bg-red-50 rounded-lg p-6 text-center shadow-sm">
@@ -226,15 +298,19 @@ export function Projects() {
             </button>
           </div>
         ) : filteredProjects.length === 0 ? (
-          <div className="bg-white rounded-lg p-12 text-center shadow-sm">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Grid3x3 className="w-8 h-8 text-gray-400" />
+          <div className="bg-surface rounded-lg p-12 text-center shadow-sm">
+            <div className="w-16 h-16 bg-surface-hover rounded-full flex items-center justify-center mx-auto mb-4">
+              <Grid3x3 className="w-8 h-8 text-text-tertiary" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+            <h3 className="text-lg font-semibold text-text-primary mb-2" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
               No projects found
             </h3>
-            <p className="text-gray-600 mb-6">Create your first project to start tracking work</p>
-            <button className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#204EA7] text-white rounded-lg hover:bg-[#1a3d8a] transition-colors font-medium">
+            <p className="text-text-secondary mb-6">Create your first project to start tracking work</p>
+            <button
+              type="button"
+              onClick={() => setShowCreateModal(true)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors font-medium"
+            >
               <Plus className="w-5 h-5" />
               Create Project
             </button>
@@ -242,18 +318,17 @@ export function Projects() {
         ) : viewMode === 'grid' ? (
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
             {filteredProjects.map((project) => (
-              <div
+              <button
                 key={project.id}
                 onClick={() => {
                   setSelectedProject(project);
                   setShowMembersModal(true);
                 }}
-                className="bg-white rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow cursor-pointer border border-transparent hover:border-[#204EA7]/20"
+                className="bg-surface rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow cursor-pointer border border-transparent hover:border-accent/20"
               >
-                {/* Header */}
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold mb-1" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
+                <div className="flex items-start justify-between gap-3 mb-4">
+                  <div>
+                    <h3 className="text-lg font-semibold mb-1 text-text-primary" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
                       {project.name}
                     </h3>
                     <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(project.status)}`}>
@@ -266,12 +341,12 @@ export function Projects() {
                         e.stopPropagation();
                         setDropdownOpen(dropdownOpen === project.id ? null : project.id);
                       }}
-                      className="p-1 hover:bg-gray-100 rounded"
+                      className="p-1 hover:bg-surface-hover rounded"
                     >
-                      <MoreVertical className="w-5 h-5 text-gray-400" />
+                      <MoreVertical className="w-5 h-5 text-text-tertiary" />
                     </button>
                     {dropdownOpen === project.id && (
-                      <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
+                      <div className="absolute right-0 mt-1 w-48 bg-surface rounded-lg shadow-lg border border-border-subtle z-10">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -279,7 +354,7 @@ export function Projects() {
                             setShowMembersModal(true);
                             setDropdownOpen(null);
                           }}
-                          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-t-lg flex items-center gap-2"
+                          className="w-full text-left px-4 py-2 text-sm text-text-secondary hover:bg-surface-sunken rounded-t-lg flex items-center gap-2"
                         >
                           <Users className="w-4 h-4" />
                           Manage Members
@@ -304,77 +379,66 @@ export function Projects() {
                 </div>
 
                 {/* Description */}
-                <p className="text-sm text-gray-600 mb-4 line-clamp-2">{project.description}</p>
+                <p className="text-sm text-text-secondary mb-4 line-clamp-2">{project.description}</p>
 
                 {/* Progress */}
                 <div className="mb-4">
                   <div className="flex items-center justify-between text-sm mb-2">
-                    <span className="text-gray-600">Progress</span>
-                    <span className="font-semibold text-gray-900">{project.progress}%</span>
+                    <span className="text-text-secondary">Progress</span>
+                    <span className="font-semibold text-text-primary">{project.progress}%</span>
                   </div>
-                  <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div className="w-full h-2 bg-surface-hover rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-[#204EA7] transition-all duration-300"
+                      className="h-full bg-accent transition-all duration-300"
                       style={{ width: `${project.progress}%` }}
                     ></div>
                   </div>
+                  <span
+                    className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${getProjectPriorityBadgeClasses(project.priority)}`}
+                  >
+                    {project.priority}
+                  </span>
                 </div>
 
-                {/* Stats */}
-                <div className="flex items-center gap-4 mb-4 text-sm text-gray-600">
-                  <div className="flex items-center gap-1.5">
-                    <CheckSquare className="w-4 h-4" />
-                    <span>{project.tasksCompleted}/{project.tasksTotal} tasks</span>
-                  </div>
-                </div>
+                <p className="text-sm text-text-secondary mb-4 min-h-10">
+                  {project.description || 'No description has been added yet.'}
+                </p>
 
-                {/* Footer */}
-                <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-                  <div className="flex items-center -space-x-2">
-                    {project.team.map((member, idx) => (
-                      <div
-                        key={idx}
-                        className="w-8 h-8 rounded-full bg-[#204EA7] flex items-center justify-center text-white text-xs font-semibold border-2 border-white"
-                      >
-                        {member}
-                      </div>
-                    ))}
-                    {project.team.length > 4 && (
-                      <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 text-xs font-semibold border-2 border-white">
-                        +{project.team.length - 4}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                <div className="flex items-center justify-between pt-4 border-t border-divider text-xs text-text-tertiary">
+                  <span className="flex items-center gap-1.5">
                     <Calendar className="w-3.5 h-3.5" />
-                    {project.lastUpdated}
-                  </div>
+                    Updated {formatCreated(project.updated_at)}
+                  </span>
+                  <span>Created {formatCreated(project.created_at)}</span>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         ) : (
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+          <div className="bg-surface rounded-lg shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200">
+                <thead className="bg-surface-sunken border-b border-border-subtle">
                   <tr>
-                    <th className="text-left px-6 py-3 text-sm font-semibold text-gray-900">Project</th>
-                    <th className="text-left px-6 py-3 text-sm font-semibold text-gray-900">Status</th>
-                    <th className="text-left px-6 py-3 text-sm font-semibold text-gray-900">Progress</th>
-                    <th className="text-left px-6 py-3 text-sm font-semibold text-gray-900">Tasks</th>
-                    <th className="text-left px-6 py-3 text-sm font-semibold text-gray-900">Team</th>
-                    <th className="text-left px-6 py-3 text-sm font-semibold text-gray-900">Last Updated</th>
-                    <th className="text-left px-6 py-3 text-sm font-semibold text-gray-900"></th>
+                    <th className="text-left px-6 py-3 text-sm font-semibold text-text-primary">Project</th>
+                    <th className="text-left px-6 py-3 text-sm font-semibold text-text-primary">Description</th>
+                    <th className="text-left px-6 py-3 text-sm font-semibold text-text-primary">Created By</th>
+                    <th className="text-left px-6 py-3 text-sm font-semibold text-text-primary">Priority</th>
+                    <th className="text-left px-6 py-3 text-sm font-semibold text-text-primary">Created</th>
+                    <th className="text-left px-6 py-3 text-sm font-semibold text-text-primary">Updated</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {filteredProjects.map((project) => (
-                    <tr key={project.id} className="hover:bg-gray-50 cursor-pointer">
+                    <tr
+                      key={project.id}
+                      onClick={() => navigate(`/projects/${project.id}`)}
+                      className="hover:bg-surface-sunken cursor-pointer"
+                    >
                       <td className="px-6 py-4">
                         <div>
-                          <div className="font-semibold text-gray-900">{project.name}</div>
-                          <div className="text-sm text-gray-600 truncate max-w-xs">{project.description}</div>
+                          <div className="font-semibold text-text-primary">{project.name}</div>
+                          <div className="text-sm text-text-secondary truncate max-w-xs">{project.description}</div>
                         </div>
                       </td>
                       <td className="px-6 py-4">
@@ -384,16 +448,16 @@ export function Projects() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-24 h-2 bg-gray-100 rounded-full overflow-hidden">
+                          <div className="w-24 h-2 bg-surface-hover rounded-full overflow-hidden">
                             <div
-                              className="h-full bg-[#204EA7]"
+                              className="h-full bg-accent"
                               style={{ width: `${project.progress}%` }}
                             ></div>
                           </div>
-                          <span className="text-sm font-medium text-gray-900">{project.progress}%</span>
+                          <span className="text-sm font-medium text-text-primary">{project.progress}%</span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
+                      <td className="px-6 py-4 text-sm text-text-secondary">
                         {project.tasksCompleted}/{project.tasksTotal}
                       </td>
                       <td className="px-6 py-4">
@@ -401,19 +465,19 @@ export function Projects() {
                           {project.team.slice(0, 3).map((member, idx) => (
                             <div
                               key={idx}
-                              className="w-8 h-8 rounded-full bg-[#204EA7] flex items-center justify-center text-white text-xs font-semibold border-2 border-white"
+                              className="w-8 h-8 rounded-full bg-accent flex items-center justify-center text-white text-xs font-semibold border-2 border-surface"
                             >
                               {member}
                             </div>
                           ))}
                           {project.team.length > 3 && (
-                            <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 text-xs font-semibold border-2 border-white">
+                            <div className="w-8 h-8 rounded-full bg-surface-hover flex items-center justify-center text-text-secondary text-xs font-semibold border-2 border-surface">
                               +{project.team.length - 3}
                             </div>
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">{project.lastUpdated}</td>
+                      <td className="px-6 py-4 text-sm text-text-secondary">{project.lastUpdated}</td>
                       <td className="px-6 py-4">
                         <div className="relative">
                           <button 
@@ -421,12 +485,12 @@ export function Projects() {
                               e.stopPropagation();
                               setDropdownOpen(dropdownOpen === project.id ? null : project.id);
                             }}
-                            className="p-1 hover:bg-gray-100 rounded"
+                            className="p-1 hover:bg-surface-hover rounded"
                           >
-                            <MoreVertical className="w-5 h-5 text-gray-400" />
+                            <MoreVertical className="w-5 h-5 text-text-tertiary" />
                           </button>
                           {dropdownOpen === project.id && (
-                            <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
+                            <div className="absolute right-0 mt-1 w-48 bg-surface rounded-lg shadow-lg border border-border-subtle z-10">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -434,7 +498,7 @@ export function Projects() {
                                   setShowMembersModal(true);
                                   setDropdownOpen(null);
                                 }}
-                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-t-lg flex items-center gap-2"
+                                className="w-full text-left px-4 py-2 text-sm text-text-secondary hover:bg-surface-sunken rounded-t-lg flex items-center gap-2"
                               >
                                 <Users className="w-4 h-4" />
                                 Manage Members
@@ -457,6 +521,17 @@ export function Projects() {
                           )}
                         </div>
                       </td>
+                      <td className="px-6 py-4 text-sm text-text-secondary max-w-sm truncate">{project.description || 'No description'}</td>
+                      <td className="px-6 py-4 text-sm text-text-secondary">{project.created_by || 'Unknown'}</td>
+                      <td className="px-6 py-4">
+                        <span
+                          className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${getProjectPriorityBadgeClasses(project.priority)}`}
+                        >
+                          {project.priority}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-text-secondary">{formatCreated(project.created_at)}</td>
+                      <td className="px-6 py-4 text-sm text-text-secondary">{formatCreated(project.updated_at)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -469,7 +544,7 @@ export function Projects() {
       {/* Create Project Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+          <div className="bg-surface rounded-lg p-6 w-full max-w-md mx-4">
             <h2 className="text-xl font-semibold mb-4" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
               Create New Project
             </h2>
@@ -485,7 +560,7 @@ export function Projects() {
               }}
             >
               <div className="mb-4">
-                <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="name" className="block text-sm font-medium text-text-secondary mb-1">
                   Project Name *
                 </label>
                 <input
@@ -493,19 +568,19 @@ export function Projects() {
                   id="name"
                   name="name"
                   required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#204EA7] focus:border-transparent"
+                  className="w-full px-3 py-2 border border-border-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
                   placeholder="Enter project name"
                 />
               </div>
               <div className="mb-6">
-                <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="description" className="block text-sm font-medium text-text-secondary mb-1">
                   Description
                 </label>
                 <textarea
                   id="description"
                   name="description"
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#204EA7] focus:border-transparent"
+                  className="w-full px-3 py-2 border border-border-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
                   placeholder="Enter project description (optional)"
                 />
               </div>
@@ -513,14 +588,14 @@ export function Projects() {
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  className="flex-1 px-4 py-2 border border-border-strong text-text-secondary rounded-lg hover:bg-surface-sunken transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={creating}
-                  className="flex-1 px-4 py-2 bg-[#204EA7] text-white rounded-lg hover:bg-[#1a3d8a] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="flex-1 px-4 py-2 bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {creating && <Loader2 className="w-4 h-4 animate-spin" />}
                   Create Project
@@ -534,17 +609,17 @@ export function Projects() {
       {/* Project Members Modal */}
       {showMembersModal && selectedProject && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-2xl mx-4 max-h-[80vh] overflow-y-auto">
+          <div className="bg-surface rounded-lg p-6 w-full max-w-2xl mx-4 max-h-[80vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h2 className="text-xl font-semibold" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
                   {selectedProject.name}
                 </h2>
-                <p className="text-gray-600 text-sm mt-1">{selectedProject.description}</p>
+                <p className="text-text-secondary text-sm mt-1">{selectedProject.description}</p>
               </div>
               <button
                 onClick={() => setShowMembersModal(false)}
-                className="p-2 hover:bg-gray-100 rounded-lg"
+                className="p-2 hover:bg-surface-hover rounded-lg"
               >
                 ✕
               </button>
@@ -554,7 +629,7 @@ export function Projects() {
               <h3 className="text-lg font-semibold mb-4">Project Members</h3>
               
               {/* Add Member Form */}
-              <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+              <div className="mb-4 p-4 bg-surface-sunken rounded-lg">
                 <h4 className="text-sm font-medium mb-2">Add Member</h4>
                 <form
                   onSubmit={(e) => {
@@ -573,19 +648,19 @@ export function Projects() {
                     type="text"
                     name="userId"
                     placeholder="User ID (Auth0 ID)"
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7] focus:border-transparent"
+                    className="flex-1 px-3 py-2 border border-border-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
                     required
                   />
                   <select
                     name="role"
-                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7] focus:border-transparent"
+                    className="px-3 py-2 border border-border-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
                   >
                     <option value="member">Member</option>
                     <option value="admin">Admin</option>
                   </select>
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-[#204EA7] text-white rounded-lg hover:bg-[#1a3d8a] transition-colors text-sm font-medium"
+                    className="px-4 py-2 bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors text-sm font-medium"
                   >
                     Add
                   </button>
@@ -594,24 +669,24 @@ export function Projects() {
 
               {membersLoading ? (
                 <div className="flex items-center justify-center py-8">
-                  <Loader2 className="w-6 h-6 animate-spin text-[#204EA7]" />
+                  <Loader2 className="w-6 h-6 animate-spin text-accent" />
                 </div>
               ) : (
                 <div className="space-y-3">
                   {members.map((member) => (
-                    <div key={member.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div key={member.id} className="flex items-center justify-between p-3 bg-surface-sunken rounded-lg">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-[#204EA7] flex items-center justify-center text-white font-semibold">
+                        <div className="w-10 h-10 rounded-full bg-accent flex items-center justify-center text-white font-semibold">
                           {member.profiles?.full_name?.charAt(0) || member.user_id.charAt(0)}
                         </div>
                         <div>
                           <p className="font-medium">{member.profiles?.full_name || 'Unknown User'}</p>
-                          <p className="text-sm text-gray-600">{member.profiles?.email || member.user_id}</p>
+                          <p className="text-sm text-text-secondary">{member.profiles?.email || member.user_id}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          member.role === 'admin' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'
+                          member.role === 'admin' ? 'bg-blue-100 text-blue-700' : 'bg-surface-hover text-text-secondary'
                         }`}>
                           {member.role}
                         </span>
@@ -625,7 +700,7 @@ export function Projects() {
                     </div>
                   ))}
                   {members.length === 0 && (
-                    <p className="text-gray-500 text-center py-8">No members yet</p>
+                    <p className="text-text-tertiary text-center py-8">No members yet</p>
                   )}
                 </div>
               )}
@@ -634,7 +709,7 @@ export function Projects() {
             <div className="flex gap-3">
               <button
                 onClick={() => setShowMembersModal(false)}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                className="flex-1 px-4 py-2 border border-border-strong text-text-secondary rounded-lg hover:bg-surface-sunken transition-colors"
               >
                 Close
               </button>
@@ -645,26 +720,26 @@ export function Projects() {
 
       {memberRemovalConfirmation && selectedProject && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+          <div className="bg-surface rounded-lg p-6 w-full max-w-md mx-4">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center">
                 <span className="text-yellow-700 font-bold">!</span>
               </div>
               <div>
-                <h2 className="text-xl font-semibold text-gray-900" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+                <h2 className="text-xl font-semibold text-text-primary" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
                   Confirm Project Deletion
                 </h2>
-                <p className="text-gray-600 text-sm">
+                <p className="text-text-secondary text-sm">
                   Removing the last member will delete the project <span className="font-semibold">"{selectedProject.name}"</span> permanently.
                 </p>
               </div>
             </div>
 
-            <div className="mb-6 text-gray-700">
+            <div className="mb-6 text-text-secondary">
               <p>
                 Are you sure you want to remove <span className="font-semibold">{memberRemovalConfirmation.userName}</span> from this project?
               </p>
-              <p className="mt-2 text-sm text-gray-500">
+              <p className="mt-2 text-sm text-text-tertiary">
                 This action cannot be undone and the project will be deleted if there are no remaining members.
               </p>
             </div>
@@ -672,7 +747,7 @@ export function Projects() {
             <div className="flex gap-3">
               <button
                 onClick={cancelMemberRemoval}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                className="flex-1 px-4 py-2 border border-border-strong text-text-secondary rounded-lg hover:bg-surface-sunken transition-colors"
               >
                 Cancel
               </button>
@@ -690,24 +765,24 @@ export function Projects() {
       {/* Delete Project Confirmation Modal */}
       {showDeleteModal && selectedProject && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+          <div className="bg-surface rounded-lg p-6 w-full max-w-md mx-4">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
                 <Trash2 className="w-5 h-5 text-red-600" />
               </div>
               <div>
-                <h2 className="text-xl font-semibold text-gray-900" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+                <h2 className="text-xl font-semibold text-text-primary" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
                   Delete Project
                 </h2>
-                <p className="text-gray-600 text-sm">This action cannot be undone</p>
+                <p className="text-text-secondary text-sm">This action cannot be undone</p>
               </div>
             </div>
             
             <div className="mb-6">
-              <p className="text-gray-700 mb-2">
+              <p className="text-text-secondary mb-2">
                 Are you sure you want to delete <span className="font-semibold">"{selectedProject.name}"</span>?
               </p>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-text-secondary">
                 This will permanently delete the project and all associated tasks, members, and data. This action cannot be undone.
               </p>
             </div>
@@ -715,7 +790,7 @@ export function Projects() {
             <div className="flex gap-3">
               <button
                 onClick={() => setShowDeleteModal(false)}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                className="flex-1 px-4 py-2 border border-border-strong text-text-secondary rounded-lg hover:bg-surface-sunken transition-colors"
                 disabled={deleting}
               >
                 Cancel
