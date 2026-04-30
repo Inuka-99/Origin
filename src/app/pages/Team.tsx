@@ -107,21 +107,21 @@ export function Team() {
   );
 
   return (
-    <div className="min-h-screen bg-[#F7F8FA]">
+    <div className="min-h-screen bg-canvas">
       <Sidebar />
       <TopBar />
 
       {/* Main Content */}
-      <main className="ml-56 pt-16 p-8">
+      <main className="pt-16 p-8 transition-[margin] duration-200 ease-out" style={{ marginLeft: 'var(--sidebar-width)' }}>
         {/* Header */}
         <div className="flex items-start justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-semibold mb-2" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
+            <h1 className="text-3xl font-semibold mb-2" style={{ fontFamily: 'Space Grotesk, sans-serif', color: 'var(--text-primary)' }}>
               Team
             </h1>
-            <p className="text-gray-600">Manage team members and their roles</p>
+            <p className="text-text-secondary">Manage team members and their roles</p>
           </div>
-          <button className="flex items-center gap-2 px-4 py-2.5 bg-[#204EA7] text-white rounded-lg hover:bg-[#1a3d8a] transition-colors font-medium">
+          <button className="flex items-center gap-2 px-4 py-2.5 bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors font-medium">
             <Plus className="w-5 h-5" />
             Invite Member
           </button>
@@ -129,42 +129,42 @@ export function Team() {
 
         {/* Stats */}
         <div className="grid grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-lg p-4 shadow-sm">
-            <div className="text-2xl font-semibold mb-1" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
+          <div className="bg-surface rounded-lg p-4 shadow-sm">
+            <div className="text-2xl font-semibold mb-1" style={{ fontFamily: 'Space Grotesk, sans-serif', color: 'var(--text-primary)' }}>
               {mockTeamMembers.length}
             </div>
-            <div className="text-sm text-gray-600">Total Members</div>
+            <div className="text-sm text-text-secondary">Total Members</div>
           </div>
-          <div className="bg-white rounded-lg p-4 shadow-sm">
-            <div className="text-2xl font-semibold mb-1" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
+          <div className="bg-surface rounded-lg p-4 shadow-sm">
+            <div className="text-2xl font-semibold mb-1" style={{ fontFamily: 'Space Grotesk, sans-serif', color: 'var(--text-primary)' }}>
               {mockTeamMembers.filter(m => m.status === 'Active').length}
             </div>
-            <div className="text-sm text-gray-600">Active</div>
+            <div className="text-sm text-text-secondary">Active</div>
           </div>
-          <div className="bg-white rounded-lg p-4 shadow-sm">
-            <div className="text-2xl font-semibold mb-1" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
+          <div className="bg-surface rounded-lg p-4 shadow-sm">
+            <div className="text-2xl font-semibold mb-1" style={{ fontFamily: 'Space Grotesk, sans-serif', color: 'var(--text-primary)' }}>
               {mockTeamMembers.filter(m => m.role === 'Admin').length}
             </div>
-            <div className="text-sm text-gray-600">Admins</div>
+            <div className="text-sm text-text-secondary">Admins</div>
           </div>
-          <div className="bg-white rounded-lg p-4 shadow-sm">
-            <div className="text-2xl font-semibold mb-1" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
+          <div className="bg-surface rounded-lg p-4 shadow-sm">
+            <div className="text-2xl font-semibold mb-1" style={{ fontFamily: 'Space Grotesk, sans-serif', color: 'var(--text-primary)' }}>
               {mockTeamMembers.filter(m => m.status === 'Invited').length}
             </div>
-            <div className="text-sm text-gray-600">Pending Invites</div>
+            <div className="text-sm text-text-secondary">Pending Invites</div>
           </div>
         </div>
 
         {/* Search Bar */}
-        <div className="bg-white rounded-lg p-4 mb-6 shadow-sm">
+        <div className="bg-surface rounded-lg p-4 mb-6 shadow-sm">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-tertiary" />
             <input
               type="text"
               placeholder="Search team members..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7] focus:border-transparent"
+              className="w-full pl-10 pr-4 py-2.5 bg-surface-sunken border border-border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
             />
           </div>
         </div>
@@ -174,32 +174,32 @@ export function Team() {
           {filteredMembers.map((member) => (
             <div
               key={member.id}
-              className="bg-white rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow border border-transparent hover:border-[#204EA7]/20"
+              className="bg-surface rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow border border-transparent hover:border-accent/20"
             >
               {/* Header */}
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-[#204EA7] flex items-center justify-center text-white font-semibold">
+                  <div className="w-12 h-12 rounded-full bg-accent flex items-center justify-center text-white font-semibold">
                     {member.avatar}
                   </div>
                   <div>
-                    <h3 className="font-semibold text-gray-900">{member.name}</h3>
-                    <p className="text-sm text-gray-600">{member.department}</p>
+                    <h3 className="font-semibold text-text-primary">{member.name}</h3>
+                    <p className="text-sm text-text-secondary">{member.department}</p>
                   </div>
                 </div>
-                <button className="p-1 hover:bg-gray-100 rounded">
-                  <MoreVertical className="w-5 h-5 text-gray-400" />
+                <button className="p-1 hover:bg-surface-hover rounded">
+                  <MoreVertical className="w-5 h-5 text-text-tertiary" />
                 </button>
               </div>
 
               {/* Contact */}
-              <div className="flex items-center gap-2 text-sm text-gray-600 mb-4">
+              <div className="flex items-center gap-2 text-sm text-text-secondary mb-4">
                 <Mail className="w-4 h-4" />
                 {member.email}
               </div>
 
               {/* Stats and Role */}
-              <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+              <div className="flex items-center justify-between pt-4 border-t border-divider">
                 <div className="flex items-center gap-2">
                   {member.role === 'Admin' ? (
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
@@ -207,7 +207,7 @@ export function Team() {
                       Admin
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-surface-hover text-text-secondary">
                       <User className="w-3 h-3" />
                       Member
                     </span>
@@ -219,7 +219,7 @@ export function Team() {
                   )}
                 </div>
                 {member.status === 'Active' && (
-                  <span className="text-sm text-gray-600">{member.tasksCount} tasks</span>
+                  <span className="text-sm text-text-secondary">{member.tasksCount} tasks</span>
                 )}
               </div>
             </div>
@@ -227,14 +227,14 @@ export function Team() {
         </div>
 
         {filteredMembers.length === 0 && (
-          <div className="bg-white rounded-lg p-12 text-center shadow-sm">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <User className="w-8 h-8 text-gray-400" />
+          <div className="bg-surface rounded-lg p-12 text-center shadow-sm">
+            <div className="w-16 h-16 bg-surface-hover rounded-full flex items-center justify-center mx-auto mb-4">
+              <User className="w-8 h-8 text-text-tertiary" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+            <h3 className="text-lg font-semibold text-text-primary mb-2" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
               No members found
             </h3>
-            <p className="text-gray-600">Try adjusting your search</p>
+            <p className="text-text-secondary">Try adjusting your search</p>
           </div>
         )}
       </main>

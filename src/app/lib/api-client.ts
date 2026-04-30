@@ -30,6 +30,30 @@ interface RequestOptions extends Omit<RequestInit, 'headers'> {
   headers?: Record<string, string>;
 }
 
+/**
+ * Server-side paginated list endpoints (e.g. /tasks, /projects) now
+ * return `{ data, total, page, limit }` instead of a bare array.
+ * `unwrapList` accepts either shape and gives callers a plain array,
+ * so call sites that haven't migrated yet (and tools that call the
+ * legacy endpoints) keep working.
+ */
+export interface PaginatedList<T> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export function unwrapList<T>(
+  response: T[] | PaginatedList<T> | null | undefined,
+): T[] {
+  if (!response) return [];
+  if (Array.isArray(response)) return response;
+  return Array.isArray((response as PaginatedList<T>).data)
+    ? (response as PaginatedList<T>).data
+    : [];
+}
+
 export interface ApiClient {
   /** Send a GET request. Returns parsed JSON. */
   get: <T = unknown>(path: string, options?: RequestOptions) => Promise<T>;

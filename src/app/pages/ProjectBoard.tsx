@@ -4,7 +4,7 @@ import { ChevronRight, Plus, MoreVertical, GripVertical, MessageSquare, Calendar
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import { useApiClient } from '../lib/api-client';
+import { useApiClient, unwrapList, type PaginatedList } from '../lib/api-client';
 import { useTaskRealtime } from '../lib/use-task-realtime';
 
 interface ApiTask {
@@ -104,15 +104,15 @@ function TaskCard({ task, columnId, onMoveTask, onDeleteTask, onEditTask }: Task
   return (
     <div
       ref={dragRef}
-      className={`bg-white rounded-lg p-4 shadow-sm border border-gray-200 hover:shadow-md transition-all cursor-grab active:cursor-grabbing group ${
+      className={`bg-surface rounded-lg p-4 shadow-sm border border-border-subtle hover:shadow-md transition-all cursor-grab active:cursor-grabbing group ${
         task.completed ? 'opacity-60' : ''
       } ${isDragging ? 'opacity-50 shadow-xl scale-105' : ''}`}
       style={{ transition: 'all 0.2s ease' }}
     >
       <div className="flex items-start gap-2">
-        <GripVertical className="w-4 h-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-0.5" />
+        <GripVertical className="w-4 h-4 text-text-tertiary opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-0.5" />
         <div className="flex-1 min-w-0">
-          <h4 className={`text-sm font-medium mb-2 ${task.completed ? 'line-through' : 'text-gray-900'}`}>
+          <h4 className={`text-sm font-medium mb-2 ${task.completed ? 'line-through' : 'text-text-primary'}`}>
             {task.title}
           </h4>
 
@@ -132,7 +132,7 @@ function TaskCard({ task, columnId, onMoveTask, onDeleteTask, onEditTask }: Task
             <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${getPriorityColor(task.priority)}`}>
               {task.priority}
             </span>
-            <span className="flex items-center gap-1 text-xs text-gray-500">
+            <span className="flex items-center gap-1 text-xs text-text-tertiary">
               <CalendarIcon className="w-3 h-3" />
               {task.dueDate}
             </span>
@@ -145,20 +145,20 @@ function TaskCard({ task, columnId, onMoveTask, onDeleteTask, onEditTask }: Task
                 {task.assignees.map((assignee, idx) => (
                   <div
                     key={idx}
-                    className="w-6 h-6 rounded-full bg-[#204EA7] flex items-center justify-center text-white text-xs font-semibold border-2 border-white"
+                    className="w-6 h-6 rounded-full bg-accent flex items-center justify-center text-white text-xs font-semibold border-2 border-surface"
                   >
                     {assignee}
                   </div>
                 ))}
               </div>
               {task.subtasks && (
-                <div className="flex items-center gap-1 text-xs text-gray-500">
+                <div className="flex items-center gap-1 text-xs text-text-tertiary">
                   <CheckSquare className="w-3.5 h-3.5" />
                   {task.subtasks.completed}/{task.subtasks.total}
                 </div>
               )}
             </div>
-            <div className="flex items-center gap-1 text-xs text-gray-500">
+            <div className="flex items-center gap-1 text-xs text-text-tertiary">
               <MessageSquare className="w-3.5 h-3.5" />
               {task.comments}
             </div>
@@ -170,7 +170,7 @@ function TaskCard({ task, columnId, onMoveTask, onDeleteTask, onEditTask }: Task
               e.stopPropagation();
               onEditTask(task);
             }}
-            className="p-1 hover:bg-blue-100 rounded"
+            className="p-1 hover:bg-accent-soft rounded"
             title="Edit task"
           >
             <MoreVertical className="w-4 h-4 text-blue-500" />
@@ -180,7 +180,7 @@ function TaskCard({ task, columnId, onMoveTask, onDeleteTask, onEditTask }: Task
               e.stopPropagation();
               onDeleteTask(task.id);
             }}
-            className="rounded border border-red-700 bg-white p-1 text-red-700 transition-all duration-200 hover:bg-red-700 hover:text-white hover:shadow-sm"
+            className="rounded border border-red-700 bg-surface p-1 text-red-700 transition-all duration-200 hover:bg-red-700 hover:text-white hover:shadow-sm"
             title="Delete task"
           >
             <Trash2 className="w-4 h-4" />
@@ -224,23 +224,23 @@ function KanbanColumn({ column, onMoveTask, onDeleteTask, onEditTask }: KanbanCo
   return (
     <div
       ref={dropRef}
-      className={`w-80 bg-gray-50 rounded-lg p-4 flex flex-col transition-all ${
-        isActive ? 'ring-2 ring-[#204EA7] ring-opacity-50 bg-[#204EA7]/5' : ''
+      className={`w-80 bg-surface-sunken rounded-lg p-4 flex flex-col transition-all ${
+        isActive ? 'ring-2 ring-accent ring-opacity-50 bg-accent/5' : ''
       }`}
       style={{ height: 'calc(100vh - 280px)', minHeight: '500px' }}
     >
       {/* Column Header */}
       <div className="flex items-center justify-between mb-4 flex-shrink-0">
         <div className="flex items-center gap-2">
-          <h3 className="font-semibold text-gray-900" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+          <h3 className="font-semibold text-text-primary" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
             {column.title}
           </h3>
-          <span className="px-2 py-0.5 bg-gray-200 text-gray-700 text-xs font-semibold rounded-full">
+          <span className="px-2 py-0.5 bg-surface-hover text-text-secondary text-xs font-semibold rounded-full">
             {column.tasks.length}
           </span>
         </div>
-        <button className="p-1 hover:bg-gray-200 rounded transition-colors">
-          <Plus className="w-4 h-4 text-gray-600" />
+        <button className="p-1 hover:bg-surface-hover rounded transition-colors">
+          <Plus className="w-4 h-4 text-text-secondary" />
         </button>
       </div>
 
@@ -248,8 +248,8 @@ function KanbanColumn({ column, onMoveTask, onDeleteTask, onEditTask }: KanbanCo
       <div className="space-y-3 overflow-y-auto flex-1 pr-1 kanban-scrollbar">
         {column.tasks.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center py-12">
-            <p className="text-sm text-gray-400 mb-4">No tasks in this stage</p>
-            <button className="flex items-center gap-2 px-3 py-2 text-[#204EA7] text-sm font-medium hover:bg-[#204EA7]/5 rounded-lg transition-colors">
+            <p className="text-sm text-text-tertiary mb-4">No tasks in this stage</p>
+            <button className="flex items-center gap-2 px-3 py-2 text-accent text-sm font-medium hover:bg-accent/5 rounded-lg transition-colors">
               <Plus className="w-4 h-4" />
               Add Task
             </button>
@@ -287,9 +287,12 @@ export function ProjectBoard() {
 
   const loadProjects = useCallback(async () => {
     try {
-      const data = await api.get<ApiProject[]>('/projects');
-      setProjects(data ?? []);
-      return data ?? [];
+      // /projects now returns { data, total, page, limit }; unwrapList
+      // tolerates both the new envelope and the legacy bare-array shape.
+      const response = await api.get<ApiProject[] | PaginatedList<ApiProject>>('/projects');
+      const list = unwrapList(response);
+      setProjects(list);
+      return list;
     } catch (err) {
       console.error('Failed to load projects', err);
       return [];
@@ -339,7 +342,8 @@ export function ProjectBoard() {
       setIsLoading(true);
       const resolvedProjects = loadedProjects ?? projects;
       const resolvedColorMap = new Map<string, string>(resolvedProjects.map((p, i) => [p.id, PROJECT_COLORS[i % PROJECT_COLORS.length]]));
-      const tasks = await api.get<ApiTask[]>('/tasks');
+      const tasksResponse = await api.get<ApiTask[] | PaginatedList<ApiTask>>('/tasks');
+      const tasks = unwrapList(tasksResponse);
       const columnTasks: Record<string, Task[]> = {
         todo: [],
         'in-progress': [],
@@ -553,30 +557,30 @@ export function ProjectBoard() {
 
   return (
     <DndProvider backend={HTML5Backend}>
-      <div className="min-h-screen bg-[#F7F8FA]">
+      <div className="min-h-screen bg-canvas">
         <Sidebar />
         <TopBar />
 
         {/* Main Content */}
-        <main className="ml-56 pt-16 p-8">
+        <main className="pt-16 p-8 transition-[margin] duration-200 ease-out" style={{ marginLeft: 'var(--sidebar-width)' }}>
           {/* Breadcrumb */}
-          <div className="flex items-center gap-2 text-sm text-gray-600 mb-4">
-            <a href="/projects" className="hover:text-[#204EA7] transition-colors">Projects</a>
+          <div className="flex items-center gap-2 text-sm text-text-secondary mb-4">
+            <a href="/projects" className="hover:text-accent transition-colors">Projects</a>
             <ChevronRight className="w-4 h-4" />
-            <span className="text-gray-900 font-medium">Task Board</span>
+            <span className="text-text-primary font-medium">Task Board</span>
           </div>
 
           {/* Board Header */}
           <div className="flex items-start justify-between mb-6">
             <div>
-              <h1 className="text-3xl font-semibold mb-2" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
+              <h1 className="text-3xl font-semibold mb-2" style={{ fontFamily: 'Space Grotesk, sans-serif', color: 'var(--text-primary)' }}>
                 Task Board
               </h1>
-              <p className="text-sm text-gray-500">{isLoading ? 'Loading...' : `${columns.reduce((sum, c) => sum + c.tasks.length, 0)} tasks across ${columns.length} columns`}</p>
+              <p className="text-sm text-text-tertiary">{isLoading ? 'Loading...' : `${columns.reduce((sum, c) => sum + c.tasks.length, 0)} tasks across ${columns.length} columns`}</p>
             </div>
             <button
               onClick={openCreateForm}
-              className="flex items-center gap-2 px-4 py-2.5 bg-[#204EA7] text-white rounded-lg hover:bg-[#1a3d8a] transition-colors font-medium"
+              className="flex items-center gap-2 px-4 py-2.5 bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors font-medium"
             >
               <Plus className="w-5 h-5" />
               Add Task
@@ -584,20 +588,20 @@ export function ProjectBoard() {
           </div>
 
           {/* View Switcher */}
-          <div className="flex items-center gap-1 mb-6 border-b border-gray-200">
-            <button className="px-4 py-2.5 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-t-lg transition-colors">
+          <div className="flex items-center gap-1 mb-6 border-b border-border-subtle">
+            <button className="px-4 py-2.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-sunken rounded-t-lg transition-colors">
               Overview
             </button>
-            <button className="px-4 py-2.5 text-sm font-medium text-[#204EA7] bg-white border-b-2 border-[#204EA7] rounded-t-lg">
+            <button className="px-4 py-2.5 text-sm font-medium text-accent bg-surface border-b-2 border-accent rounded-t-lg">
               Board
             </button>
-            <button className="px-4 py-2.5 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-t-lg transition-colors">
+            <button className="px-4 py-2.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-sunken rounded-t-lg transition-colors">
               List
             </button>
-            <button className="px-4 py-2.5 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-t-lg transition-colors">
+            <button className="px-4 py-2.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-sunken rounded-t-lg transition-colors">
               Calendar
             </button>
-            <button className="px-4 py-2.5 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-t-lg transition-colors">
+            <button className="px-4 py-2.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-sunken rounded-t-lg transition-colors">
               Activity
             </button>
           </div>
@@ -605,32 +609,32 @@ export function ProjectBoard() {
           {/* Task form modal */}
           {isTaskFormOpen && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-              <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
+              <div className="w-full max-w-lg rounded-xl bg-surface p-6 shadow-xl">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-lg font-semibold">
                     {taskFormMode === 'create' ? 'Create Task' : 'Edit Task'}
                   </h2>
-                  <button onClick={closeTaskForm} className="text-gray-400 hover:text-gray-600">X</button>
+                  <button onClick={closeTaskForm} className="text-text-tertiary hover:text-text-secondary">X</button>
                 </div>
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Title</label>
+                    <label className="block text-xs font-medium text-text-secondary mb-1">Title</label>
                     <input
                       name="title"
                       value={taskForm.title}
                       onChange={(e) => setTaskForm((prev) => ({ ...prev, title: e.target.value }))}
                       placeholder="Task title"
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7]"
+                      className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
                     />
                   </div>
                   {projects.length > 0 && (
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Project</label>
+                      <label className="block text-xs font-medium text-text-secondary mb-1">Project</label>
                       <select
                         name="project_id"
                         value={taskForm.project_id}
                         onChange={(e) => setTaskForm((prev) => ({ ...prev, project_id: e.target.value }))}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7]"
+                        className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
                       >
                         {projects.map((p) => (
                           <option key={p.id} value={p.id}>{p.name}</option>
@@ -640,12 +644,12 @@ export function ProjectBoard() {
                   )}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
+                      <label className="block text-xs font-medium text-text-secondary mb-1">Status</label>
                       <select
                         name="status"
                         value={taskForm.status}
                         onChange={(e) => setTaskForm((prev) => ({ ...prev, status: e.target.value as Task['status'] }))}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7]"
+                        className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
                       >
                         <option value="To Do">To Do</option>
                         <option value="In Progress">In Progress</option>
@@ -654,12 +658,12 @@ export function ProjectBoard() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Priority</label>
+                      <label className="block text-xs font-medium text-text-secondary mb-1">Priority</label>
                       <select
                         name="priority"
                         value={taskForm.priority}
                         onChange={(e) => setTaskForm((prev) => ({ ...prev, priority: e.target.value as Task['priority'] }))}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7]"
+                        className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
                       >
                         <option value="High">High</option>
                         <option value="Medium">Medium</option>
@@ -668,26 +672,26 @@ export function ProjectBoard() {
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Due Date</label>
+                    <label className="block text-xs font-medium text-text-secondary mb-1">Due Date</label>
                     <input
                       name="dueDate"
                       type="date"
                       value={taskForm.dueDate}
                       onChange={(e) => setTaskForm((prev) => ({ ...prev, dueDate: e.target.value }))}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#204EA7]"
+                      className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
                     />
                   </div>
                 </div>
                 <div className="mt-4 flex justify-end gap-2">
                   <button
                     onClick={closeTaskForm}
-                    className="px-4 py-2 text-sm bg-gray-100 rounded hover:bg-gray-200"
+                    className="px-4 py-2 text-sm bg-surface-hover rounded hover:bg-surface-hover"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={submitTaskForm}
-                    className="px-4 py-2 text-sm bg-[#204EA7] text-white rounded hover:bg-[#163b74]"
+                    className="px-4 py-2 text-sm bg-accent text-white rounded hover:bg-[#163b74]"
                   >
                     Save
                   </button>

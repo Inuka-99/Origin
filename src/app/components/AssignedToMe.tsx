@@ -66,7 +66,7 @@ const sampleAssignedTasks: AssignedTask[] = [
     priority: 'high',
     due_date: '2026-03-07',
     status: 'in_progress',
-    project: { id: '6', name: 'Design', color: '#204EA7' }
+    project: { id: '6', name: 'Design', color: 'var(--accent)' }
   }
 ];
 
@@ -92,20 +92,20 @@ export function AssignedToMe({ tasks, loading = false }: AssignedToMeProps) {
       case 'low':
         return { bg: 'bg-green-100', text: 'text-green-700' };
       default:
-        return { bg: 'bg-gray-100', text: 'text-gray-700' };
+        return { bg: 'bg-surface-hover', text: 'text-text-secondary' };
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'in_progress':
-        return { bg: 'bg-[#204EA7]/10', text: 'text-[#204EA7]' };
+        return { bg: 'bg-accent/10', text: 'text-accent' };
       case 'todo':
-        return { bg: 'bg-gray-100', text: 'text-gray-700' };
+        return { bg: 'bg-surface-hover', text: 'text-text-secondary' };
       case 'done':
         return { bg: 'bg-green-100', text: 'text-green-700' };
       default:
-        return { bg: 'bg-gray-100', text: 'text-gray-700' };
+        return { bg: 'bg-surface-hover', text: 'text-text-secondary' };
     }
   };
 
@@ -114,10 +114,10 @@ export function AssignedToMe({ tasks, loading = false }: AssignedToMeProps) {
     : displayTasks.filter(task => task.status === activeStatus);
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-100 flex flex-col" style={{ height: '520px' }}>
+    <div className="bg-surface rounded-lg shadow-sm border border-divider flex flex-col" style={{ height: '520px' }}>
       {/* Header */}
-      <div className="flex-shrink-0 px-6 pt-5 pb-4 border-b border-gray-100">
-        <h2 className="text-lg font-semibold mb-4" style={{ fontFamily: 'Space Grotesk, sans-serif', color: '#1a1a1a' }}>
+      <div className="flex-shrink-0 px-6 pt-5 pb-4 border-b border-divider">
+        <h2 className="text-lg font-semibold mb-4" style={{ fontFamily: 'Space Grotesk, sans-serif', color: 'var(--text-primary)' }}>
           Assigned to Me
         </h2>
 
@@ -129,8 +129,8 @@ export function AssignedToMe({ tasks, loading = false }: AssignedToMeProps) {
               onClick={() => setActiveStatus(filter.id)}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
                 activeStatus === filter.id
-                  ? 'bg-[#204EA7] text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  ? 'bg-accent text-white'
+                  : 'bg-surface-hover text-text-secondary hover:bg-surface-hover'
               }`}
             >
               {filter.label}
@@ -143,15 +143,15 @@ export function AssignedToMe({ tasks, loading = false }: AssignedToMeProps) {
       </div>
 
       {/* Table Header */}
-      <div className="flex-shrink-0 grid grid-cols-12 gap-4 px-6 py-3 border-b border-gray-100 bg-gray-50">
+      <div className="flex-shrink-0 grid grid-cols-12 gap-4 px-6 py-3 border-b border-divider bg-surface-sunken">
         <div className="col-span-6">
-          <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Task Name</span>
+          <span className="text-xs font-semibold text-text-secondary uppercase tracking-wide">Task Name</span>
         </div>
         <div className="col-span-3">
-          <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Priority</span>
+          <span className="text-xs font-semibold text-text-secondary uppercase tracking-wide">Priority</span>
         </div>
         <div className="col-span-3">
-          <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Due Date</span>
+          <span className="text-xs font-semibold text-text-secondary uppercase tracking-wide">Due Date</span>
         </div>
       </div>
 
@@ -159,7 +159,7 @@ export function AssignedToMe({ tasks, loading = false }: AssignedToMeProps) {
       <div className="flex-1 overflow-y-auto">
         {loading ? (
           <div className="flex items-center justify-center h-32">
-            <div className="text-sm text-gray-500">Loading assigned tasks...</div>
+            <div className="text-sm text-text-tertiary">Loading assigned tasks...</div>
           </div>
         ) : (
           filteredTasks.map((task) => {
@@ -169,10 +169,10 @@ export function AssignedToMe({ tasks, loading = false }: AssignedToMeProps) {
             return (
               <div
                 key={task.id}
-                className="grid grid-cols-12 gap-4 px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer border-b border-gray-100 last:border-b-0"
+                className="grid grid-cols-12 gap-4 px-6 py-4 hover:bg-surface-sunken transition-colors cursor-pointer border-b border-divider last:border-b-0"
               >
                 <div className="col-span-6 flex flex-col gap-1.5">
-                  <span className="text-sm font-medium text-gray-900">
+                  <span className="text-sm font-medium text-text-primary">
                     {task.title}
                   </span>
                   <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium w-fit ${statusColors.bg} ${statusColors.text}`}>
@@ -186,7 +186,7 @@ export function AssignedToMe({ tasks, loading = false }: AssignedToMeProps) {
                   </span>
                 </div>
                 <div className="col-span-3 flex items-start">
-                  <span className="flex items-center gap-1.5 text-sm text-gray-600">
+                  <span className="flex items-center gap-1.5 text-sm text-text-secondary">
                     <Calendar className="w-4 h-4" />
                     {task.due_date ? new Date(task.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No due date'}
                   </span>

@@ -117,6 +117,17 @@ export class GCalConnectionRepository {
     }
   }
 
+  async updateGoogleEmail(userId: string, email: string): Promise<void> {
+    const { error } = await this.client
+      .from('google_calendar_connections')
+      .update({ google_email: email })
+      .eq('user_id', userId);
+
+    if (error) {
+      this.logger.warn(`updateGoogleEmail failed: ${error.message}`);
+    }
+  }
+
   async updateCalendarId(userId: string, calendarId: string): Promise<void> {
     const { error } = await this.client
       .from('google_calendar_connections')

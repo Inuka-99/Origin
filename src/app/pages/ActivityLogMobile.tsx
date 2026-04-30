@@ -89,7 +89,7 @@ function getActionColor(action: string): string {
   if (action.includes('status') || action.includes('updated')) return 'bg-blue-100 text-blue-600';
   if (action.includes('assigned') || action.includes('member')) return 'bg-purple-100 text-purple-600';
   if (action.includes('priority')) return 'bg-amber-100 text-amber-600';
-  return 'bg-gray-100 text-gray-600';
+  return 'bg-surface-hover text-text-secondary';
 }
 
 function getActionLabel(action: string): string {
@@ -155,16 +155,16 @@ export function ActivityLogMobile() {
   }, [fetchLogs]);
 
   return (
-    <div className="min-h-screen bg-[#F7F8FA]">
+    <div className="min-h-screen bg-canvas">
       <MobileTopBar />
 
       <main className="pt-16 px-4 pb-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-4 mt-4">
           <div className="flex items-center gap-2">
-            <Activity className="w-5 h-5 text-[#204EA7]" />
+            <Activity className="w-5 h-5 text-accent" />
             <h1
-              className="text-xl font-semibold text-gray-900"
+              className="text-xl font-semibold text-text-primary"
               style={{ fontFamily: 'Space Grotesk, sans-serif' }}
             >
               Activity
@@ -174,14 +174,14 @@ export function ActivityLogMobile() {
             <button
               onClick={() => setShowFilters(!showFilters)}
               className={`p-2 rounded-lg border ${
-                showFilters ? 'bg-[#204EA7] text-white border-[#204EA7]' : 'bg-white text-gray-600 border-gray-200'
+                showFilters ? 'bg-accent text-white border-accent' : 'bg-surface text-text-secondary border-border-subtle'
               }`}
             >
               <Filter className="w-4 h-4" />
             </button>
             <button
               onClick={fetchLogs}
-              className="p-2 rounded-lg bg-white border border-gray-200 text-gray-600"
+              className="p-2 rounded-lg bg-surface border border-border-subtle text-text-secondary"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
@@ -190,25 +190,25 @@ export function ActivityLogMobile() {
 
         {/* Filters */}
         {showFilters && (
-          <div className="bg-white rounded-xl border border-gray-200 p-3 mb-4 space-y-3">
+          <div className="bg-surface rounded-xl border border-border-subtle p-3 mb-4 space-y-3">
             <div className="relative">
               <select
                 value={entityType}
                 onChange={(e) => { setEntityType(e.target.value); setPage(1); }}
-                className="w-full appearance-none bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5 text-sm text-gray-700"
+                className="w-full appearance-none bg-surface-sunken border border-border-subtle rounded-lg px-3 py-2.5 text-sm text-text-secondary"
               >
                 <option value="">All Types</option>
                 <option value="task">Tasks</option>
                 <option value="project">Projects</option>
                 <option value="member">Members</option>
               </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-tertiary pointer-events-none" />
             </div>
             <div className="relative">
               <select
                 value={action}
                 onChange={(e) => { setAction(e.target.value); setPage(1); }}
-                className="w-full appearance-none bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5 text-sm text-gray-700"
+                className="w-full appearance-none bg-surface-sunken border border-border-subtle rounded-lg px-3 py-2.5 text-sm text-text-secondary"
               >
                 <option value="">All Actions</option>
                 <option value="task_created">Created</option>
@@ -216,7 +216,7 @@ export function ActivityLogMobile() {
                 <option value="status_changed">Status Changed</option>
                 <option value="assigned">Assigned</option>
               </select>
-              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-tertiary pointer-events-none" />
             </div>
           </div>
         )}
@@ -224,15 +224,15 @@ export function ActivityLogMobile() {
         {/* Loading */}
         {loading && (
           <div className="flex items-center justify-center py-12">
-            <RefreshCw className="w-5 h-5 animate-spin text-gray-400" />
+            <RefreshCw className="w-5 h-5 animate-spin text-text-tertiary" />
           </div>
         )}
 
         {/* Error */}
         {error && !loading && (
           <div className="text-center py-12">
-            <p className="text-sm text-gray-500 mb-2">Failed to load activity</p>
-            <button onClick={fetchLogs} className="text-sm text-[#204EA7] font-medium">
+            <p className="text-sm text-text-tertiary mb-2">Failed to load activity</p>
+            <button onClick={fetchLogs} className="text-sm text-accent font-medium">
               Try again
             </button>
           </div>
@@ -242,7 +242,7 @@ export function ActivityLogMobile() {
         {!loading && !error && entries.length === 0 && (
           <div className="text-center py-12">
             <Activity className="w-8 h-8 text-gray-300 mx-auto mb-3" />
-            <p className="text-sm text-gray-500">No activity yet</p>
+            <p className="text-sm text-text-tertiary">No activity yet</p>
           </div>
         )}
 
@@ -258,7 +258,7 @@ export function ActivityLogMobile() {
               return (
                 <div
                   key={entry.id}
-                  className="bg-white rounded-xl border border-gray-200 p-4"
+                  className="bg-surface rounded-xl border border-border-subtle p-4"
                   style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}
                 >
                   <div className="flex items-start gap-3">
@@ -269,22 +269,22 @@ export function ActivityLogMobile() {
                         className="w-8 h-8 rounded-full object-cover flex-shrink-0"
                       />
                     ) : (
-                      <div className="w-8 h-8 bg-[#204EA7] rounded-full flex items-center justify-center text-white text-xs font-medium flex-shrink-0">
+                      <div className="w-8 h-8 bg-accent rounded-full flex items-center justify-center text-white text-xs font-medium flex-shrink-0">
                         {initials}
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-medium text-gray-900 truncate">{userName}</span>
-                        <span className="text-xs text-gray-400 flex-shrink-0 ml-2">{timeAgo(entry.created_at)}</span>
+                        <span className="text-sm font-medium text-text-primary truncate">{userName}</span>
+                        <span className="text-xs text-text-tertiary flex-shrink-0 ml-2">{timeAgo(entry.created_at)}</span>
                       </div>
-                      <p className="text-xs text-gray-600 mb-2 line-clamp-2">{entry.description}</p>
+                      <p className="text-xs text-text-secondary mb-2 line-clamp-2">{entry.description}</p>
                       <div className="flex items-center gap-2">
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${colorClass}`}>
                           <ActionIcon className="w-3 h-3" />
                           {getActionLabel(entry.action).split(' ').pop()}
                         </span>
-                        <span className="text-xs text-gray-400 capitalize bg-gray-100 px-2 py-0.5 rounded-full">
+                        <span className="text-xs text-text-tertiary capitalize bg-surface-hover px-2 py-0.5 rounded-full">
                           {entry.entity_type}
                         </span>
                       </div>
@@ -300,7 +300,7 @@ export function ActivityLogMobile() {
         {!loading && entries.length > 0 && page * limit < total && (
           <button
             onClick={() => setPage((p) => p + 1)}
-            className="w-full mt-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-medium text-[#204EA7] hover:bg-gray-50 transition-colors"
+            className="w-full mt-4 py-3 bg-surface border border-border-subtle rounded-xl text-sm font-medium text-accent hover:bg-surface-sunken transition-colors"
           >
             Load more
           </button>
