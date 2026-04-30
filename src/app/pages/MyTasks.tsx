@@ -314,7 +314,11 @@ export function MyTasks() {
         setTasks((prev) => prev.map((t) => (t.id === editingTaskId ? normalizeTask(updated) : t)));
       } else {
         const created = await api.post<ApiTask>('/tasks', payload);
-        setTasks((prev) => [...prev, normalizeTask(created)]);
+        setTasks((previous) =>
+          previous.some((task) => task.id === created.id)
+            ? previous
+            : [...previous, normalizeTask(created)],
+        );
       }
       closeTaskModal();
     } catch (error) {
