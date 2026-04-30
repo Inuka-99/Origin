@@ -25,10 +25,22 @@ import * as jwt from 'jsonwebtoken';
 import { Auth0ManagementService } from './auth0-management.service';
 import { GCalConnectionRepository } from './connection.repository';
 
-const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
-// openid + email let Google return the user's email on the tokeninfo endpoint
-// so we can display "Connected as <email>" instead of "unknown@google".
-const REQUIRED_SCOPES = [CALENDAR_SCOPE, 'openid', 'email'];
+const CALENDAR_EVENTS_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
+// calendar.readonly lets calendarList.list succeed (calendar.events alone
+// returns 403 when listing the user's calendars).
+const CALENDAR_READONLY_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
+// openid + userinfo.email let us read the connected account's email so
+// the UI can show "Connected as alice@example.com" instead of
+// "unknown@google".
+const REQUIRED_SCOPES = [
+  CALENDAR_EVENTS_SCOPE,
+  CALENDAR_READONLY_SCOPE,
+  'openid',
+  'email',
+  'https://www.googleapis.com/auth/userinfo.email',
+  'https://www.googleapis.com/auth/userinfo.profile',
+];
+const CALENDAR_SCOPE = CALENDAR_EVENTS_SCOPE; // back-compat for the validator below
 const STATE_TTL_SECONDS = 10 * 60;
 
 interface StatePayload {
@@ -106,7 +118,15 @@ export class GoogleOAuthService {
     oauth.setCredentials(tokens);
     const info = await oauth.getTokenInfo(tokens.access_token!);
 
-    const email = info.email ?? 'unknown@google';
+    // Prefer the email returned by Google's tokeninfo. If it isn't there
+    // (older grants without the email scope, or Google's response shape
+    // changed), fall back to the userinfo endpoint and finally to a
+    // placeholder. We never store the placeholder if we can avoid it
+    // because it surfaces directly in the UI.
+    const email =
+      info.email ??
+      (await this.fetchEmailFromUserInfo(tokens.access_token!)) ??
+      'unknown@google';
     const scopes = info.scopes ?? REQUIRED_SCOPES;
 
     if (!scopes.includes(CALENDAR_SCOPE)) {
@@ -255,6 +275,28 @@ export class GoogleOAuthService {
       accessToken: body.access_token,
       expiresAt: new Date(Date.now() + body.expires_in * 1000),
     };
+  }
+
+  /**
+   * Calls Google's OAuth2 userinfo endpoint as a backup source for the
+   * connected account's email. Returns null on any failure; the caller
+   * decides whether to fall back to a placeholder.
+   */
+  private async fetchEmailFromUserInfo(accessToken: string): Promise<string | null> {
+    try {
+      const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!res.ok) {
+        this.logger.warn(`userinfo lookup failed: ${res.status}`);
+        return null;
+      }
+      const body = (await res.json()) as { email?: string };
+      return body.email ?? null;
+    } catch (err) {
+      this.logger.warn(`userinfo lookup threw: ${(err as Error).message}`);
+      return null;
+    }
   }
 
   private randomNonce(): string {

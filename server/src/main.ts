@@ -8,6 +8,7 @@
 import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
+import { RateLimitInterceptor } from './common/rate-limit.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -15,6 +16,9 @@ async function bootstrap() {
   const config = app.get(ConfigService);
   const port = config.get<number>('PORT', 3000);
   const frontendUrl = config.get<string>('FRONTEND_URL', 'http://localhost:5173');
+
+  const rateLimiter = app.get(RateLimitInterceptor);
+  app.useGlobalInterceptors(rateLimiter);
 
   // Allow the frontend origin to call the API
   app.enableCors({

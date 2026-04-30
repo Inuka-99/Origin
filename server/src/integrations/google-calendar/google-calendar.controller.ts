@@ -168,8 +168,17 @@ export class GoogleCalendarController {
     }
     this.backfillLastRun.set(user.userId, now);
 
-    const allTasks = await this.tasks.listForUser(user.userId, this.roleFor(user));
-    const candidates = allTasks
+    // listForUser now returns a paginated envelope. We ask for the
+    // maximum page size (200) — backfill is a manual, rate-limited
+    // operation against the user's own tasks, so 200 is a sensible
+    // ceiling and avoids unbounded fan-out into the calendar API.
+    const tasksPage = await this.tasks.listForUser(
+      user.userId,
+      this.roleFor(user),
+      1,
+      200,
+    );
+    const candidates = tasksPage.data
       .filter((t) => t.due_date && !['done', 'Done'].includes(t.status))
       .map(toTaskForSync);
 

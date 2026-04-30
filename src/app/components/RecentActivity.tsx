@@ -110,14 +110,14 @@ export function RecentActivity() {
   const hasRealData = loaded && entries.length > 0;
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200" style={{ boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)' }}>
-      <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-        <h3 className="font-semibold text-gray-900" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+    <div className="bg-surface rounded-lg border border-border-subtle" style={{ boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)' }}>
+      <div className="px-6 py-4 border-b border-border-subtle flex items-center justify-between">
+        <h3 className="font-semibold text-text-primary" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
           Recent Activity
         </h3>
         <button
           onClick={() => navigate('/activity-log')}
-          className="text-xs text-[#204EA7] font-medium hover:underline"
+          className="text-xs text-accent font-medium hover:underline"
         >
           View all
         </button>
@@ -143,33 +143,33 @@ export function RecentActivity() {
                         className="w-8 h-8 rounded-full object-cover flex-shrink-0"
                       />
                     ) : (
-                      <div className="w-8 h-8 bg-[#204EA7] rounded-full flex items-center justify-center text-white text-xs font-medium flex-shrink-0">
+                      <div className="w-8 h-8 bg-accent rounded-full flex items-center justify-center text-white text-xs font-medium flex-shrink-0">
                         {initials}
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-gray-900">
+                      <p className="text-sm text-text-primary">
                         <span className="font-medium">{name}</span>{' '}
-                        <span className="text-gray-600">{actionVerb(entry.action)}</span>{' '}
-                        <span className="font-semibold text-[#204EA7]">{target}</span>
+                        <span className="text-text-secondary">{actionVerb(entry.action)}</span>{' '}
+                        <span className="font-semibold text-accent">{target}</span>
                       </p>
-                      <p className="text-xs text-gray-400 mt-0.5">{timeAgo(entry.created_at)}</p>
+                      <p className="text-xs text-text-tertiary mt-0.5">{timeAgo(entry.created_at)}</p>
                     </div>
                   </div>
                 );
               })
             : fallbackActivities.map((activity) => (
                 <div key={activity.id} className="flex items-start gap-3">
-                  <div className="w-8 h-8 bg-[#204EA7] rounded-full flex items-center justify-center text-white text-xs font-medium flex-shrink-0">
+                  <div className="w-8 h-8 bg-accent rounded-full flex items-center justify-center text-white text-xs font-medium flex-shrink-0">
                     {activity.avatar}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-900">
+                    <p className="text-sm text-text-primary">
                       <span className="font-medium">{activity.user}</span>{' '}
-                      <span className="text-gray-600">{activity.action}</span>{' '}
-                      <span className="font-semibold text-[#204EA7]">{activity.target}</span>
+                      <span className="text-text-secondary">{activity.action}</span>{' '}
+                      <span className="font-semibold text-accent">{activity.target}</span>
                     </p>
-                    <p className="text-xs text-gray-400 mt-0.5">{activity.time}</p>
+                    <p className="text-xs text-text-tertiary mt-0.5">{activity.time}</p>
                   </div>
                 </div>
               ))}

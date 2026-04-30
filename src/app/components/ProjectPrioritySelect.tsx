@@ -71,7 +71,7 @@ export function ProjectPrioritySelect({
       </button>
 
       {isOpen ? (
-        <div className="absolute left-0 right-0 top-full z-50 mt-2 rounded-xl border border-gray-200 bg-white p-2 shadow-xl">
+        <div className="absolute left-0 right-0 top-full z-50 mt-2 rounded-xl border border-border-subtle bg-surface p-2 shadow-xl">
           <div className="space-y-2" role="listbox" aria-label="Project priority">
             {PROJECT_PRIORITIES.map((priority) => {
               const isSelected = priority === value;
