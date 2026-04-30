@@ -51,8 +51,10 @@ const sampleCompletedTasks: CompletedTask[] = [
 
 export function RecentlyCompleted({ tasks, loading = false }: RecentlyCompletedProps) {
   // Use provided tasks or fallback to sample
-  const displayTasks = tasks.length > 0 ? tasks : sampleCompletedTasks;
-
+ if (!tasks || tasks.length === 0) {
+    tasks = sampleCompletedTasks;
+  }
+  
   const formatTimeAgo = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();

@@ -58,6 +58,47 @@ export interface UseTasksReturn {
 }
 
 /**
+ * Normalize task status values from API to consistent lowercase format
+ */
+function normalizeTaskStatus(status: any): 'todo' | 'in_progress' | 'done' {
+  if (!status) return 'todo';
+  
+  const statusStr = String(status).toLowerCase();
+  
+  // Map various status formats to normalized values
+  if (statusStr.includes('todo') || statusStr === 'to do') return 'todo';
+  if (statusStr.includes('progress') || statusStr === 'in progress') return 'in_progress';
+  if (statusStr.includes('review') || statusStr.includes('done') || statusStr === 'completed') return 'done';
+  
+  return 'todo';
+}
+
+/**
+ * Normalize task priority values from API to consistent lowercase format
+ */
+function normalizeTaskPriority(priority: any): 'low' | 'medium' | 'high' {
+  if (!priority) return 'medium';
+  
+  const priorityStr = String(priority).toLowerCase();
+  
+  if (priorityStr.includes('high')) return 'high';
+  if (priorityStr.includes('low')) return 'low';
+  
+  return 'medium';
+}
+
+/**
+ * Normalize task data from API
+ */
+function normalizeTasks(tasks: Task[]): Task[] {
+  return tasks.map(task => ({
+    ...task,
+    status: normalizeTaskStatus(task.status),
+    priority: normalizeTaskPriority(task.priority),
+  }));
+}
+
+/**
  * Hook to fetch and manage tasks for the current user
  */
 export function useTasks(): UseTasksReturn {
@@ -71,7 +112,7 @@ export function useTasks(): UseTasksReturn {
       setLoading(true);
       setError(null);
       const data = await api.get<Task[]>('/tasks');
-      setTasks(data);
+      setTasks(normalizeTasks(data));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch tasks');
     } finally {
@@ -90,14 +131,24 @@ export function useTasks(): UseTasksReturn {
 
   const createTask = useCallback(async (data: CreateTaskData): Promise<Task> => {
     const newTask = await api.post<Task>('/tasks', data);
-    setTasks(prev => [...prev, newTask]);
-    return newTask;
+    const normalized = { 
+      ...newTask, 
+      status: normalizeTaskStatus(newTask.status),
+      priority: normalizeTaskPriority(newTask.priority),
+    };
+    setTasks(prev => [...prev, normalized]);
+    return normalized;
   }, [api]);
 
   const updateTask = useCallback(async (id: string, data: UpdateTaskData): Promise<Task> => {
     const updatedTask = await api.patch<Task>(`/tasks/${id}`, data);
-    setTasks(prev => prev.map(task => task.id === id ? updatedTask : task));
-    return updatedTask;
+    const normalized = { 
+      ...updatedTask, 
+      status: normalizeTaskStatus(updatedTask.status),
+      priority: normalizeTaskPriority(updatedTask.priority),
+    };
+    setTasks(prev => prev.map(task => task.id === id ? normalized : task));
+    return normalized;
   }, [api]);
 
   const deleteTask = useCallback(async (id: string): Promise<void> => {
