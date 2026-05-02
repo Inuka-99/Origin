@@ -2,6 +2,17 @@ import { Sidebar } from '../components/Sidebar';
 import { TopBar } from '../components/TopBar';
 import { ChevronRight, Plus, MoreVertical, GripVertical, MessageSquare, Calendar as CalendarIcon, CheckSquare, Trash2 } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { TaskDetailsDialog, type TaskDetailsData } from '../components/TaskDetailsDialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../components/ui/alert-dialog';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { useApiClient, unwrapList, type PaginatedList } from '../lib/api-client';
@@ -29,6 +40,7 @@ interface ApiProject {
 interface Task {
   id: string;
   title: string;
+  description?: string | null;
   project: string;
   projectColor: string;
   priority: 'Low' | 'Medium' | 'High';
@@ -44,6 +56,11 @@ interface Column {
   id: string;
   title: string;
   tasks: Task[];
+}
+
+interface PendingTaskDeletion {
+  id: string;
+  title: string;
 }
 
 const ItemTypes = {
@@ -72,9 +89,10 @@ interface TaskCardProps {
   onMoveTask: (taskId: string, fromColumn: string, toColumn: string) => void;
   onDeleteTask: (taskId: string) => void;
   onEditTask: (task: Task) => void;
+  onOpenTask: (task: Task) => void;
 }
 
-function TaskCard({ task, columnId, onMoveTask, onDeleteTask, onEditTask }: TaskCardProps) {
+function TaskCard({ task, columnId, onMoveTask, onDeleteTask, onEditTask, onOpenTask }: TaskCardProps) {
   const dragRef = useRef<HTMLDivElement | null>(null);
   const [{ isDragging }, drag] = useDrag(() => ({
     type: ItemTypes.CARD,
@@ -104,6 +122,11 @@ function TaskCard({ task, columnId, onMoveTask, onDeleteTask, onEditTask }: Task
   return (
     <div
       ref={dragRef}
+      onClick={() => {
+        if (!isDragging) {
+          onOpenTask(task);
+        }
+      }}
       className={`bg-surface rounded-lg p-4 shadow-sm border border-border-subtle hover:shadow-md transition-all cursor-grab active:cursor-grabbing group ${
         task.completed ? 'opacity-60' : ''
       } ${isDragging ? 'opacity-50 shadow-xl scale-105' : ''}`}
@@ -196,9 +219,10 @@ interface KanbanColumnProps {
   onMoveTask: (taskId: string, fromColumn: string, toColumn: string) => void;
   onDeleteTask: (taskId: string) => void;
   onEditTask: (task: Task) => void;
+  onOpenTask: (task: Task) => void;
 }
 
-function KanbanColumn({ column, onMoveTask, onDeleteTask, onEditTask }: KanbanColumnProps) {
+function KanbanColumn({ column, onMoveTask, onDeleteTask, onEditTask, onOpenTask }: KanbanColumnProps) {
   const dropRef = useRef<HTMLDivElement | null>(null);
   const [{ isOver, canDrop }, drop] = useDrop(() => ({
     accept: ItemTypes.CARD,
@@ -261,10 +285,11 @@ function KanbanColumn({ column, onMoveTask, onDeleteTask, onEditTask }: KanbanCo
               task={task}
               columnId={column.id}
               onMoveTask={onMoveTask}
-              onDeleteTask={(taskId) => {
-                onDeleteTask(taskId);
+              onDeleteTask={() => {
+                onDeleteTask(task.id);
               }}
               onEditTask={onEditTask}
+              onOpenTask={onOpenTask}
             />
           ))
         )}
@@ -325,6 +350,7 @@ export function ProjectBoard() {
     return {
       id: task.id,
       title: task.title,
+      description: task.description,
       project: 'Client Website Redesign', // optionally dynamic if you have project data
       projectColor: '#204EA7',
       priority: task.priority,
@@ -358,6 +384,7 @@ export function ProjectBoard() {
         const normalized: Task = {
           id: task.id,
           title: task.title,
+          description: task.description,
           project: projectName,
           projectColor,
           priority,
@@ -397,8 +424,13 @@ export function ProjectBoard() {
   const [isTaskFormOpen, setIsTaskFormOpen] = useState(false);
   const [taskFormMode, setTaskFormMode] = useState<'create' | 'edit'>('create');
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [selectedTaskDetails, setSelectedTaskDetails] = useState<TaskDetailsData | null>(null);
+  const [pendingTaskDeletion, setPendingTaskDeletion] = useState<PendingTaskDeletion | null>(null);
+  const [isDeletingTask, setIsDeletingTask] = useState(false);
   const [taskForm, setTaskForm] = useState<{
     title: string;
+    description: string;
     project_id: string;
     status: Task['status'];
     priority: Task['priority'];
@@ -406,6 +438,7 @@ export function ProjectBoard() {
     assigneeId: string;
   }>({
     title: '',
+    description: '',
     project_id: '',
     status: 'To Do',
     priority: 'Medium',
@@ -418,6 +451,7 @@ export function ProjectBoard() {
     setEditingTask(null);
     setTaskForm({
       title: '',
+      description: '',
       project_id: projects[0]?.id ?? '',
       status: 'To Do',
       priority: 'Medium',
@@ -433,6 +467,7 @@ export function ProjectBoard() {
     setEditingTask(task);
     setTaskForm({
       title: task.title,
+      description: task.description ?? '',
       project_id: matchedProject?.id ?? projects[0]?.id ?? '',
       status: task.status ?? 'To Do',
       priority: task.priority,
@@ -440,6 +475,50 @@ export function ProjectBoard() {
       assigneeId: task.assignees[0] ?? '',
     });
     setIsTaskFormOpen(true);
+  };
+
+  const openTaskDetails = async (task: Task) => {
+    try {
+      const fullTask = await api.get<ApiTask>(`/tasks/${task.id}`);
+      const projectName = fullTask.project_id
+        ? (projects.find((project) => project.id === fullTask.project_id)?.name ?? task.project)
+        : task.project;
+
+      setSelectedTaskDetails({
+        id: fullTask.id,
+        title: fullTask.title,
+        description: fullTask.description,
+        status: databaseToDisplayStatus(fullTask.status),
+        priority: fullTask.priority,
+        assignee: fullTask.assigned_to || (task.assignees[0] ?? 'Unassigned'),
+        dueDate: fullTask.due_date ? new Date(fullTask.due_date).toLocaleDateString() : 'Not set',
+        project: projectName || 'No project assigned',
+        createdAt: fullTask.created_at ?? null,
+        updatedAt: fullTask.updated_at ?? null,
+        createdBy: fullTask.created_by ?? null,
+      });
+      setIsDetailsOpen(true);
+    } catch (error) {
+      console.error('Failed to load task details:', error);
+      alert('Unable to open task details right now.');
+    }
+  };
+
+  const handleEditFromDetails = () => {
+    if (!selectedTaskDetails) return;
+    const task = columns.flatMap((column) => column.tasks).find((item) => item.id === selectedTaskDetails.id);
+    if (!task) return;
+    setIsDetailsOpen(false);
+    openEditForm(task);
+  };
+
+  const handleDeleteFromDetails = () => {
+    if (!selectedTaskDetails) return;
+    setIsDetailsOpen(false);
+    setPendingTaskDeletion({
+      id: selectedTaskDetails.id,
+      title: selectedTaskDetails.title,
+    });
   };
 
   const closeTaskForm = () => {
@@ -455,6 +534,7 @@ export function ProjectBoard() {
     const requestBody = {
       project_id: taskForm.project_id || null,
       title: taskForm.title,
+      description: taskForm.description.trim() || null,
       status: displayToDatabaseStatus(taskForm.status),
       priority: taskForm.priority,
       due_date: taskForm.dueDate ? new Date(taskForm.dueDate).toISOString() : null,
@@ -470,6 +550,7 @@ export function ProjectBoard() {
         const newTask: Task = {
           id: created.id,
           title: created.title,
+          description: created.description,
           project: projectName,
           projectColor,
           priority,
@@ -523,16 +604,25 @@ export function ProjectBoard() {
     }
   };
 
-  const handleDeleteTask = async (taskId: string) => {
-    if (!confirm('Delete task?')) return;
+  const requestTaskDeletion = (task: Pick<Task, 'id' | 'title'>) => {
+    setPendingTaskDeletion({ id: task.id, title: task.title });
+  };
+
+  const handleDeleteTask = async () => {
+    if (!pendingTaskDeletion) return;
+
     try {
-      await api.delete(`/tasks/${taskId}`);
+      setIsDeletingTask(true);
+      await api.delete(`/tasks/${pendingTaskDeletion.id}`);
       setColumns((prev) => prev.map((col) => ({
         ...col,
-        tasks: col.tasks.filter((task) => task.id !== taskId),
+        tasks: col.tasks.filter((task) => task.id !== pendingTaskDeletion.id),
       })));
+      setPendingTaskDeletion(null);
     } catch (error) {
       console.error('Delete task failed:', error);
+    } finally {
+      setIsDeletingTask(false);
     }
   };
 
@@ -627,6 +717,16 @@ export function ProjectBoard() {
                       className="w-full border border-border-strong rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
                     />
                   </div>
+                  <div>
+                    <label className="block text-xs font-medium text-text-secondary mb-1">Description</label>
+                    <textarea
+                      name="description"
+                      value={taskForm.description}
+                      onChange={(e) => setTaskForm((prev) => ({ ...prev, description: e.target.value }))}
+                      placeholder="Add task context or notes"
+                      className="w-full min-h-24 border border-border-strong rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+                    />
+                  </div>
                   {projects.length > 0 && (
                     <div>
                       <label className="block text-xs font-medium text-text-secondary mb-1">Project</label>
@@ -700,6 +800,51 @@ export function ProjectBoard() {
             </div>
           )}
 
+          <TaskDetailsDialog
+            open={isDetailsOpen}
+            onOpenChange={setIsDetailsOpen}
+            task={selectedTaskDetails}
+            onEdit={handleEditFromDetails}
+            onDelete={() => {
+              handleDeleteFromDetails();
+            }}
+          />
+
+          <AlertDialog
+            open={Boolean(pendingTaskDeletion)}
+            onOpenChange={(open) => {
+              if (!open && !isDeletingTask) {
+                setPendingTaskDeletion(null);
+              }
+            }}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+                  Delete Task
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  {pendingTaskDeletion
+                    ? `Are you sure you want to delete "${pendingTaskDeletion.title}"?`
+                    : 'Are you sure you want to delete this task?'}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={isDeletingTask}>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={(event) => {
+                    event.preventDefault();
+                    void handleDeleteTask();
+                  }}
+                  disabled={isDeletingTask}
+                  className="border border-red-700 bg-surface text-red-700 transition-all duration-200 hover:bg-red-700 hover:text-white hover:shadow-sm"
+                >
+                  {isDeletingTask ? 'Deleting...' : 'Delete Task'}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
           {/* Kanban Board */}
           <div className="overflow-x-auto pb-4 kanban-horizontal-scroll">
             <div className="flex gap-4 min-w-max">
@@ -708,8 +853,15 @@ export function ProjectBoard() {
                   key={column.id}
                   column={column}
                   onMoveTask={handleMoveTask}
-                  onDeleteTask={handleDeleteTask}
+                  onDeleteTask={(taskId) => {
+                    const task = columns.flatMap((currentColumn) => currentColumn.tasks).find((item) => item.id === taskId);
+                    if (!task) return;
+                    requestTaskDeletion(task);
+                  }}
                   onEditTask={openEditForm}
+                  onOpenTask={(task) => {
+                    void openTaskDetails(task);
+                  }}
                 />
               ))}
             </div>
