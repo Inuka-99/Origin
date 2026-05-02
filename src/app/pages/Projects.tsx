@@ -8,29 +8,100 @@ import {
   List,
   Plus,
   Search,
-  Users,
-  MoreVertical,
-  CheckSquare,
-  Loader2,
-  Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Sidebar } from '../components/Sidebar';
 import { TopBar } from '../components/TopBar';
-import { useProjects, useProjectMembers, type Project as ApiProject, type ProjectMember } from '../lib/useProjects';
-import { useAuthUser } from '../auth/useAuthUser';
-import { useApiClient } from '../lib/api-client';
+import { ProjectPrioritySelect } from '../components/ProjectPrioritySelect';
+import { Button } from '../components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog';
+import { Input } from '../components/ui/input';
+import { Textarea } from '../components/ui/textarea';
+import { type PaginatedList, unwrapList, useApiClient } from '../lib/api-client';
+import {
+  type CreateProjectPayload,
+  getProjectPriorityBadgeClasses,
+  type Project,
+  type ProjectPriority,
+  type ProjectStatus,
+} from '../lib/projects';
 
-interface Project extends ApiProject {
-  progress: number;
-  tasksTotal: number;
-  tasksCompleted: number;
-  status: 'Active' | 'Completed' | 'On Hold';
-  team: string[];
-  lastUpdated: string;
-  user_role?: 'admin' | 'member' | null;
+const PROJECT_STATUSES: ProjectStatus[] = [
+  'Planning',
+  'Active',
+  'In Progress',
+  'Review',
+  'On Hold',
+  'Completed',
+  'Archived',
+];
+
+interface ProjectFormState {
+  name: string;
+  description: string;
+  start_date: string;
+  due_date: string;
+  priority: ProjectPriority;
+  status: ProjectStatus;
+  department: string;
+  tags: string;
 }
 
+type FormErrors = Partial<Record<'name' | 'priority' | 'department' | 'due_date', string>>;
+
+function getTodayDateString() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function createInitialFormState(): ProjectFormState {
+  return {
+    name: '',
+    description: '',
+    start_date: getTodayDateString(),
+    due_date: '',
+    priority: 'Medium',
+    status: 'Planning',
+    department: '',
+    tags: '',
+  };
+}
+
+function formatCreated(value: string) {
+  return new Date(value).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function validateForm(form: ProjectFormState): FormErrors {
+  const errors: FormErrors = {};
+
+  if (!form.name.trim()) {
+    errors.name = 'Project name is required.';
+  }
+
+  if (!form.priority) {
+    errors.priority = 'Priority is required.';
+  }
+
+  if (!form.department.trim()) {
+    errors.department = 'Department is required.';
+  }
+
+  if (form.due_date && form.due_date < form.start_date) {
+    errors.due_date = 'Due date cannot be earlier than start date.';
+  }
+
+  return errors;
+}
 
 const formControlClassName =
   'flex h-10 w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm shadow-sm outline-none transition-[border-color,box-shadow] hover:border-border-strong hover:shadow-md focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50';
@@ -39,182 +110,114 @@ const textAreaClassName =
   'min-h-24 rounded-md border border-border-strong bg-surface shadow-sm transition-[border-color,box-shadow] hover:border-border-strong hover:shadow-md focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50';
 
 export function Projects() {
+  const api = useApiClient();
   const navigate = useNavigate();
-  const { projects: apiProjects, loading, error, createProject, updateProject, deleteProject, refetch } = useProjects();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [memberRemovalConfirmation, setMemberRemovalConfirmation] = useState<{
-    userId: string;
-    userName: string;
-    isLastMember: boolean;
-  } | null>(null);
-  const [creating, setCreating] = useState(false);
-  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-  const [showMembersModal, setShowMembersModal] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [dropdownOpen, setDropdownOpen] = useState<string | null>(null);
-  const { members, loading: membersLoading, addMember, removeMember } = useProjectMembers(selectedProject?.id || '');
-  const { user } = useAuthUser();
-  const api = useApiClient();
-  const [projectTasks, setProjectTasks] = useState<Record<string, any[]>>({});
-  const [tasksLoading, setTasksLoading] = useState(false);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [form, setForm] = useState<ProjectFormState>(createInitialFormState);
+  const [errors, setErrors] = useState<FormErrors>({});
 
-  // Close dropdown when clicking outside
   useEffect(() => {
-    const handleClickOutside = () => {
-      setDropdownOpen(null);
-    };
-    if (dropdownOpen) {
-      document.addEventListener('click', handleClickOutside);
-      return () => document.removeEventListener('click', handleClickOutside);
-    }
-  }, [dropdownOpen]);
+    let cancelled = false;
 
-  // Fetch tasks for all projects
-  useEffect(() => {
-    const fetchProjectTasks = async () => {
-      if (apiProjects.length === 0) return;
-
-      setTasksLoading(true);
+    async function loadProjects() {
       try {
-        const tasksMap: Record<string, any[]> = {};
-
-        // Fetch tasks for each project in parallel
-        const taskPromises = apiProjects.map(async (project) => {
-          try {
-            const tasks = await api.get(`/tasks/project/${project.id}`);
-            return { projectId: project.id, tasks };
-          } catch (err) {
-            console.error(`Failed to fetch tasks for project ${project.id}:`, err);
-            return { projectId: project.id, tasks: [] };
-          }
-        });
-
-        const results = await Promise.all(taskPromises);
-
-        results.forEach(({ projectId, tasks }) => {
-          tasksMap[projectId] = tasks;
-        });
-
-        setProjectTasks(tasksMap);
-      } catch (err) {
-        console.error('Failed to fetch project tasks:', err);
+        setIsLoading(true);
+        setLoadError(null);
+        const response = await api.get<Project[] | PaginatedList<Project>>('/projects');
+        const normalizedProjects = unwrapList(response);
+        if (!cancelled) {
+          setProjects(Array.isArray(normalizedProjects) ? normalizedProjects : []);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setLoadError(error instanceof Error ? error.message : 'Unable to load projects.');
+          setProjects([]);
+        }
       } finally {
-        setTasksLoading(false);
+        if (!cancelled) {
+          setIsLoading(false);
+        }
       }
+    }
+
+    void loadProjects();
+
+    return () => {
+      cancelled = true;
     };
+  }, [api]);
 
-    fetchProjectTasks();
-  }, [apiProjects, api]);
-
-  // Convert API projects to display format with calculated stats
-  const projects: Project[] = apiProjects.map(apiProject => {
-    const tasks = projectTasks[apiProject.id] || [];
-    const tasksTotal = tasks.length;
-    const tasksCompleted = tasks.filter(task => task.status === 'Done').length;
-    const progress = tasksTotal > 0 ? Math.round((tasksCompleted / tasksTotal) * 100) : 0;
-
-    return {
-      ...apiProject,
-      progress,
-      tasksTotal,
-      tasksCompleted,
-      status: 'Active' as const, // TODO: Determine from project state
-      team: [], // TODO: Get from members
-      lastUpdated: new Date(apiProject.updated_at).toLocaleDateString(),
-    };
-  });
-
-  const filteredProjects = projects.filter(project =>
-    project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    project.description?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const handleCreateProject = async (data: { name: string; description?: string }) => {
-    try {
-      setCreating(true);
-      await createProject(data);
-      setShowCreateModal(false);
-    } catch (err) {
-      console.error('Failed to create project:', err);
-    } finally {
-      setCreating(false);
+  const filteredProjects = useMemo(() => {
+    const projectList = Array.isArray(projects) ? projects : [];
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) {
+      return projectList;
     }
+
+    return projectList.filter((project) =>
+      [project.name, project.description ?? ''].some((value) => value.toLowerCase().includes(query)),
+    );
+  }, [projects, searchQuery]);
+
+  const openCreateModal = () => {
+    setForm(createInitialFormState());
+    setErrors({});
+    setIsModalOpen(true);
   };
 
-  const handleDeleteProject = async () => {
-    if (!selectedProject) return;
-    try {
-      setDeleting(true);
-      await deleteProject(selectedProject.id);
-      setShowDeleteModal(false);
-      setSelectedProject(null);
-    } catch (err) {
-      console.error('Failed to delete project:', err);
-    } finally {
-      setDeleting(false);
-    }
-  };
-
-  const isProjectAdmin = (project: Project) => {
-    return project.user_role === 'admin';
-  };
-
-  const performRemoveMember = async (memberId: string) => {
-    if (!selectedProject) return;
-
-    try {
-      await removeMember(memberId);
-      await refetch();
-
-      // Refresh tasks after member removal
-      const updatedTasks = await api.get(`/tasks/project/${selectedProject.id}`);
-      setProjectTasks(prev => ({
-        ...prev,
-        [selectedProject.id]: updatedTasks
-      }));
-
-      const removedSelf = memberId === user?.sub;
-      const wasLastMember = memberRemovalConfirmation?.isLastMember;
-      if (removedSelf || wasLastMember) {
-        setShowMembersModal(false);
-        setSelectedProject(null);
-      }
-    } catch (err) {
-      console.error('Failed to remove member:', err);
-    } finally {
-      setMemberRemovalConfirmation(null);
-    }
-  };
-
-  const handleRemoveMember = (member: ProjectMember) => {
-    if (!selectedProject) return;
-
-    const isLastMember = members.length === 1;
-    if (isLastMember) {
-      setMemberRemovalConfirmation({
-        userId: member.user_id,
-        userName: member.profiles?.full_name || member.user_id,
-        isLastMember: true,
-      });
+  const closeCreateModal = () => {
+    if (isSubmitting) {
       return;
     }
 
-    performRemoveMember(member.user_id);
+    setIsModalOpen(false);
   };
 
-  const cancelMemberRemoval = () => setMemberRemovalConfirmation(null);
+  const setField = <K extends keyof ProjectFormState>(field: K, value: ProjectFormState[K]) => {
+    setForm((current) => ({ ...current, [field]: value }));
+  };
 
-  const getStatusColor = (status: Project['status']) => {
-    switch (status) {
-      case 'Active':
-        return 'bg-green-100 text-green-700';
-      case 'Completed':
-        return 'bg-blue-100 text-blue-700';
-      case 'On Hold':
-        return 'bg-surface-hover text-text-secondary';
+  const handleSubmit: React.FormEventHandler<HTMLFormElement> = async (event) => {
+    event.preventDefault();
+
+    const validationErrors = validateForm(form);
+    setErrors(validationErrors);
+
+    if (Object.keys(validationErrors).length > 0) {
+      return;
+    }
+
+    const payload: CreateProjectPayload = {
+      name: form.name.trim(),
+      description: form.description.trim() || undefined,
+      start_date: form.start_date,
+      due_date: form.due_date || undefined,
+      priority: form.priority,
+      status: form.status,
+      department: form.department.trim(),
+      tags: form.tags
+        .split(',')
+        .map((tag) => tag.trim())
+        .filter(Boolean),
+    };
+
+    try {
+      setIsSubmitting(true);
+      const createdProject = await api.post<Project>('/projects', payload);
+      setProjects((current) => [createdProject, ...current]);
+      setIsModalOpen(false);
+      toast.success('Project created successfully.');
+      navigate(`/projects/${createdProject.id}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to create project.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -223,175 +226,134 @@ export function Projects() {
       <Sidebar />
       <TopBar />
 
-      <main className="px-8 pt-20 pb-8 transition-[margin] duration-200 ease-out" style={{ marginLeft: 'var(--sidebar-width)' }}>
+      <main
+        className="px-8 pb-8 pt-20 transition-[margin] duration-200 ease-out"
+        style={{ marginLeft: 'var(--sidebar-width)' }}
+      >
         <div className="mb-10 flex items-center justify-between gap-6">
           <div className="pt-1">
-            <h1 className="mb-3 text-3xl font-semibold" style={{ fontFamily: 'Space Grotesk, sans-serif', color: 'var(--text-primary)' }}>
+            <h1
+              className="mb-3 text-3xl font-semibold text-text-primary"
+              style={{ fontFamily: 'Space Grotesk, sans-serif' }}
+            >
               Projects
             </h1>
             <p className="text-text-secondary">Manage and track all active projects</p>
           </div>
           <button
-            onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors font-medium"
+            type="button"
+            onClick={openCreateModal}
+            className="mt-1 flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 font-medium text-white transition-colors hover:bg-accent-hover"
           >
-            <Plus className="w-5 h-5" />
+            <Plus className="h-5 w-5" />
             Create Project
           </button>
         </div>
 
-        <div className="bg-surface rounded-lg p-4 mb-6 flex items-center gap-4 shadow-sm">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-text-tertiary" />
+        <div className="mb-6 flex items-center gap-4 rounded-lg bg-surface p-4 shadow-sm">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-text-tertiary" />
             <input
               type="text"
               placeholder="Search projects..."
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-surface-sunken border border-border-subtle rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+              className="w-full rounded-lg border border-border-subtle bg-surface-sunken py-2.5 pl-10 pr-4 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-accent"
             />
           </div>
 
-          <button type="button" className="flex items-center gap-2 px-4 py-2.5 bg-surface-sunken border border-border-subtle rounded-lg text-sm font-medium text-text-tertiary cursor-not-allowed">
-            <Filter className="w-4 h-4" />
-            Filter
-            <ChevronDown className="w-4 h-4" />
+          <button
+            type="button"
+            className="cursor-not-allowed rounded-lg border border-border-subtle bg-surface-sunken px-4 py-2.5 text-sm font-medium text-text-tertiary"
+          >
+            <span className="flex items-center gap-2">
+              <Filter className="h-4 w-4" />
+              Filter
+              <ChevronDown className="h-4 w-4" />
+            </span>
           </button>
 
-          <button type="button" className="flex items-center gap-2 px-4 py-2.5 bg-surface-sunken border border-border-subtle rounded-lg text-sm font-medium text-text-tertiary cursor-not-allowed">
-            Sort
-            <ChevronDown className="w-4 h-4" />
+          <button
+            type="button"
+            className="cursor-not-allowed rounded-lg border border-border-subtle bg-surface-sunken px-4 py-2.5 text-sm font-medium text-text-tertiary"
+          >
+            <span className="flex items-center gap-2">
+              Sort
+              <ChevronDown className="h-4 w-4" />
+            </span>
           </button>
 
-          <div className="flex items-center gap-1 bg-surface-sunken rounded-lg p-1">
+          <div className="flex items-center gap-1 rounded-lg bg-surface-sunken p-1">
             <button
               type="button"
               onClick={() => setViewMode('grid')}
-              className={`p-2 rounded ${viewMode === 'grid' ? 'bg-surface shadow-sm' : 'hover:bg-surface-hover'}`}
+              className={`rounded p-2 ${viewMode === 'grid' ? 'bg-surface shadow-sm' : 'hover:bg-surface-hover'}`}
             >
-              <Grid3x3 className="w-4 h-4 text-text-secondary" />
+              <Grid3x3 className="h-4 w-4 text-text-secondary" />
             </button>
             <button
               type="button"
               onClick={() => setViewMode('list')}
-              className={`p-2 rounded ${viewMode === 'list' ? 'bg-surface shadow-sm' : 'hover:bg-surface-hover'}`}
+              className={`rounded p-2 ${viewMode === 'list' ? 'bg-surface shadow-sm' : 'hover:bg-surface-hover'}`}
             >
-              <List className="w-4 h-4 text-text-secondary" />
+              <List className="h-4 w-4 text-text-secondary" />
             </button>
           </div>
         </div>
 
-        {/* Projects Grid/List */}
-        {loading ? (
-          <div className="bg-surface rounded-lg p-12 text-center shadow-sm">
-            <Loader2 className="w-8 h-8 animate-spin text-accent mx-auto mb-4" />
-            <p className="text-text-secondary">Loading projects...</p>
-          </div>
-        ) : error ? (
-          <div className="bg-red-50 rounded-lg p-6 text-center shadow-sm">
-            <p className="text-red-600 mb-4">{error}</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+        {isLoading ? (
+          <div className="rounded-lg bg-surface p-12 text-text-secondary shadow-sm">Loading projects...</div>
+        ) : loadError ? (
+          <div className="rounded-lg bg-surface p-12 shadow-sm">
+            <h3
+              className="mb-2 text-lg font-semibold text-text-primary"
+              style={{ fontFamily: 'Space Grotesk, sans-serif' }}
             >
-              Retry
-            </button>
+              Projects are unavailable
+            </h3>
+            <p className="text-red-600">{loadError}</p>
           </div>
         ) : filteredProjects.length === 0 ? (
-          <div className="bg-surface rounded-lg p-12 text-center shadow-sm">
-            <div className="w-16 h-16 bg-surface-hover rounded-full flex items-center justify-center mx-auto mb-4">
-              <Grid3x3 className="w-8 h-8 text-text-tertiary" />
+          <div className="rounded-lg bg-surface p-12 text-center shadow-sm">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-surface-hover">
+              <Grid3x3 className="h-8 w-8 text-text-tertiary" />
             </div>
-            <h3 className="text-lg font-semibold text-text-primary mb-2" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+            <h3
+              className="mb-2 text-lg font-semibold text-text-primary"
+              style={{ fontFamily: 'Space Grotesk, sans-serif' }}
+            >
               No projects found
             </h3>
-            <p className="text-text-secondary mb-6">Create your first project to start tracking work</p>
+            <p className="mb-6 text-text-secondary">Create your first project to start tracking work</p>
             <button
               type="button"
-              onClick={() => setShowCreateModal(true)}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors font-medium"
+              onClick={openCreateModal}
+              className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 font-medium text-white transition-colors hover:bg-accent-hover"
             >
-              <Plus className="w-5 h-5" />
+              <Plus className="h-5 w-5" />
               Create Project
             </button>
           </div>
         ) : viewMode === 'grid' ? (
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
             {filteredProjects.map((project) => (
               <button
                 key={project.id}
-                onClick={() => {
-                  setSelectedProject(project);
-                  setShowMembersModal(true);
-                }}
-                className="bg-surface rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow cursor-pointer border border-transparent hover:border-accent/20"
+                type="button"
+                onClick={() => navigate(`/projects/${project.id}`)}
+                className="rounded-2xl border border-transparent bg-surface p-6 text-left shadow-sm transition-shadow hover:border-accent/20 hover:shadow-md"
               >
-                <div className="flex items-start justify-between gap-3 mb-4">
+                <div className="mb-4 flex items-start justify-between gap-3">
                   <div>
-                    <h3 className="text-lg font-semibold mb-1 text-text-primary" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+                    <h3
+                      className="mb-1 text-lg font-semibold text-text-primary"
+                      style={{ fontFamily: 'Space Grotesk, sans-serif' }}
+                    >
                       {project.name}
                     </h3>
-                    <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(project.status)}`}>
-                      {project.status}
-                    </span>
-                  </div>
-                  <div className="relative">
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDropdownOpen(dropdownOpen === project.id ? null : project.id);
-                      }}
-                      className="p-1 hover:bg-surface-hover rounded"
-                    >
-                      <MoreVertical className="w-5 h-5 text-text-tertiary" />
-                    </button>
-                    {dropdownOpen === project.id && (
-                      <div className="absolute right-0 mt-1 w-48 bg-surface rounded-lg shadow-lg border border-border-subtle z-10">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedProject(project);
-                            setShowMembersModal(true);
-                            setDropdownOpen(null);
-                          }}
-                          className="w-full text-left px-4 py-2 text-sm text-text-secondary hover:bg-surface-sunken rounded-t-lg flex items-center gap-2"
-                        >
-                          <Users className="w-4 h-4" />
-                          Manage Members
-                        </button>
-                        {isProjectAdmin(project) && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedProject(project);
-                              setShowDeleteModal(true);
-                              setDropdownOpen(null);
-                            }}
-                            className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-b-lg flex items-center gap-2"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                            Delete Project
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Description */}
-                <p className="text-sm text-text-secondary mb-4 line-clamp-2">{project.description}</p>
-
-                {/* Progress */}
-                <div className="mb-4">
-                  <div className="flex items-center justify-between text-sm mb-2">
-                    <span className="text-text-secondary">Progress</span>
-                    <span className="font-semibold text-text-primary">{project.progress}%</span>
-                  </div>
-                  <div className="w-full h-2 bg-surface-hover rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-accent transition-all duration-300"
-                      style={{ width: `${project.progress}%` }}
-                    ></div>
+                    <p className="text-xs text-text-tertiary">
+                      Created by {project.created_by || 'Unknown user'}
+                    </p>
                   </div>
                   <span
                     className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${getProjectPriorityBadgeClasses(project.priority)}`}
@@ -400,13 +362,13 @@ export function Projects() {
                   </span>
                 </div>
 
-                <p className="text-sm text-text-secondary mb-4 min-h-10">
+                <p className="mb-4 min-h-10 text-sm text-text-secondary">
                   {project.description || 'No description has been added yet.'}
                 </p>
 
-                <div className="flex items-center justify-between pt-4 border-t border-divider text-xs text-text-tertiary">
+                <div className="flex items-center justify-between border-t border-divider pt-4 text-xs text-text-tertiary">
                   <span className="flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5" />
+                    <Calendar className="h-3.5 w-3.5" />
                     Updated {formatCreated(project.updated_at)}
                   </span>
                   <span>Created {formatCreated(project.created_at)}</span>
@@ -415,17 +377,17 @@ export function Projects() {
             ))}
           </div>
         ) : (
-          <div className="bg-surface rounded-lg shadow-sm overflow-hidden">
+          <div className="overflow-hidden rounded-lg bg-surface shadow-sm">
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-surface-sunken border-b border-border-subtle">
+                <thead className="border-b border-border-subtle bg-surface-sunken">
                   <tr>
-                    <th className="text-left px-6 py-3 text-sm font-semibold text-text-primary">Project</th>
-                    <th className="text-left px-6 py-3 text-sm font-semibold text-text-primary">Description</th>
-                    <th className="text-left px-6 py-3 text-sm font-semibold text-text-primary">Created By</th>
-                    <th className="text-left px-6 py-3 text-sm font-semibold text-text-primary">Priority</th>
-                    <th className="text-left px-6 py-3 text-sm font-semibold text-text-primary">Created</th>
-                    <th className="text-left px-6 py-3 text-sm font-semibold text-text-primary">Updated</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-text-primary">Project</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-text-primary">Description</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-text-primary">Created By</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-text-primary">Priority</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-text-primary">Created</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-text-primary">Updated</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -433,96 +395,17 @@ export function Projects() {
                     <tr
                       key={project.id}
                       onClick={() => navigate(`/projects/${project.id}`)}
-                      className="hover:bg-surface-sunken cursor-pointer"
+                      className="cursor-pointer hover:bg-surface-sunken"
                     >
                       <td className="px-6 py-4">
-                        <div>
-                          <div className="font-semibold text-text-primary">{project.name}</div>
-                          <div className="text-sm text-text-secondary truncate max-w-xs">{project.description}</div>
-                        </div>
+                        <div className="font-semibold text-text-primary">{project.name}</div>
                       </td>
-                      <td className="px-6 py-4">
-                        <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-medium ${getStatusColor(project.status)}`}>
-                          {project.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-24 h-2 bg-surface-hover rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-accent"
-                              style={{ width: `${project.progress}%` }}
-                            ></div>
-                          </div>
-                          <span className="text-sm font-medium text-text-primary">{project.progress}%</span>
-                        </div>
+                      <td className="max-w-sm truncate px-6 py-4 text-sm text-text-secondary">
+                        {project.description || 'No description'}
                       </td>
                       <td className="px-6 py-4 text-sm text-text-secondary">
-                        {project.tasksCompleted}/{project.tasksTotal}
+                        {project.created_by || 'Unknown'}
                       </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center -space-x-2">
-                          {project.team.slice(0, 3).map((member, idx) => (
-                            <div
-                              key={idx}
-                              className="w-8 h-8 rounded-full bg-accent flex items-center justify-center text-white text-xs font-semibold border-2 border-surface"
-                            >
-                              {member}
-                            </div>
-                          ))}
-                          {project.team.length > 3 && (
-                            <div className="w-8 h-8 rounded-full bg-surface-hover flex items-center justify-center text-text-secondary text-xs font-semibold border-2 border-surface">
-                              +{project.team.length - 3}
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-text-secondary">{project.lastUpdated}</td>
-                      <td className="px-6 py-4">
-                        <div className="relative">
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDropdownOpen(dropdownOpen === project.id ? null : project.id);
-                            }}
-                            className="p-1 hover:bg-surface-hover rounded"
-                          >
-                            <MoreVertical className="w-5 h-5 text-text-tertiary" />
-                          </button>
-                          {dropdownOpen === project.id && (
-                            <div className="absolute right-0 mt-1 w-48 bg-surface rounded-lg shadow-lg border border-border-subtle z-10">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedProject(project);
-                                  setShowMembersModal(true);
-                                  setDropdownOpen(null);
-                                }}
-                                className="w-full text-left px-4 py-2 text-sm text-text-secondary hover:bg-surface-sunken rounded-t-lg flex items-center gap-2"
-                              >
-                                <Users className="w-4 h-4" />
-                                Manage Members
-                              </button>
-                              {isProjectAdmin(project) && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedProject(project);
-                                    setShowDeleteModal(true);
-                                    setDropdownOpen(null);
-                                  }}
-                                  className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-b-lg flex items-center gap-2"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                  Delete Project
-                                </button>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-text-secondary max-w-sm truncate">{project.description || 'No description'}</td>
-                      <td className="px-6 py-4 text-sm text-text-secondary">{project.created_by || 'Unknown'}</td>
                       <td className="px-6 py-4">
                         <span
                           className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${getProjectPriorityBadgeClasses(project.priority)}`}
@@ -530,8 +413,12 @@ export function Projects() {
                           {project.priority}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-sm text-text-secondary">{formatCreated(project.created_at)}</td>
-                      <td className="px-6 py-4 text-sm text-text-secondary">{formatCreated(project.updated_at)}</td>
+                      <td className="px-6 py-4 text-sm text-text-secondary">
+                        {formatCreated(project.created_at)}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-text-secondary">
+                        {formatCreated(project.updated_at)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -541,272 +428,133 @@ export function Projects() {
         )}
       </main>
 
-      {/* Create Project Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-surface rounded-lg p-6 w-full max-w-md mx-4">
-            <h2 className="text-xl font-semibold mb-4" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
-              Create New Project
-            </h2>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                const formData = new FormData(e.target as HTMLFormElement);
-                const name = formData.get('name') as string;
-                const description = formData.get('description') as string;
-                if (name.trim()) {
-                  handleCreateProject({ name: name.trim(), description: description.trim() || undefined });
-                }
-              }}
-            >
-              <div className="mb-4">
-                <label htmlFor="name" className="block text-sm font-medium text-text-secondary mb-1">
-                  Project Name *
-                </label>
-                <input
-                  type="text"
-                  id="name"
-                  name="name"
-                  required
-                  className="w-full px-3 py-2 border border-border-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
-                  placeholder="Enter project name"
-                />
+      <Dialog open={isModalOpen} onOpenChange={(open) => (open ? setIsModalOpen(true) : closeCreateModal())}>
+        <DialogContent className="max-h-[90vh] w-[min(92vw,58rem)] max-w-5xl overflow-hidden border-0 p-0 shadow-2xl">
+          <div className="max-h-[90vh] overflow-y-auto bg-surface">
+            <DialogHeader className="border-b border-divider px-6 pb-3 pt-5">
+              <DialogTitle
+                style={{ fontFamily: 'Space Grotesk, sans-serif' }}
+                className="text-2xl text-gray-950"
+              >
+                Create Project
+              </DialogTitle>
+              <DialogDescription className="text-text-secondary">
+                Capture the essentials now and refine the project after creation.
+              </DialogDescription>
+            </DialogHeader>
+
+            <form onSubmit={handleSubmit} className="space-y-4 px-6 py-5">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="md:col-span-2">
+                  <label className="mb-1.5 block text-sm font-medium text-text-primary">
+                    Project Name <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    value={form.name}
+                    onChange={(event) => setField('name', event.target.value)}
+                    placeholder="Enter a clear project name"
+                    aria-invalid={Boolean(errors.name)}
+                    className={formControlClassName}
+                  />
+                  {errors.name ? <p className="mt-1 text-sm text-red-600">{errors.name}</p> : null}
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="mb-1.5 block text-sm font-medium text-text-primary">Description</label>
+                  <Textarea
+                    value={form.description}
+                    onChange={(event) => setField('description', event.target.value)}
+                    placeholder="Add project context or a short summary"
+                    className={textAreaClassName}
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-text-primary">Start Date</label>
+                  <Input
+                    type="date"
+                    value={form.start_date}
+                    onChange={(event) => setField('start_date', event.target.value)}
+                    className={formControlClassName}
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-text-primary">Due Date</label>
+                  <Input
+                    type="date"
+                    value={form.due_date}
+                    onChange={(event) => setField('due_date', event.target.value)}
+                    aria-invalid={Boolean(errors.due_date)}
+                    className={formControlClassName}
+                  />
+                  {errors.due_date ? <p className="mt-1 text-sm text-red-600">{errors.due_date}</p> : null}
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-text-primary">
+                    Priority <span className="text-red-500">*</span>
+                  </label>
+                  <ProjectPrioritySelect
+                    value={form.priority}
+                    onChange={(value) => setField('priority', value)}
+                    className={Boolean(errors.priority) ? 'border-red-500 ring-red-200' : undefined}
+                  />
+                  {errors.priority ? <p className="mt-1 text-sm text-red-600">{errors.priority}</p> : null}
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-text-primary">Status</label>
+                  <select
+                    value={form.status}
+                    onChange={(event) => setField('status', event.target.value as ProjectStatus)}
+                    className={formControlClassName}
+                  >
+                    {PROJECT_STATUSES.map((status) => (
+                      <option key={status} value={status}>
+                        {status}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="mb-1.5 block text-sm font-medium text-text-primary">
+                    Department <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    value={form.department}
+                    onChange={(event) => setField('department', event.target.value)}
+                    placeholder="Enter the owning team or department"
+                    aria-invalid={Boolean(errors.department)}
+                    className={formControlClassName}
+                  />
+                  {errors.department ? <p className="mt-1 text-sm text-red-600">{errors.department}</p> : null}
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="mb-1.5 block text-sm font-medium text-text-primary">Tags</label>
+                  <Input
+                    value={form.tags}
+                    onChange={(event) => setField('tags', event.target.value)}
+                    placeholder="Enter tags separated by commas"
+                    className={formControlClassName}
+                  />
+                </div>
               </div>
-              <div className="mb-6">
-                <label htmlFor="description" className="block text-sm font-medium text-text-secondary mb-1">
-                  Description
-                </label>
-                <textarea
-                  id="description"
-                  name="description"
-                  rows={3}
-                  className="w-full px-3 py-2 border border-border-strong rounded-lg focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
-                  placeholder="Enter project description (optional)"
-                />
-              </div>
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className="flex-1 px-4 py-2 border border-border-strong text-text-secondary rounded-lg hover:bg-surface-sunken transition-colors"
-                >
+
+              <DialogFooter className="border-t border-divider pt-3">
+                <Button type="button" variant="outline" onClick={closeCreateModal} disabled={isSubmitting}>
                   Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={creating}
-                  className="flex-1 px-4 py-2 bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  {creating && <Loader2 className="w-4 h-4 animate-spin" />}
-                  Create Project
-                </button>
-              </div>
+                </Button>
+                <Button type="submit" disabled={isSubmitting} className="bg-accent text-white hover:bg-accent-hover">
+                  {isSubmitting ? 'Creating...' : 'Create Project'}
+                </Button>
+              </DialogFooter>
             </form>
           </div>
-        </div>
-      )}
-
-      {/* Project Members Modal */}
-      {showMembersModal && selectedProject && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-surface rounded-lg p-6 w-full max-w-2xl mx-4 max-h-[80vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-xl font-semibold" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
-                  {selectedProject.name}
-                </h2>
-                <p className="text-text-secondary text-sm mt-1">{selectedProject.description}</p>
-              </div>
-              <button
-                onClick={() => setShowMembersModal(false)}
-                className="p-2 hover:bg-surface-hover rounded-lg"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="mb-6">
-              <h3 className="text-lg font-semibold mb-4">Project Members</h3>
-              
-              {/* Add Member Form */}
-              <div className="mb-4 p-4 bg-surface-sunken rounded-lg">
-                <h4 className="text-sm font-medium mb-2">Add Member</h4>
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    const formData = new FormData(e.target as HTMLFormElement);
-                    const userId = formData.get('userId') as string;
-                    const role = formData.get('role') as string;
-                    if (userId.trim()) {
-                      addMember(userId.trim(), role as 'admin' | 'member' || 'member');
-                      (e.target as HTMLFormElement).reset();
-                    }
-                  }}
-                  className="flex gap-2"
-                >
-                  <input
-                    type="text"
-                    name="userId"
-                    placeholder="User ID (Auth0 ID)"
-                    className="flex-1 px-3 py-2 border border-border-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
-                    required
-                  />
-                  <select
-                    name="role"
-                    className="px-3 py-2 border border-border-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
-                  >
-                    <option value="member">Member</option>
-                    <option value="admin">Admin</option>
-                  </select>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors text-sm font-medium"
-                  >
-                    Add
-                  </button>
-                </form>
-              </div>
-
-              {membersLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="w-6 h-6 animate-spin text-accent" />
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {members.map((member) => (
-                    <div key={member.id} className="flex items-center justify-between p-3 bg-surface-sunken rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-accent flex items-center justify-center text-white font-semibold">
-                          {member.profiles?.full_name?.charAt(0) || member.user_id.charAt(0)}
-                        </div>
-                        <div>
-                          <p className="font-medium">{member.profiles?.full_name || 'Unknown User'}</p>
-                          <p className="text-sm text-text-secondary">{member.profiles?.email || member.user_id}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          member.role === 'admin' ? 'bg-blue-100 text-blue-700' : 'bg-surface-hover text-text-secondary'
-                        }`}>
-                          {member.role}
-                        </span>
-                        <button
-                          onClick={() => handleRemoveMember(member)}
-                          className="p-1 hover:bg-red-100 rounded text-red-600"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                  {members.length === 0 && (
-                    <p className="text-text-tertiary text-center py-8">No members yet</p>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowMembersModal(false)}
-                className="flex-1 px-4 py-2 border border-border-strong text-text-secondary rounded-lg hover:bg-surface-sunken transition-colors"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {memberRemovalConfirmation && selectedProject && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-surface rounded-lg p-6 w-full max-w-md mx-4">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center">
-                <span className="text-yellow-700 font-bold">!</span>
-              </div>
-              <div>
-                <h2 className="text-xl font-semibold text-text-primary" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
-                  Confirm Project Deletion
-                </h2>
-                <p className="text-text-secondary text-sm">
-                  Removing the last member will delete the project <span className="font-semibold">"{selectedProject.name}"</span> permanently.
-                </p>
-              </div>
-            </div>
-
-            <div className="mb-6 text-text-secondary">
-              <p>
-                Are you sure you want to remove <span className="font-semibold">{memberRemovalConfirmation.userName}</span> from this project?
-              </p>
-              <p className="mt-2 text-sm text-text-tertiary">
-                This action cannot be undone and the project will be deleted if there are no remaining members.
-              </p>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={cancelMemberRemoval}
-                className="flex-1 px-4 py-2 border border-border-strong text-text-secondary rounded-lg hover:bg-surface-sunken transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => performRemoveMember(memberRemovalConfirmation.userId)}
-                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-              >
-                Delete Project
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Project Confirmation Modal */}
-      {showDeleteModal && selectedProject && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-surface rounded-lg p-6 w-full max-w-md mx-4">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
-                <Trash2 className="w-5 h-5 text-red-600" />
-              </div>
-              <div>
-                <h2 className="text-xl font-semibold text-text-primary" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
-                  Delete Project
-                </h2>
-                <p className="text-text-secondary text-sm">This action cannot be undone</p>
-              </div>
-            </div>
-            
-            <div className="mb-6">
-              <p className="text-text-secondary mb-2">
-                Are you sure you want to delete <span className="font-semibold">"{selectedProject.name}"</span>?
-              </p>
-              <p className="text-sm text-text-secondary">
-                This will permanently delete the project and all associated tasks, members, and data. This action cannot be undone.
-              </p>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowDeleteModal(false)}
-                className="flex-1 px-4 py-2 border border-border-strong text-text-secondary rounded-lg hover:bg-surface-sunken transition-colors"
-                disabled={deleting}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDeleteProject}
-                disabled={deleting}
-                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {deleting && <Loader2 className="w-4 h-4 animate-spin" />}
-                Delete Project
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
