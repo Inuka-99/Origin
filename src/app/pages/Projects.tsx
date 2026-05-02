@@ -24,7 +24,7 @@ import {
 } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
-import { useApiClient } from '../lib/api-client';
+import { type PaginatedList, unwrapList, useApiClient } from '../lib/api-client';
 import {
   type CreateProjectPayload,
   getProjectPriorityBadgeClasses,
@@ -129,13 +129,15 @@ export function Projects() {
       try {
         setIsLoading(true);
         setLoadError(null);
-        const response = await api.get<Project[]>('/projects');
+        const response = await api.get<Project[] | PaginatedList<Project>>('/projects');
+        const normalizedProjects = unwrapList(response);
         if (!cancelled) {
-          setProjects(response);
+          setProjects(Array.isArray(normalizedProjects) ? normalizedProjects : []);
         }
       } catch (error) {
         if (!cancelled) {
           setLoadError(error instanceof Error ? error.message : 'Unable to load projects.');
+          setProjects([]);
         }
       } finally {
         if (!cancelled) {
@@ -152,12 +154,13 @@ export function Projects() {
   }, [api]);
 
   const filteredProjects = useMemo(() => {
+    const projectList = Array.isArray(projects) ? projects : [];
     const query = searchQuery.trim().toLowerCase();
     if (!query) {
-      return projects;
+      return projectList;
     }
 
-    return projects.filter((project) =>
+    return projectList.filter((project) =>
       [project.name, project.description ?? ''].some((value) => value.toLowerCase().includes(query)),
     );
   }, [projects, searchQuery]);
