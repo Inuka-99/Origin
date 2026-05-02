@@ -26,6 +26,7 @@ import { SupabaseModule } from './supabase';
 import { UsersModule } from './users';
 import { ProjectsModule } from './projects';
 import { TasksModule } from './tasks/tasks.module';
+import { TimeEntriesModule } from './time-entries';
 import { ActivityLogModule } from './activity-log';
 import { ChatModule } from './chat';
 import { GoogleCalendarModule } from './integrations/google-calendar';
@@ -54,6 +55,9 @@ import { RateLimitInterceptor } from './common/rate-limit.interceptor';
 
     // Task CRUD with role-based access
     TasksModule,
+
+    // Task time logging
+    TimeEntriesModule,
 
     // Activity log / audit feed
     ActivityLogModule,
