@@ -41,7 +41,8 @@ import {
 import { Input } from '../components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import { Textarea } from '../components/ui/textarea';
-import { useApiClient } from '../lib/api-client';
+import { useAuthUser } from '../auth/useAuthUser';
+import { useApiClient, unwrapList, type PaginatedList } from '../lib/api-client';
 import {
   getProjectPriorityBadgeClasses,
 } from '../lib/projects';
@@ -88,6 +89,21 @@ interface AddMemberFormState {
   user_id: string;
   email: string;
   role: ProjectMemberRole;
+}
+
+interface ProjectTask {
+  id: string;
+  title: string;
+  description: string | null;
+  project_id: string | null;
+  status: 'todo' | 'in_progress' | 'In Review' | 'Done' | 'completed' | null;
+  priority: 'Low' | 'Medium' | 'High';
+  due_date: string | null;
+  assignee_id?: string | null;
+  assigned_to?: string | null;
+  created_by: string | null;
+  created_at: string | null;
+  updated_at: string | null;
 }
 
 type EditProjectFormErrors = Partial<Record<'name' | 'priority' | 'department' | 'due_date', string>>;
@@ -219,9 +235,12 @@ const textAreaClassName =
 export function ProjectDetails() {
   const { projectId = '' } = useParams();
   const api = useApiClient();
+  const { user } = useAuthUser();
   const navigate = useNavigate();
   const [project, setProject] = useState<Project | null>(null);
   const [members, setMembers] = useState<ProjectMember[]>([]);
+  const [projectTasks, setProjectTasks] = useState<ProjectTask[]>([]);
+  const [isTasksLoading, setIsTasksLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -270,6 +289,37 @@ export function ProjectDetails() {
     }
 
     void loadProjectDetails();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [api, projectId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadProjectTasks() {
+      try {
+        setIsTasksLoading(true);
+        const response = await api.get<ProjectTask[] | PaginatedList<ProjectTask>>(
+          `/tasks/project/${projectId}`,
+        );
+        if (!cancelled) {
+          setProjectTasks(unwrapList(response));
+        }
+      } catch (taskError) {
+        if (!cancelled) {
+          console.error('Unable to load project tasks', taskError);
+          setProjectTasks([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsTasksLoading(false);
+        }
+      }
+    }
+
+    void loadProjectTasks();
 
     return () => {
       cancelled = true;
@@ -346,6 +396,72 @@ export function ProjectDetails() {
       return fields.some((field) => field.toLowerCase().includes(search));
     });
   }, [memberCandidates, memberSearch]);
+  const tasksAssignedToCurrentUser = useMemo(
+    () =>
+      user?.sub
+        ? new Set(
+            projectTasks
+              .filter((task) => task.assignee_id === user.sub || task.assigned_to === user.sub)
+              .map((task) => task.id),
+          )
+        : new Set<string>(),
+    [projectTasks, user?.sub],
+  );
+  const tasksCreatedByCurrentUser = useMemo(
+    () =>
+      user?.sub
+        ? new Set(projectTasks.filter((task) => task.created_by === user.sub).map((task) => task.id))
+        : new Set<string>(),
+    [projectTasks, user?.sub],
+  );
+
+  const getTaskStatusLabel = (status: ProjectTask['status']) => {
+    switch (status) {
+      case 'todo':
+        return 'To Do';
+      case 'in_progress':
+        return 'In Progress';
+      case 'In Review':
+        return 'In Review';
+      case 'Done':
+      case 'completed':
+        return 'Done';
+      default:
+        return 'To Do';
+    }
+  };
+
+  const getTaskStatusClasses = (status: ProjectTask['status']) => {
+    switch (status) {
+      case 'in_progress':
+        return 'bg-accent-soft text-blue-600';
+      case 'In Review':
+        return 'bg-purple-50 text-purple-600';
+      case 'Done':
+      case 'completed':
+        return 'bg-green-50 text-green-600';
+      case 'todo':
+      default:
+        return 'bg-surface-hover text-text-secondary';
+    }
+  };
+
+  const getTaskPriorityClasses = (priority: ProjectTask['priority']) => {
+    switch (priority) {
+      case 'High':
+        return 'bg-red-50 text-red-600';
+      case 'Medium':
+        return 'bg-yellow-50 text-yellow-700';
+      case 'Low':
+      default:
+        return 'bg-green-50 text-green-600';
+    }
+  };
+
+  const getTaskAssigneeLabel = (task: ProjectTask) => {
+    const member = members.find((item) => item.user_id === task.assignee_id || item.user_id === task.assigned_to);
+    return member?.full_name || member?.email || member?.user_id || task.assigned_to || 'Unassigned';
+  };
 
   const openEditModal = () => {
     setEditForm(createEditProjectForm(project));
@@ -720,6 +836,107 @@ export function ProjectDetails() {
                   </div>
                 </div>
               </div>
+            </section>
+
+            <section className="rounded-2xl border border-divider bg-surface p-6 shadow-sm">
+              <div className="mb-5 flex items-center justify-between gap-4">
+                <div>
+                  <h2
+                    className="text-lg font-semibold text-text-primary"
+                    style={{ fontFamily: 'Space Grotesk, sans-serif' }}
+                  >
+                    Project Tasks
+                  </h2>
+                  <p className="mt-1 text-sm text-text-tertiary">
+                    Review the tasks connected to this project at a glance.
+                  </p>
+                </div>
+                <span className="rounded-full bg-surface-hover px-3 py-1 text-xs font-medium text-text-secondary">
+                  {projectTasks.length} task{projectTasks.length === 1 ? '' : 's'}
+                </span>
+              </div>
+
+              {isTasksLoading ? (
+                <div className="rounded-xl border border-divider bg-surface-sunken px-5 py-10 text-center text-text-secondary">
+                  Loading project tasks...
+                </div>
+              ) : projectTasks.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-border-subtle bg-surface-sunken px-5 py-10 text-center">
+                  <p className="font-medium text-text-primary">No tasks for this project yet</p>
+                  <p className="mt-1 text-sm text-text-tertiary">
+                    Tasks will appear here once the team starts adding work items.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {projectTasks.map((task) => {
+                    const isAssignedToMe = tasksAssignedToCurrentUser.has(task.id);
+                    const isCreatedByMe = tasksCreatedByCurrentUser.has(task.id);
+
+                    return (
+                      <div
+                        key={task.id}
+                        className="rounded-xl border border-border-subtle bg-surface px-4 py-4 shadow-sm"
+                      >
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="text-sm font-semibold text-text-primary">{task.title}</h3>
+                              {isAssignedToMe ? (
+                                <span className="rounded-full bg-accent/10 px-2.5 py-1 text-[11px] font-medium text-accent">
+                                  Assigned to me
+                                </span>
+                              ) : null}
+                              {isCreatedByMe ? (
+                                <span className="rounded-full bg-surface-hover px-2.5 py-1 text-[11px] font-medium text-text-secondary">
+                                  Created by me
+                                </span>
+                              ) : null}
+                            </div>
+                            {task.description ? (
+                              <p className="mt-1 line-clamp-2 text-sm text-text-tertiary">{task.description}</p>
+                            ) : null}
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span
+                              className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${getTaskStatusClasses(task.status)}`}
+                            >
+                              {getTaskStatusLabel(task.status)}
+                            </span>
+                            <span
+                              className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${getTaskPriorityClasses(task.priority)}`}
+                            >
+                              {task.priority}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 grid grid-cols-1 gap-3 text-sm text-text-secondary md:grid-cols-3">
+                          <div>
+                            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-text-tertiary">
+                              Assignee
+                            </p>
+                            <p>{getTaskAssigneeLabel(task)}</p>
+                          </div>
+                          <div>
+                            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-text-tertiary">
+                              Due Date
+                            </p>
+                            <p>{task.due_date ? new Date(task.due_date).toLocaleDateString() : 'Not set'}</p>
+                          </div>
+                          <div>
+                            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-text-tertiary">
+                              Updated
+                            </p>
+                            <p>{task.updated_at ? new Date(task.updated_at).toLocaleString() : 'Not available'}</p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </section>
           </div>
         ) : null}
