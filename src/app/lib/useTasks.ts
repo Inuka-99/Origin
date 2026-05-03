@@ -162,8 +162,13 @@ export function useTasks(options: UseTasksOptions = {}): UseTasksReturn {
 
   const updateTask = useCallback(async (id: string, data: UpdateTaskData): Promise<Task> => {
     const updatedTask = await api.patch<Task>(`/tasks/${id}`, data);
-    setTasks(prev => prev.map(task => task.id === id ? updatedTask : task));
-    return updatedTask;
+    const normalized = { 
+      ...updatedTask, 
+      status: normalizeTaskStatus(updatedTask.status),
+      priority: normalizeTaskPriority(updatedTask.priority),
+    };
+    setTasks(prev => prev.map(task => task.id === id ? normalized : task));
+    return normalized;
   }, [api]);
 
   const deleteTask = useCallback(async (id: string): Promise<void> => {

@@ -21,6 +21,14 @@ interface RecentlyCompletedProps {
 export function RecentlyCompleted({ tasks, loading = false }: RecentlyCompletedProps) {
   // Use provided tasks only
   const displayTasks = tasks;
+  if (!loading && displayTasks.length === 0) {
+    return (
+      <div className="bg-surface rounded-lg shadow-sm border border-divider flex items-center justify-center" style={{ height: '480px' }}>
+        <p className="text-sm text-text-tertiary">No completed tasks to show.</p>
+      </div>
+    );
+  }
+  
 
   const formatTimeAgo = (dateString: string) => {
     const date = new Date(dateString);

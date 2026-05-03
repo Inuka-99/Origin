@@ -4,10 +4,12 @@ import { RecentlyCompleted } from '../components/RecentlyCompleted';
 import { AssignedToMe } from '../components/AssignedToMe';
 import { Settings, ChevronDown, BarChart3, Activity, TrendingUp as TrendingUpIcon, Calendar } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useTasks } from '../lib/useTasks';
 
 export function DashboardMobile() {
   const [showWidgetMenu, setShowWidgetMenu] = useState(false);
   const [greeting, setGreeting] = useState('Good afternoon');
+  const { tasks, loading: tasksLoading } = useTasks();
 
   useEffect(() => {
     const hour = new Date().getHours();
@@ -79,17 +81,17 @@ export function DashboardMobile() {
 
           {/* Today's Focus */}
           <div className="mb-6">
-            <TodaysFocus />
+            <TodaysFocus tasks={tasks} loading={tasksLoading} />
           </div>
 
           {/* Recently Completed */}
           <div className="mb-6">
-            <RecentlyCompleted />
+            <RecentlyCompleted tasks={tasks.filter(task => task.status === 'done')} loading={tasksLoading} />
           </div>
 
           {/* Assigned to Me - Full Width */}
           <div className="mb-6">
-            <AssignedToMe />
+            <AssignedToMe tasks={tasks} loading={tasksLoading} />
           </div>
         </div>
       </main>
