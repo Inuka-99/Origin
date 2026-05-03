@@ -14,60 +14,13 @@ interface Task {
 }
 
 interface TodaysFocusProps {
-  tasks: Task[];
+  tasks?: Task[];
   loading?: boolean;
 }
 
-const sampleTasks: Task[] = [
-  {
-    id: '1',
-    title: 'Review Q1 performance metrics',
-    project: { id: '1', name: 'Analytics Dashboard', color: 'var(--accent)' },
-    due_date: '2024-04-20T10:00:00Z',
-    status: 'todo'
-  },
-  {
-    id: '2',
-    title: 'Update client presentation slides',
-    project: { id: '2', name: 'Client Portal', color: '#9333EA' },
-    due_date: '2024-04-20T14:00:00Z',
-    status: 'todo'
-  },
-  {
-    id: '3',
-    title: 'Code review for authentication module',
-    project: { id: '3', name: 'ORIGIN Platform', color: '#16A34A' },
-    due_date: '2024-04-20T16:30:00Z',
-    status: 'todo'
-  },
-  {
-    id: '4',
-    title: 'Team standup meeting',
-    project: { id: '4', name: 'Engineering', color: '#DC2626' },
-    due_date: '2024-04-20T09:30:00Z',
-    status: 'todo'
-  },
-  {
-    id: '5',
-    title: 'Update documentation for API endpoints',
-    project: { id: '5', name: 'Backend Infrastructure', color: '#16A34A' },
-    due_date: '2024-04-20T15:00:00Z',
-    status: 'todo'
-  },
-  {
-    id: '6',
-    title: 'Design review with product team',
-    project: { id: '6', name: 'Design System', color: 'var(--accent)' },
-    due_date: '2024-04-20T11:30:00Z',
-    status: 'todo'
-  }
-];
-
-export function TodaysFocus({ tasks, loading = false }: TodaysFocusProps) {
+export function TodaysFocus({ tasks = [], loading = false }: TodaysFocusProps) {
   const [activeTab, setActiveTab] = useState('today');
-
-  // Use provided tasks or fallback to sample
-  const displayTasks = tasks.length > 0 ? tasks : sampleTasks;
+  const displayTasks = tasks;
 
   // Filter tasks based on active tab
   const getFilteredTasks = () => {
@@ -130,6 +83,8 @@ export function TodaysFocus({ tasks, loading = false }: TodaysFocusProps) {
     { id: 'unscheduled', label: 'Unscheduled', count: displayTasks.filter(task => !task.due_date && task.status !== 'done').length }
   ];
 
+  const activeTabLabel = tabs.find((tab) => tab.id === activeTab)?.label.toLowerCase() ?? 'selected';
+
   return (
     <div className="bg-surface rounded-lg shadow-sm border border-divider flex flex-col" style={{ height: '480px' }}>
       {/* Sticky Header */}
@@ -179,43 +134,51 @@ export function TodaysFocus({ tasks, loading = false }: TodaysFocusProps) {
           </div>
         ) : (
           <div className="space-y-2">
-            {filteredTasks.map((task) => (
-              <div
-                key={task.id}
-                className="flex items-start gap-3 p-3 rounded-lg hover:bg-surface-sunken transition-colors cursor-pointer group"
-              >
-                <div className="mt-0.5">
-                  <div className="w-5 h-5 rounded border-2 border-border-strong group-hover:border-accent transition-colors flex items-center justify-center">
-                    {/* Empty checkbox */}
-                  </div>
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-sm font-medium text-text-primary mb-1">
-                    {task.title}
-                  </h3>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {task.project && (
-                      <span
-                        className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
-                        style={{ 
-                          backgroundColor: `${task.project.color || '#204EA7'}15`,
-                          color: task.project.color || '#204EA7'
-                        }}
-                      >
-                        {task.project.name}
-                      </span>
-                    )}
-                    {task.due_date && (
-                      <span className="flex items-center gap-1 text-xs text-text-tertiary">
-                        <Clock className="w-3 h-3" />
-                        {new Date(task.due_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    )}
-                  </div>
-                </div>
+            {filteredTasks.length === 0 ? (
+              <div className="flex h-32 items-center justify-center rounded-lg border border-dashed border-divider px-4 text-center">
+                <p className="text-sm text-text-tertiary">
+                  There are no {activeTabLabel} tasks.
+                </p>
               </div>
-            ))}
+            ) : (
+              filteredTasks.map((task) => (
+                <div
+                  key={task.id}
+                  className="flex items-start gap-3 p-3 rounded-lg hover:bg-surface-sunken transition-colors cursor-pointer group"
+                >
+                  <div className="mt-0.5">
+                    <div className="w-5 h-5 rounded border-2 border-border-strong group-hover:border-accent transition-colors flex items-center justify-center">
+                      {/* Empty checkbox */}
+                    </div>
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-sm font-medium text-text-primary mb-1">
+                      {task.title}
+                    </h3>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {task.project && (
+                        <span
+                          className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
+                          style={{ 
+                            backgroundColor: `${task.project.color || '#204EA7'}15`,
+                            color: task.project.color || '#204EA7'
+                          }}
+                        >
+                          {task.project.name}
+                        </span>
+                      )}
+                      {task.due_date && (
+                        <span className="flex items-center gap-1 text-xs text-text-tertiary">
+                          <Clock className="w-3 h-3" />
+                          {new Date(task.due_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         )}
       </div>

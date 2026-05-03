@@ -21,6 +21,8 @@ import { SupabaseService } from '../supabase';
 import { UserRoleCache } from '../users';
 
 @Controller('tasks')
+@UseGuards(JwtAuthGuard)
+@UseInterceptors(UserSyncInterceptor)
 export class TasksController {
   constructor(
     private readonly tasksService: TasksService,
@@ -83,13 +85,8 @@ export class TasksController {
   @Get(':id')
   async getOne(
     @Param('id') id: string,
-    @Body('status') status: string,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    const updated = this.tasksService.updateTaskStatus(id, status as any);
-    if (!updated) {
-      throw new NotFoundException('Task not found');
-    }
-    return updated;
     const role = await this.getUserRole(user.userId);
     return this.tasksService.getById(id, user.userId, role);
   }

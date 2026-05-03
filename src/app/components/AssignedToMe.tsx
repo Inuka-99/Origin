@@ -15,66 +15,13 @@ interface AssignedTask {
 }
 
 interface AssignedToMeProps {
-  tasks: AssignedTask[];
+  tasks?: AssignedTask[];
   loading?: boolean;
 }
 
-const sampleAssignedTasks: AssignedTask[] = [
-  {
-    id: '1',
-    title: 'Implement user profile settings page',
-    priority: 'high',
-    due_date: '2026-03-05',
-    status: 'in_progress',
-    project: { id: '1', name: 'Frontend', color: '#DC2626' }
-  },
-  {
-    id: '2',
-    title: 'Write unit tests for authentication service',
-    priority: 'high',
-    due_date: '2026-03-06',
-    status: 'todo',
-    project: { id: '2', name: 'Backend', color: '#16A34A' }
-  },
-  {
-    id: '3',
-    title: 'Update API documentation',
-    priority: 'medium',
-    due_date: '2026-03-08',
-    status: 'in_progress',
-    project: { id: '3', name: 'Documentation', color: '#9333EA' }
-  },
-  {
-    id: '4',
-    title: 'Review pull request for dashboard redesign',
-    priority: 'medium',
-    due_date: '2026-03-10',
-    status: 'todo',
-    project: { id: '4', name: 'Frontend', color: '#DC2626' }
-  },
-  {
-    id: '5',
-    title: 'Optimize database queries for reports',
-    priority: 'low',
-    due_date: '2026-03-12',
-    status: 'todo',
-    project: { id: '5', name: 'Backend', color: '#16A34A' }
-  },
-  {
-    id: '6',
-    title: 'Create wireframes for mobile app',
-    priority: 'high',
-    due_date: '2026-03-07',
-    status: 'in_progress',
-    project: { id: '6', name: 'Design', color: 'var(--accent)' }
-  }
-];
-
-export function AssignedToMe({ tasks, loading = false }: AssignedToMeProps) {
+export function AssignedToMe({ tasks = [], loading = false }: AssignedToMeProps) {
   const [activeStatus, setActiveStatus] = useState('all');
-
-  // Use provided tasks or fallback to sample
-  const displayTasks = tasks.length > 0 ? tasks : sampleAssignedTasks;
+  const displayTasks = tasks;
 
   const statusFilters = [
     { id: 'all', label: 'All', count: displayTasks.length },
@@ -112,6 +59,9 @@ export function AssignedToMe({ tasks, loading = false }: AssignedToMeProps) {
   const filteredTasks = activeStatus === 'all' 
     ? displayTasks 
     : displayTasks.filter(task => task.status === activeStatus);
+
+  const activeStatusLabel =
+    statusFilters.find((filter) => filter.id === activeStatus)?.label.toLowerCase() ?? 'selected';
 
   return (
     <div className="bg-surface rounded-lg shadow-sm border border-divider flex flex-col" style={{ height: '520px' }}>
@@ -162,38 +112,48 @@ export function AssignedToMe({ tasks, loading = false }: AssignedToMeProps) {
             <div className="text-sm text-text-tertiary">Loading assigned tasks...</div>
           </div>
         ) : (
-          filteredTasks.map((task) => {
-            const priorityColors = getPriorityColor(task.priority);
-            const statusColors = getStatusColor(task.status);
-
-            return (
-              <div
-                key={task.id}
-                className="grid grid-cols-12 gap-4 px-6 py-4 hover:bg-surface-sunken transition-colors cursor-pointer border-b border-divider last:border-b-0"
-              >
-                <div className="col-span-6 flex flex-col gap-1.5">
-                  <span className="text-sm font-medium text-text-primary">
-                    {task.title}
-                  </span>
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium w-fit ${statusColors.bg} ${statusColors.text}`}>
-                    {task.status.replace('_', ' ')}
-                  </span>
-                </div>
-                <div className="col-span-3 flex items-start">
-                  <span className={`inline-flex items-center px-2.5 py-1 rounded text-xs font-medium ${priorityColors.bg} ${priorityColors.text} capitalize`}>
-                    {task.priority === 'high' && <AlertCircle className="w-3 h-3 mr-1" />}
-                    {task.priority}
-                  </span>
-                </div>
-                <div className="col-span-3 flex items-start">
-                  <span className="flex items-center gap-1.5 text-sm text-text-secondary">
-                    <Calendar className="w-4 h-4" />
-                    {task.due_date ? new Date(task.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No due date'}
-                  </span>
-                </div>
+          filteredTasks.length === 0 ? (
+            <div className="flex h-40 items-center justify-center px-6 text-center">
+              <div className="rounded-lg border border-dashed border-divider px-4 py-6">
+                <p className="text-sm text-text-tertiary">
+                  There are no {activeStatusLabel === 'all' ? 'assigned' : activeStatusLabel} tasks assigned to you.
+                </p>
               </div>
-            );
-          })
+            </div>
+          ) : (
+            filteredTasks.map((task) => {
+              const priorityColors = getPriorityColor(task.priority);
+              const statusColors = getStatusColor(task.status);
+
+              return (
+                <div
+                  key={task.id}
+                  className="grid grid-cols-12 gap-4 px-6 py-4 hover:bg-surface-sunken transition-colors cursor-pointer border-b border-divider last:border-b-0"
+                >
+                  <div className="col-span-6 flex flex-col gap-1.5">
+                    <span className="text-sm font-medium text-text-primary">
+                      {task.title}
+                    </span>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium w-fit ${statusColors.bg} ${statusColors.text}`}>
+                      {task.status.replace('_', ' ')}
+                    </span>
+                  </div>
+                  <div className="col-span-3 flex items-start">
+                    <span className={`inline-flex items-center px-2.5 py-1 rounded text-xs font-medium ${priorityColors.bg} ${priorityColors.text} capitalize`}>
+                      {task.priority === 'high' && <AlertCircle className="w-3 h-3 mr-1" />}
+                      {task.priority}
+                    </span>
+                  </div>
+                  <div className="col-span-3 flex items-start">
+                    <span className="flex items-center gap-1.5 text-sm text-text-secondary">
+                      <Calendar className="w-4 h-4" />
+                      {task.due_date ? new Date(task.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No due date'}
+                    </span>
+                  </div>
+                </div>
+              );
+            })
+          )
         )}
       </div>
     </div>

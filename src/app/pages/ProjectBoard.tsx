@@ -308,6 +308,8 @@ export function ProjectBoard() {
   ]);
   const [isLoading, setIsLoading] = useState(false);
   const [projects, setProjects] = useState<ApiProject[]>([]);
+  const projectsRef = useRef<ApiProject[]>([]);
+  const realtimeRefreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const projectColorMap = new Map<string, string>(projects.map((p, i) => [p.id, PROJECT_COLORS[i % PROJECT_COLORS.length]]));
 
   const loadProjects = useCallback(async () => {
@@ -316,6 +318,7 @@ export function ProjectBoard() {
       // tolerates both the new envelope and the legacy bare-array shape.
       const response = await api.get<ApiProject[] | PaginatedList<ApiProject>>('/projects');
       const list = unwrapList(response);
+      projectsRef.current = list;
       setProjects(list);
       return list;
     } catch (err) {
@@ -366,7 +369,7 @@ export function ProjectBoard() {
   const loadTasks = useCallback(async (loadedProjects?: ApiProject[]) => {
     try {
       setIsLoading(true);
-      const resolvedProjects = loadedProjects ?? projects;
+      const resolvedProjects = loadedProjects ?? projectsRef.current;
       const resolvedColorMap = new Map<string, string>(resolvedProjects.map((p, i) => [p.id, PROJECT_COLORS[i % PROJECT_COLORS.length]]));
       const tasksResponse = await api.get<ApiTask[] | PaginatedList<ApiTask>>('/tasks');
       const tasks = unwrapList(tasksResponse);
@@ -405,15 +408,29 @@ export function ProjectBoard() {
     } finally {
       setIsLoading(false);
     }
-  }, [api, projects]);
+  }, [api]);
 
   useEffect(() => {
     void loadProjects().then((loaded) => void loadTasks(loaded));
   }, [loadProjects, loadTasks]);
 
   const refreshTasks = useCallback(() => {
-    void loadTasks();
+    if (realtimeRefreshTimeoutRef.current) {
+      clearTimeout(realtimeRefreshTimeoutRef.current);
+    }
+    realtimeRefreshTimeoutRef.current = setTimeout(() => {
+      void loadTasks();
+      realtimeRefreshTimeoutRef.current = null;
+    }, 750);
   }, [loadTasks]);
+
+  useEffect(() => {
+    return () => {
+      if (realtimeRefreshTimeoutRef.current) {
+        clearTimeout(realtimeRefreshTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useTaskRealtime({
     onCreated: refreshTasks,

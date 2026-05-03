@@ -4,10 +4,14 @@ import { RecentlyCompleted } from '../components/RecentlyCompleted';
 import { AssignedToMe } from '../components/AssignedToMe';
 import { Settings, ChevronDown, BarChart3, Activity, TrendingUp as TrendingUpIcon, Calendar } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useAuthUser } from '../auth/useAuthUser';
+import { useTasks } from '../lib/useTasks';
 
 export function DashboardMobile() {
   const [showWidgetMenu, setShowWidgetMenu] = useState(false);
   const [greeting, setGreeting] = useState('Good afternoon');
+  const { user } = useAuthUser();
+  const { tasks, loading: tasksLoading, error: tasksError } = useTasks();
 
   useEffect(() => {
     const hour = new Date().getHours();
@@ -36,12 +40,19 @@ export function DashboardMobile() {
         <div className="p-4">
           {/* Personalized Greeting Section */}
           <div className="mb-6">
-            <p className="text-xs text-text-tertiary font-medium mb-0.5">{greeting}, Sarah</p>
+            <p className="text-xs text-text-tertiary font-medium mb-0.5">{greeting}, {user?.name || 'User'}</p>
             <h1 className="text-2xl mb-1 font-semibold" style={{ fontFamily: 'Space Grotesk, sans-serif', color: 'var(--text-primary)' }}>
               What are we working on today?
             </h1>
             <p className="text-xs text-text-tertiary font-normal">Here's a quick overview of your tasks.</p>
           </div>
+
+          {tasksError && (
+            <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-3">
+              <p className="text-sm font-medium text-red-700">Failed to load dashboard data</p>
+              <p className="mt-1 text-xs text-red-600">{tasksError}</p>
+            </div>
+          )}
 
           {/* Customize Dashboard Button with Dropdown */}
           <div className="relative mb-6">
@@ -79,17 +90,17 @@ export function DashboardMobile() {
 
           {/* Today's Focus */}
           <div className="mb-6">
-            <TodaysFocus />
+            <TodaysFocus tasks={tasks} loading={tasksLoading} />
           </div>
 
           {/* Recently Completed */}
           <div className="mb-6">
-            <RecentlyCompleted />
+            <RecentlyCompleted tasks={tasks.filter(task => task.status === 'done')} loading={tasksLoading} />
           </div>
 
           {/* Assigned to Me - Full Width */}
           <div className="mb-6">
-            <AssignedToMe />
+            <AssignedToMe tasks={tasks} loading={tasksLoading} />
           </div>
         </div>
       </main>

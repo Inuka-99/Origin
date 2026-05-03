@@ -8,7 +8,6 @@
 
 import { Injectable } from '@nestjs/common';
 import { google, calendar_v3 } from 'googleapis';
-import { OAuth2Client } from 'google-auth-library';
 import { GoogleOAuthService } from './google-oauth.service';
 
 export interface ResolvedCalendarClient {
@@ -26,7 +25,7 @@ export class GoogleCalendarClientFactory {
     const tokens = await this.oauth.getAccessTokenForUser(userId);
     if (!tokens) return null;
 
-    const authClient = new OAuth2Client();
+    const authClient = new google.auth.OAuth2();
     authClient.setCredentials({ access_token: tokens.accessToken });
 
     return {
