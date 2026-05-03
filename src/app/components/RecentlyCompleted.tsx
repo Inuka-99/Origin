@@ -16,42 +16,11 @@ interface RecentlyCompletedProps {
   loading?: boolean;
 }
 
-const sampleCompletedTasks: CompletedTask[] = [
-  {
-    id: '1',
-    title: 'Design system color palette update',
-    project: { id: '1', name: 'Design System', color: 'var(--accent)' },
-    updated_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString() // 2 hours ago
-  },
-  {
-    id: '2',
-    title: 'Database migration script',
-    project: { id: '2', name: 'Backend Infrastructure', color: '#16A34A' },
-    updated_at: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString() // 5 hours ago
-  },
-  {
-    id: '3',
-    title: 'User onboarding flow documentation',
-    project: { id: '3', name: 'Product Docs', color: '#9333EA' },
-    updated_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() // Yesterday
-  },
-  {
-    id: '4',
-    title: 'Fix login page responsive issues',
-    project: { id: '4', name: 'Frontend', color: '#DC2626' },
-    updated_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() // Yesterday
-  },
-  {
-    id: '5',
-    title: 'Security audit report review',
-    project: { id: '5', name: 'Security', color: '#EA580C' },
-    updated_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString() // 2 days ago
-  }
-];
+
 
 export function RecentlyCompleted({ tasks, loading = false }: RecentlyCompletedProps) {
-  // Use provided tasks or fallback to sample
-  const displayTasks = tasks.length > 0 ? tasks : sampleCompletedTasks;
+  // Use provided tasks only
+  const displayTasks = tasks;
 
   const formatTimeAgo = (dateString: string) => {
     const date = new Date(dateString);

@@ -18,56 +18,13 @@ interface TodaysFocusProps {
   loading?: boolean;
 }
 
-const sampleTasks: Task[] = [
-  {
-    id: '1',
-    title: 'Review Q1 performance metrics',
-    project: { id: '1', name: 'Analytics Dashboard', color: 'var(--accent)' },
-    due_date: '2024-04-20T10:00:00Z',
-    status: 'todo'
-  },
-  {
-    id: '2',
-    title: 'Update client presentation slides',
-    project: { id: '2', name: 'Client Portal', color: '#9333EA' },
-    due_date: '2024-04-20T14:00:00Z',
-    status: 'todo'
-  },
-  {
-    id: '3',
-    title: 'Code review for authentication module',
-    project: { id: '3', name: 'ORIGIN Platform', color: '#16A34A' },
-    due_date: '2024-04-20T16:30:00Z',
-    status: 'todo'
-  },
-  {
-    id: '4',
-    title: 'Team standup meeting',
-    project: { id: '4', name: 'Engineering', color: '#DC2626' },
-    due_date: '2024-04-20T09:30:00Z',
-    status: 'todo'
-  },
-  {
-    id: '5',
-    title: 'Update documentation for API endpoints',
-    project: { id: '5', name: 'Backend Infrastructure', color: '#16A34A' },
-    due_date: '2024-04-20T15:00:00Z',
-    status: 'todo'
-  },
-  {
-    id: '6',
-    title: 'Design review with product team',
-    project: { id: '6', name: 'Design System', color: 'var(--accent)' },
-    due_date: '2024-04-20T11:30:00Z',
-    status: 'todo'
-  }
-];
+
 
 export function TodaysFocus({ tasks, loading = false }: TodaysFocusProps) {
   const [activeTab, setActiveTab] = useState('today');
 
-  // Use provided tasks or fallback to sample
-  const displayTasks = tasks.length > 0 ? tasks : sampleTasks;
+  // Use provided tasks only
+  const displayTasks = tasks;
 
   // Filter tasks based on active tab
   const getFilteredTasks = () => {

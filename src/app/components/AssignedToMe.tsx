@@ -19,62 +19,13 @@ interface AssignedToMeProps {
   loading?: boolean;
 }
 
-const sampleAssignedTasks: AssignedTask[] = [
-  {
-    id: '1',
-    title: 'Implement user profile settings page',
-    priority: 'high',
-    due_date: '2026-03-05',
-    status: 'in_progress',
-    project: { id: '1', name: 'Frontend', color: '#DC2626' }
-  },
-  {
-    id: '2',
-    title: 'Write unit tests for authentication service',
-    priority: 'high',
-    due_date: '2026-03-06',
-    status: 'todo',
-    project: { id: '2', name: 'Backend', color: '#16A34A' }
-  },
-  {
-    id: '3',
-    title: 'Update API documentation',
-    priority: 'medium',
-    due_date: '2026-03-08',
-    status: 'in_progress',
-    project: { id: '3', name: 'Documentation', color: '#9333EA' }
-  },
-  {
-    id: '4',
-    title: 'Review pull request for dashboard redesign',
-    priority: 'medium',
-    due_date: '2026-03-10',
-    status: 'todo',
-    project: { id: '4', name: 'Frontend', color: '#DC2626' }
-  },
-  {
-    id: '5',
-    title: 'Optimize database queries for reports',
-    priority: 'low',
-    due_date: '2026-03-12',
-    status: 'todo',
-    project: { id: '5', name: 'Backend', color: '#16A34A' }
-  },
-  {
-    id: '6',
-    title: 'Create wireframes for mobile app',
-    priority: 'high',
-    due_date: '2026-03-07',
-    status: 'in_progress',
-    project: { id: '6', name: 'Design', color: 'var(--accent)' }
-  }
-];
+
 
 export function AssignedToMe({ tasks, loading = false }: AssignedToMeProps) {
   const [activeStatus, setActiveStatus] = useState('all');
 
-  // Use provided tasks or fallback to sample
-  const displayTasks = tasks.length > 0 ? tasks : sampleAssignedTasks;
+  // Use provided tasks only
+  const displayTasks = tasks;
 
   const statusFilters = [
     { id: 'all', label: 'All', count: displayTasks.length },
