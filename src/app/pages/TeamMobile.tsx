@@ -1,85 +1,13 @@
 import { MobileTopBar } from '../components/MobileTopBar';
 import { Search, Plus, Mail, Shield, User, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
-
-interface TeamMember {
-  id: string;
-  name: string;
-  email: string;
-  role: 'Admin' | 'Member';
-  avatar: string;
-  department: string;
-  status: 'Active' | 'Invited';
-  tasksCount: number;
-}
-
-const mockTeamMembers: TeamMember[] = [
-  {
-    id: '1',
-    name: 'Sarah Johnson',
-    email: 'sarah@company.com',
-    role: 'Admin',
-    avatar: 'SJ',
-    department: 'Product',
-    status: 'Active',
-    tasksCount: 12
-  },
-  {
-    id: '2',
-    name: 'Alex Morgan',
-    email: 'alex@company.com',
-    role: 'Member',
-    avatar: 'AM',
-    department: 'Engineering',
-    status: 'Active',
-    tasksCount: 18
-  },
-  {
-    id: '3',
-    name: 'Jordan Lee',
-    email: 'jordan@company.com',
-    role: 'Member',
-    avatar: 'JL',
-    department: 'Engineering',
-    status: 'Active',
-    tasksCount: 15
-  },
-  {
-    id: '4',
-    name: 'Sarah Chen',
-    email: 'sarah.chen@company.com',
-    role: 'Member',
-    avatar: 'SC',
-    department: 'Design',
-    status: 'Active',
-    tasksCount: 10
-  },
-  {
-    id: '5',
-    name: 'Emma Martinez',
-    email: 'emma@company.com',
-    role: 'Admin',
-    avatar: 'EM',
-    department: 'Marketing',
-    status: 'Active',
-    tasksCount: 8
-  },
-  {
-    id: '6',
-    name: 'Rachel Harris',
-    email: 'rachel@company.com',
-    role: 'Member',
-    avatar: 'RH',
-    department: 'Marketing',
-    status: 'Invited',
-    tasksCount: 0
-  }
-];
+import { useTeamMembers } from '../lib/useTeamMembers';
 
 export function TeamMobile() {
   const [searchQuery, setSearchQuery] = useState('');
+  const { members, loading, error } = useTeamMembers();
 
-  const filteredMembers = mockTeamMembers.filter(member =>
+  const filteredMembers = members.filter(member =>
     member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     member.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
     member.department.toLowerCase().includes(searchQuery.toLowerCase())
@@ -108,17 +36,24 @@ export function TeamMobile() {
           <div className="grid grid-cols-2 gap-3 mb-4">
             <div className="bg-surface rounded-lg p-4 shadow-sm">
               <div className="text-2xl font-semibold mb-1" style={{ fontFamily: 'Space Grotesk, sans-serif', color: 'var(--text-primary)' }}>
-                {mockTeamMembers.length}
+                {members.length}
               </div>
               <div className="text-xs text-text-secondary">Total Members</div>
             </div>
             <div className="bg-surface rounded-lg p-4 shadow-sm">
               <div className="text-2xl font-semibold mb-1" style={{ fontFamily: 'Space Grotesk, sans-serif', color: 'var(--text-primary)' }}>
-                {mockTeamMembers.filter(m => m.status === 'Active').length}
+                {members.filter(m => m.status === 'Active').length}
               </div>
               <div className="text-xs text-text-secondary">Active</div>
             </div>
           </div>
+
+          {error && (
+            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3">
+              <p className="text-sm font-medium text-red-700">Failed to load team data</p>
+              <p className="mt-1 text-xs text-red-600">{error}</p>
+            </div>
+          )}
 
           {/* Search Bar */}
           <div className="relative mb-4">
@@ -134,7 +69,11 @@ export function TeamMobile() {
 
           {/* Team Members List */}
           <div className="space-y-3">
-            {filteredMembers.map((member) => (
+            {loading ? (
+              <div className="bg-surface rounded-lg p-8 text-center shadow-sm">
+                <p className="text-sm text-text-tertiary">Loading team members...</p>
+              </div>
+            ) : filteredMembers.map((member) => (
               <div
                 key={member.id}
                 className="bg-surface rounded-lg p-4 shadow-sm border border-divider"
@@ -191,7 +130,7 @@ export function TeamMobile() {
             ))}
           </div>
 
-          {filteredMembers.length === 0 && (
+          {!loading && filteredMembers.length === 0 && (
             <div className="bg-surface rounded-lg p-12 text-center shadow-sm">
               <div className="w-16 h-16 bg-surface-hover rounded-full flex items-center justify-center mx-auto mb-4">
                 <User className="w-8 h-8 text-text-tertiary" />
