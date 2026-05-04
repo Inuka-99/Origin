@@ -25,6 +25,7 @@ interface Task {
   priority: 'High' | 'Medium' | 'Low';
   dueDate: string;
   dueDateValue: string | null;
+  createdAtValue: string | null;
   status: 'To Do' | 'In Progress' | 'In Review' | 'Done';
   assignee: string;
   assigneeId: string | null;
@@ -73,8 +74,8 @@ export function MyTasks() {
   const [projectMembers, setProjectMembers] = useState<ProjectMemberMap>({});
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [priorityFilter, setPriorityFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<Task['status'] | 'all'>('all');
+  const [priorityFilter, setPriorityFilter] = useState<Task['priority'] | 'all'>('all');
   const [dueDateFilter, setDueDateFilter] = useState<DueDateFilter>('all');
   const [sortMode, setSortMode] = useState<SortMode>('newest');
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
@@ -120,15 +121,19 @@ export function MyTasks() {
   const normalizeTask = (task: ApiTask, memberMap: ProjectMemberMap = projectMembers): Task => {
     const projectMembersList = task.project_id ? memberMap[task.project_id] : [];
     const assignee = projectMembersList?.find(m => m.user_id === task.assignee_id);
+    const normalizedPriority = task.priority
+      ? (task.priority.charAt(0).toUpperCase() + task.priority.slice(1).toLowerCase()) as Task['priority']
+      : 'Medium';
     return {
       id: task.id,
       title: task.title,
       description: task.description,
       project: task.project_id || 'Unknown Project',
       projectId: task.project_id ?? null,
-      priority: (task.priority?.charAt(0).toUpperCase() + task.priority?.slice(1)) as Task['priority'] || 'Medium',
+      priority: normalizedPriority,
       dueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No due date',
       dueDateValue: task.due_date ? task.due_date.slice(0, 10) : null,
+      createdAtValue: task.created_at ?? null,
       status: (task.status
         ? ((() => {
             const map: Record<string, string> = {
@@ -184,12 +189,19 @@ export function MyTasks() {
     return getMemberLabel(member) ?? task.assignee;
   };
 
-  const getTodayValue = () => new Date().toISOString().slice(0, 10);
+  const toLocalDateValue = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const getTodayValue = () => toLocalDateValue(new Date());
 
   const getNextWeekValue = () => {
     const date = new Date();
     date.setDate(date.getDate() + 7);
-    return date.toISOString().slice(0, 10);
+    return toLocalDateValue(date);
   };
 
   const loadMembersForProjects = async (
@@ -342,7 +354,9 @@ export function MyTasks() {
         return leftDue.localeCompare(rightDue) || left.title.localeCompare(right.title);
       }
 
-      return 0;
+      const leftCreated = left.createdAtValue ?? '';
+      const rightCreated = right.createdAtValue ?? '';
+      return rightCreated.localeCompare(leftCreated) || left.title.localeCompare(right.title);
     });
   }, [tasks, projects, searchQuery, statusFilter, priorityFilter, dueDateFilter, sortMode]);
 
@@ -658,7 +672,7 @@ export function MyTasks() {
           {/* Status Filter */}
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => setStatusFilter(e.target.value as Task['status'] | 'all')}
             className="px-4 py-2.5 bg-surface-sunken border border-border-subtle rounded-lg hover:bg-surface-hover transition-colors text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent"
           >
             <option value="all">All Status</option>
@@ -673,7 +687,7 @@ export function MyTasks() {
             <Filter className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
             <select
               value={priorityFilter}
-              onChange={(e) => setPriorityFilter(e.target.value)}
+              onChange={(e) => setPriorityFilter(e.target.value as Task['priority'] | 'all')}
               className="min-w-36 pl-9 pr-4 py-2.5 bg-surface-sunken border border-border-subtle rounded-lg hover:bg-surface-hover transition-colors text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent"
             >
               <option value="all">All Priority</option>
