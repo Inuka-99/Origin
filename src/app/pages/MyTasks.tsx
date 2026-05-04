@@ -1,7 +1,7 @@
 import { Sidebar } from '../components/Sidebar';
 import { TopBar } from '../components/TopBar';
-import { Search, Filter, ChevronDown, Plus, Calendar, AlertCircle, CheckCircle2, Circle, Trash2, Edit3 } from 'lucide-react';
-import { useState, useEffect, useCallback } from 'react';
+import { Search, Filter, Plus, Calendar, AlertCircle, CheckCircle2, Circle, Trash2, Edit3, ArrowUpDown } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { TaskDetailsDialog, type TaskDetailsData } from '../components/TaskDetailsDialog';
 import {
   AlertDialog,
@@ -24,6 +24,7 @@ interface Task {
   projectId: string | null;
   priority: 'High' | 'Medium' | 'Low';
   dueDate: string;
+  dueDateValue: string | null;
   status: 'To Do' | 'In Progress' | 'In Review' | 'Done';
   assignee: string;
 }
@@ -48,6 +49,9 @@ type ApiTask = {
   updated_at?: string | null;
 };
 
+type DueDateFilter = 'all' | 'overdue' | 'today' | 'next7' | 'no_due';
+type SortMode = 'newest' | 'title_asc' | 'deadline_asc';
+
 export function MyTasks() {
   const api = useApiClient();
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -56,6 +60,14 @@ export function MyTasks() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [priorityFilter, setPriorityFilter] = useState<string>('all');
+  const [dueDateFilter, setDueDateFilter] = useState<DueDateFilter>('all');
+  const [sortMode, setSortMode] = useState<SortMode>('newest');
+  const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
+  const [bulkStatus, setBulkStatus] = useState<Task['status'] | ''>('');
+  const [bulkPriority, setBulkPriority] = useState<Task['priority'] | ''>('');
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -93,6 +105,7 @@ export function MyTasks() {
       projectId: task.project_id ?? null,
       priority: (task.priority?.charAt(0).toUpperCase() + task.priority?.slice(1)) as Task['priority'] || 'Medium',
       dueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No due date',
+      dueDateValue: task.due_date ? task.due_date.slice(0, 10) : null,
       status: (task.status
         ? ((() => {
             const map: Record<string, string> = {
@@ -139,6 +152,14 @@ export function MyTasks() {
 
   const getPriorityEnumValue = (priority: string): string => {
     return priority.toLowerCase();
+  };
+
+  const getTodayValue = () => new Date().toISOString().slice(0, 10);
+
+  const getNextWeekValue = () => {
+    const date = new Date();
+    date.setDate(date.getDate() + 7);
+    return date.toISOString().slice(0, 10);
   };
 
   const loadTasks = async () => {
@@ -220,13 +241,109 @@ export function MyTasks() {
     void loadTasks();
   }, []);
 
-  const filteredTasks = tasks.filter(task => {
-    const projectName = getTaskProjectName(task);
-    const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      projectName.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || task.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  const filteredTasks = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    const today = getTodayValue();
+    const nextWeek = getNextWeekValue();
+
+    const filtered = tasks.filter((task) => {
+      const projectName = getTaskProjectName(task);
+      const matchesSearch = !query || [
+        task.title,
+        task.description ?? '',
+        projectName,
+        task.assignee,
+      ].some((value) => value.toLowerCase().includes(query));
+      const matchesStatus = statusFilter === 'all' || task.status === statusFilter;
+      const matchesPriority = priorityFilter === 'all' || task.priority === priorityFilter;
+      const matchesDueDate =
+        dueDateFilter === 'all' ||
+        (dueDateFilter === 'no_due' && !task.dueDateValue) ||
+        (dueDateFilter === 'today' && task.dueDateValue === today) ||
+        (dueDateFilter === 'overdue' && Boolean(task.dueDateValue) && task.dueDateValue! < today && task.status !== 'Done') ||
+        (dueDateFilter === 'next7' && Boolean(task.dueDateValue) && task.dueDateValue! >= today && task.dueDateValue! <= nextWeek);
+
+      return matchesSearch && matchesStatus && matchesPriority && matchesDueDate;
+    });
+
+    return [...filtered].sort((left, right) => {
+      if (sortMode === 'title_asc') {
+        return left.title.localeCompare(right.title);
+      }
+
+      if (sortMode === 'deadline_asc') {
+        const leftDue = left.dueDateValue ?? '9999-12-31';
+        const rightDue = right.dueDateValue ?? '9999-12-31';
+        return leftDue.localeCompare(rightDue) || left.title.localeCompare(right.title);
+      }
+
+      return 0;
+    });
+  }, [tasks, projects, searchQuery, statusFilter, priorityFilter, dueDateFilter, sortMode]);
+
+  const selectedIdSet = useMemo(() => new Set(selectedTaskIds), [selectedTaskIds]);
+  const selectedTasks = useMemo(
+    () => tasks.filter((task) => selectedIdSet.has(task.id)),
+    [tasks, selectedIdSet],
+  );
+  const visibleSelectedCount = filteredTasks.filter((task) => selectedIdSet.has(task.id)).length;
+  const areAllVisibleSelected = filteredTasks.length > 0 && visibleSelectedCount === filteredTasks.length;
+
+  const toggleTaskSelection = (taskId: string) => {
+    setSelectedTaskIds((current) =>
+      current.includes(taskId)
+        ? current.filter((id) => id !== taskId)
+        : [...current, taskId],
+    );
+  };
+
+  const toggleVisibleSelection = () => {
+    setSelectedTaskIds((current) => {
+      const next = new Set(current);
+      if (areAllVisibleSelected) {
+        filteredTasks.forEach((task) => next.delete(task.id));
+      } else {
+        filteredTasks.forEach((task) => next.add(task.id));
+      }
+      return Array.from(next);
+    });
+  };
+
+  const handleBulkUpdate = async () => {
+    if (selectedTasks.length === 0) {
+      setBulkError('Select at least one task first.');
+      return;
+    }
+
+    if (!bulkStatus && !bulkPriority) {
+      setBulkError('Choose a status or priority to apply.');
+      return;
+    }
+
+    const payload: Record<string, string> = {};
+    if (bulkStatus) payload.status = displayToDatabaseStatus(bulkStatus);
+    if (bulkPriority) payload.priority = getPriorityEnumValue(bulkPriority);
+
+    setIsBulkUpdating(true);
+    setBulkError(null);
+    try {
+      const updatedTasks = await Promise.all(
+        selectedTasks.map((task) => api.patch<ApiTask>(`/tasks/${task.id}`, payload)),
+      );
+      const updatedById = new Map(updatedTasks.map((task) => [task.id, normalizeTask(task)]));
+      setTasks((current) =>
+        current.map((task) => updatedById.get(task.id) ?? task),
+      );
+      setSelectedTaskIds([]);
+      setBulkStatus('');
+      setBulkPriority('');
+    } catch (error) {
+      console.error('Bulk task update failed', error);
+      setBulkError('Bulk update failed. Check permissions and try again.');
+    } finally {
+      setIsBulkUpdating(false);
+    }
+  };
 
   const getPriorityColor = (priority: Task['priority']) => {
     switch (priority) {
@@ -489,18 +606,95 @@ export function MyTasks() {
           </select>
 
           {/* Priority Filter */}
-          <button className="flex items-center gap-2 px-4 py-2.5 bg-surface-sunken border border-border-subtle rounded-lg hover:bg-surface-hover transition-colors text-sm font-medium">
-            <Filter className="w-4 h-4" />
-            Priority
-            <ChevronDown className="w-4 h-4" />
-          </button>
+          <div className="relative">
+            <Filter className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
+            <select
+              value={priorityFilter}
+              onChange={(e) => setPriorityFilter(e.target.value)}
+              className="min-w-36 pl-9 pr-4 py-2.5 bg-surface-sunken border border-border-subtle rounded-lg hover:bg-surface-hover transition-colors text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent"
+            >
+              <option value="all">All Priority</option>
+              <option value="High">High</option>
+              <option value="Medium">Medium</option>
+              <option value="Low">Low</option>
+            </select>
+          </div>
+
+          {/* Due Date Filter */}
+          <select
+            value={dueDateFilter}
+            onChange={(e) => setDueDateFilter(e.target.value as DueDateFilter)}
+            className="min-w-36 px-4 py-2.5 bg-surface-sunken border border-border-subtle rounded-lg hover:bg-surface-hover transition-colors text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent"
+          >
+            <option value="all">All Dates</option>
+            <option value="overdue">Overdue</option>
+            <option value="today">Due Today</option>
+            <option value="next7">Next 7 Days</option>
+            <option value="no_due">No Due Date</option>
+          </select>
 
           {/* Sort */}
-          <button className="flex items-center gap-2 px-4 py-2.5 bg-surface-sunken border border-border-subtle rounded-lg hover:bg-surface-hover transition-colors text-sm font-medium">
-            Sort
-            <ChevronDown className="w-4 h-4" />
-          </button>
+          <div className="relative">
+            <ArrowUpDown className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
+            <select
+              value={sortMode}
+              onChange={(e) => setSortMode(e.target.value as SortMode)}
+              className="min-w-40 pl-9 pr-4 py-2.5 bg-surface-sunken border border-border-subtle rounded-lg hover:bg-surface-hover transition-colors text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent"
+            >
+              <option value="newest">Newest First</option>
+              <option value="title_asc">Alphabetical</option>
+              <option value="deadline_asc">Deadline</option>
+            </select>
+          </div>
         </div>
+
+        {/* Bulk Actions */}
+        {selectedTaskIds.length > 0 && (
+          <div className="mb-6 flex flex-wrap items-center gap-3 rounded-lg border border-border-subtle bg-surface p-4 shadow-sm">
+            <span className="text-sm font-medium text-text-primary">
+              {selectedTaskIds.length} selected
+            </span>
+            <select
+              value={bulkStatus}
+              onChange={(e) => setBulkStatus(e.target.value as Task['status'] | '')}
+              className="min-w-40 rounded-lg border border-border-subtle bg-surface-sunken px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+            >
+              <option value="">Status...</option>
+              <option value="To Do">To Do</option>
+              <option value="In Progress">In Progress</option>
+              <option value="In Review">In Review</option>
+              <option value="Done">Done</option>
+            </select>
+            <select
+              value={bulkPriority}
+              onChange={(e) => setBulkPriority(e.target.value as Task['priority'] | '')}
+              className="min-w-40 rounded-lg border border-border-subtle bg-surface-sunken px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+            >
+              <option value="">Priority...</option>
+              <option value="High">High</option>
+              <option value="Medium">Medium</option>
+              <option value="Low">Low</option>
+            </select>
+            <button
+              onClick={handleBulkUpdate}
+              disabled={isBulkUpdating}
+              className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover disabled:opacity-50"
+            >
+              {isBulkUpdating ? 'Updating...' : 'Apply'}
+            </button>
+            <button
+              onClick={() => {
+                setSelectedTaskIds([]);
+                setBulkError(null);
+              }}
+              disabled={isBulkUpdating}
+              className="rounded-lg border border-border-subtle px-4 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-hover disabled:opacity-50"
+            >
+              Clear
+            </button>
+            {bulkError && <span className="text-sm text-red-600">{bulkError}</span>}
+          </div>
+        )}
 
         {/* Task Stats */}
         <div className="grid grid-cols-4 gap-4 mb-6">
@@ -536,6 +730,15 @@ export function MyTasks() {
             <table className="w-full">
               <thead className="bg-surface-sunken border-b border-border-subtle">
                 <tr>
+                  <th className="w-12 px-6 py-3 text-left">
+                    <input
+                      type="checkbox"
+                      checked={areAllVisibleSelected}
+                      onChange={toggleVisibleSelection}
+                      aria-label="Select all visible tasks"
+                      className="h-4 w-4 rounded border-border-strong accent-[var(--accent)]"
+                    />
+                  </th>
                   <th className="text-left px-6 py-3 text-sm font-semibold text-text-primary">Task Name</th>
                   <th className="text-left px-6 py-3 text-sm font-semibold text-text-primary">Project</th>
                   <th className="text-left px-6 py-3 text-sm font-semibold text-text-primary">Priority</th>
@@ -553,6 +756,16 @@ export function MyTasks() {
                       void openTaskDetailsModal(task);
                     }}
                   >
+                    <td className="px-6 py-4">
+                      <input
+                        type="checkbox"
+                        checked={selectedIdSet.has(task.id)}
+                        onChange={() => toggleTaskSelection(task.id)}
+                        onClick={(event) => event.stopPropagation()}
+                        aria-label={`Select ${task.title}`}
+                        className="h-4 w-4 rounded border-border-strong accent-[var(--accent)]"
+                      />
+                    </td>
                     <td className="px-6 py-4">
                       <div className="font-medium text-text-primary">{task.title}</div>
                     </td>
