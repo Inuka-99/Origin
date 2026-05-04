@@ -28,6 +28,7 @@ import { ProjectsModule } from './projects';
 import { TasksModule } from './tasks/tasks.module';
 import { TimeEntriesModule } from './time-entries';
 import { ActivityLogModule } from './activity-log';
+import { DataIntegrityModule } from './data-integrity';
 import { ChatModule } from './chat';
 import { GoogleCalendarModule } from './integrations/google-calendar';
 import { AppController } from './app.controller';
@@ -61,6 +62,9 @@ import { RateLimitInterceptor } from './common/rate-limit.interceptor';
 
     // Activity log / audit feed
     ActivityLogModule,
+
+    // Admin data-integrity report and checkpoints
+    DataIntegrityModule,
 
     // Native team chat (channels, DMs, attachments)
     ChatModule,
