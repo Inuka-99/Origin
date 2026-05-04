@@ -27,6 +27,7 @@ interface Task {
   dueDateValue: string | null;
   status: 'To Do' | 'In Progress' | 'In Review' | 'Done';
   assignee: string;
+  assigneeId: string | null;
 }
 
 interface PendingTaskDeletion {
@@ -49,6 +50,19 @@ type ApiTask = {
   updated_at?: string | null;
 };
 
+type ProjectMemberLite = {
+  id: string;
+  user_id: string;
+  full_name?: string | null;
+  email?: string | null;
+  profiles?: {
+    full_name?: string | null;
+    email?: string | null;
+  };
+};
+
+type ProjectMemberMap = Record<string, ProjectMemberLite[]>;
+
 type DueDateFilter = 'all' | 'overdue' | 'today' | 'next7' | 'no_due';
 type SortMode = 'newest' | 'title_asc' | 'deadline_asc';
 
@@ -56,7 +70,7 @@ export function MyTasks() {
   const api = useApiClient();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [projects, setProjects] = useState<{id:string;name:string}[]>([]);
-  const [projectMembers, setProjectMembers] = useState<Record<string, {id:string;user_id:string;profiles?:{full_name?:string;email?:string}}[]>>({});
+  const [projectMembers, setProjectMembers] = useState<ProjectMemberMap>({});
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -94,8 +108,17 @@ export function MyTasks() {
     assignee_id: '',
   });
 
-  const normalizeTask = (task: ApiTask): Task => {
-    const projectMembersList = task.project_id ? projectMembers[task.project_id] : [];
+  const getMemberLabel = (member?: ProjectMemberLite): string | null => {
+    if (!member) return null;
+    return member.full_name
+      || member.email
+      || member.profiles?.full_name
+      || member.profiles?.email
+      || member.user_id;
+  };
+
+  const normalizeTask = (task: ApiTask, memberMap: ProjectMemberMap = projectMembers): Task => {
+    const projectMembersList = task.project_id ? memberMap[task.project_id] : [];
     const assignee = projectMembersList?.find(m => m.user_id === task.assignee_id);
     return {
       id: task.id,
@@ -118,7 +141,8 @@ export function MyTasks() {
             return (map[task.status] || task.status) as Task['status'];
           })())
         : 'To Do') as Task['status'],
-      assignee: assignee ? (assignee.profiles?.full_name || assignee.profiles?.email || assignee.user_id) : 'Unassigned',
+      assignee: getMemberLabel(assignee) ?? 'Unassigned',
+      assigneeId: task.assignee_id,
     };
   };
 
@@ -154,6 +178,12 @@ export function MyTasks() {
     return priority.toLowerCase();
   };
 
+  const getTaskAssigneeName = (task: Task): string => {
+    if (!task.projectId || !task.assigneeId) return task.assignee;
+    const member = projectMembers[task.projectId]?.find((item) => item.user_id === task.assigneeId);
+    return getMemberLabel(member) ?? task.assignee;
+  };
+
   const getTodayValue = () => new Date().toISOString().slice(0, 10);
 
   const getNextWeekValue = () => {
@@ -162,13 +192,48 @@ export function MyTasks() {
     return date.toISOString().slice(0, 10);
   };
 
+  const loadMembersForProjects = async (
+    projectIds: string[],
+    existingMembers: ProjectMemberMap = projectMembers,
+  ): Promise<ProjectMemberMap> => {
+    const uniqueProjectIds = Array.from(new Set(projectIds.filter(Boolean)));
+    const missingProjectIds = uniqueProjectIds.filter((projectId) => !existingMembers[projectId]);
+
+    if (missingProjectIds.length === 0) {
+      return existingMembers;
+    }
+
+    const entries = await Promise.all(
+      missingProjectIds.map(async (projectId) => {
+        try {
+          const members = await api.get<ProjectMemberLite[]>(`/projects/${projectId}/members`);
+          return [projectId, members] as const;
+        } catch (error) {
+          console.error('Failed to load project members', error);
+          return [projectId, []] as const;
+        }
+      }),
+    );
+
+    const nextMembers = {
+      ...existingMembers,
+      ...Object.fromEntries(entries),
+    };
+    setProjectMembers(nextMembers);
+    return nextMembers;
+  };
+
   const loadTasks = async () => {
     setIsLoading(true);
     try {
       // /tasks now returns { data, total, page, limit }; unwrapList
       // tolerates both the new envelope and the legacy bare-array shape.
       const response = await api.get<ApiTask[] | PaginatedList<ApiTask>>('/tasks?limit=200');
-      setTasks(unwrapList(response).map(normalizeTask));
+      const taskList = unwrapList(response);
+      const memberMap = await loadMembersForProjects(
+        taskList.map((task) => task.project_id).filter((projectId): projectId is string => Boolean(projectId)),
+      );
+      setTasks(taskList.map((task) => normalizeTask(task, memberMap)));
     } catch (error) {
       console.error('Failed to load tasks', error);
       setTasks([]);
@@ -182,7 +247,7 @@ export function MyTasks() {
       // /projects returns { data, total, page, limit }; unwrap so we
       // can use it as a plain array regardless of envelope shape.
       type ProjectLite = { id: string; name: string };
-      const response = await api.get<ProjectLite[] | PaginatedList<ProjectLite>>('/projects');
+      const response = await api.get<ProjectLite[] | PaginatedList<ProjectLite>>('/projects?limit=200');
       const list = unwrapList(response);
       setProjects(list);
 
@@ -200,7 +265,7 @@ export function MyTasks() {
       if (prev.some((item) => item.id === task.id)) return prev;
       return [...prev, normalizeTask(task)];
     });
-  }, [projects]);
+  }, [projects, projectMembers]);
 
   const handleTaskUpdated = useCallback((task: ApiTask) => {
     setTasks((prev) => {
@@ -215,7 +280,7 @@ export function MyTasks() {
       });
       return found ? updatedTasks : [...updatedTasks, normalizedTask];
     });
-  }, [projects]);
+  }, [projects, projectMembers]);
 
   const handleTaskDeleted = useCallback((payload: { id: string }) => {
     setTasks((prev) => prev.filter((task) => task.id !== payload.id));
@@ -229,7 +294,7 @@ export function MyTasks() {
   const loadProjectMembers = async (projectId: string) => {
     if (!projectId || projectMembers[projectId]) return;
     try {
-      const members = await api.get(`/projects/${projectId}/members`);
+      const members = await api.get<ProjectMemberLite[]>(`/projects/${projectId}/members`);
       setProjectMembers(prev => ({ ...prev, [projectId]: members }));
     } catch (error) {
       console.error('Failed to load project members', error);
@@ -252,7 +317,7 @@ export function MyTasks() {
         task.title,
         task.description ?? '',
         projectName,
-        task.assignee,
+        getTaskAssigneeName(task),
       ].some((value) => value.toLowerCase().includes(query));
       const matchesStatus = statusFilter === 'all' || task.status === statusFilter;
       const matchesPriority = priorityFilter === 'all' || task.priority === priorityFilter;
@@ -441,9 +506,7 @@ export function MyTasks() {
         : task.project;
       const memberList = fullTask.project_id ? projectMembers[fullTask.project_id] : [];
       const assigneeMatch = memberList?.find((member) => member.user_id === fullTask.assignee_id);
-      const assigneeLabel = assigneeMatch
-        ? (assigneeMatch.profiles?.full_name || assigneeMatch.profiles?.email || assigneeMatch.user_id)
-        : task.assignee;
+      const assigneeLabel = getMemberLabel(assigneeMatch) ?? task.assignee;
 
       setSelectedTaskDetails({
         id: fullTask.id,
@@ -934,7 +997,7 @@ export function MyTasks() {
                       <option value="">Unassigned</option>
                       {projectMembers[taskForm.project_id]?.map((member) => (
                         <option key={member.user_id} value={member.user_id}>
-                          {member.profiles?.full_name || member.profiles?.email || member.user_id}
+                          {getMemberLabel(member)}
                         </option>
                       ))}
                     </select>
