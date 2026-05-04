@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Menu, Bell, X, LayoutDashboard, Folder, CheckSquare, Calendar, Users, Settings, LogOut, MessageSquare } from 'lucide-react';
+import { Menu, X, LayoutDashboard, Folder, CheckSquare, Calendar, Users, Settings, LogOut, MessageSquare } from 'lucide-react';
 // TODO: restore image import once asset is available
 // import originLogo from 'figma:asset/966bedd3383407a6804dcd0980785a3c1cd7d32b.png';
+import { SmartRemindersBell } from './SmartRemindersBell';
 
 export function MobileTopBar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -35,10 +36,11 @@ export function MobileTopBar() {
           </div>
 
           {/* Right: Notifications */}
-          <button className="w-11 h-11 flex items-center justify-center text-text-secondary hover:bg-surface-hover rounded-lg transition-colors relative">
-            <Bell className="w-5 h-5" />
-            <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></span>
-          </button>
+          <SmartRemindersBell
+            taskRoute="/tasks-mobile"
+            className="relative flex h-11 w-11 items-center justify-center rounded-lg text-text-secondary transition-colors hover:bg-surface-hover"
+            iconClassName="w-5 h-5"
+          />
         </div>
       </header>
 

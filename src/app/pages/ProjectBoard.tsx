@@ -17,6 +17,11 @@ import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { useApiClient, unwrapList, type PaginatedList } from '../lib/api-client';
 import { useTaskRealtime } from '../lib/use-task-realtime';
+import {
+  getTaskApprovalClasses,
+  getTaskApprovalLabel,
+  type TaskApprovalStatus,
+} from '../lib/task-approval';
 
 interface ApiTask {
   id: string;
@@ -25,6 +30,9 @@ interface ApiTask {
   description: string | null;
   status: 'todo' | 'in_progress' | 'In Review' | 'Done' | 'completed' | null;
   priority: 'Low' | 'Medium' | 'High';
+  approval_status?: TaskApprovalStatus | null;
+  approved_by?: string | null;
+  approved_at?: string | null;
   due_date: string | null;
   assigned_to: string | null;
   created_by: string | null;
@@ -44,6 +52,7 @@ interface Task {
   project: string;
   projectColor: string;
   priority: 'Low' | 'Medium' | 'High';
+  approvalStatus: TaskApprovalStatus;
   dueDate: string;
   assignees: string[];
   comments: number;
@@ -154,6 +163,9 @@ function TaskCard({ task, columnId, onMoveTask, onDeleteTask, onEditTask, onOpen
           <div className="flex items-center gap-2 mb-3 flex-wrap">
             <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${getPriorityColor(task.priority)}`}>
               {task.priority}
+            </span>
+            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getTaskApprovalClasses(task.approvalStatus)}`}>
+              {getTaskApprovalLabel(task.approvalStatus)}
             </span>
             <span className="flex items-center gap-1 text-xs text-text-tertiary">
               <CalendarIcon className="w-3 h-3" />
@@ -357,6 +369,7 @@ export function ProjectBoard() {
       project: 'Client Website Redesign', // optionally dynamic if you have project data
       projectColor: '#204EA7',
       priority: task.priority,
+      approvalStatus: task.approval_status ?? 'approved',
       dueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : 'N/A',
       assignees: task.assignee_id ? [task.assignee_id] : [],
       comments: 0,
@@ -391,6 +404,7 @@ export function ProjectBoard() {
           project: projectName,
           projectColor,
           priority,
+          approvalStatus: task.approval_status ?? 'approved',
           dueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : 'N/A',
           assignees: task.assigned_to ? [task.assigned_to.slice(0, 2).toUpperCase()] : [],
           comments: 0,
@@ -451,6 +465,7 @@ export function ProjectBoard() {
     project_id: string;
     status: Task['status'];
     priority: Task['priority'];
+    requestApproval: boolean;
     dueDate: string;
     assigneeId: string;
   }>({
@@ -459,6 +474,7 @@ export function ProjectBoard() {
     project_id: '',
     status: 'To Do',
     priority: 'Medium',
+    requestApproval: false,
     dueDate: '',
     assigneeId: '',
   });
@@ -472,6 +488,7 @@ export function ProjectBoard() {
       project_id: projects[0]?.id ?? '',
       status: 'To Do',
       priority: 'Medium',
+      requestApproval: false,
       dueDate: '',
       assigneeId: '',
     });
@@ -488,6 +505,7 @@ export function ProjectBoard() {
       project_id: matchedProject?.id ?? projects[0]?.id ?? '',
       status: task.status ?? 'To Do',
       priority: task.priority,
+      requestApproval: task.approvalStatus === 'pending',
       dueDate: task.dueDate === 'N/A' ? '' : task.dueDate,
       assigneeId: task.assignees[0] ?? '',
     });
@@ -507,6 +525,7 @@ export function ProjectBoard() {
         description: fullTask.description,
         status: databaseToDisplayStatus(fullTask.status),
         priority: fullTask.priority,
+        approvalStatus: fullTask.approval_status ?? 'approved',
         assignee: fullTask.assigned_to || (task.assignees[0] ?? 'Unassigned'),
         dueDate: fullTask.due_date ? new Date(fullTask.due_date).toLocaleDateString() : 'Not set',
         project: projectName || 'No project assigned',
@@ -554,6 +573,7 @@ export function ProjectBoard() {
       description: taskForm.description.trim() || null,
       status: displayToDatabaseStatus(taskForm.status),
       priority: taskForm.priority,
+      approval_status: taskForm.requestApproval ? 'pending' : 'approved',
       due_date: taskForm.dueDate ? new Date(taskForm.dueDate).toISOString() : null,
       assigned_to: taskForm.assigneeId || null,
     };
@@ -571,6 +591,7 @@ export function ProjectBoard() {
           project: projectName,
           projectColor,
           priority,
+          approvalStatus: created.approval_status ?? 'approved',
           dueDate: created.due_date ? new Date(created.due_date).toLocaleDateString() : 'N/A',
           assignees: created.assigned_to ? [created.assigned_to.slice(0, 2).toUpperCase()] : [],
           comments: 0,
@@ -788,6 +809,22 @@ export function ProjectBoard() {
                       </select>
                     </div>
                   </div>
+                  <label className="flex items-start gap-3 rounded-lg border border-border-subtle bg-surface-sunken px-3 py-3">
+                    <input
+                      type="checkbox"
+                      checked={taskForm.requestApproval}
+                      onChange={(e) => setTaskForm((prev) => ({ ...prev, requestApproval: e.target.checked }))}
+                      className="mt-0.5 h-4 w-4 rounded border-border-strong text-accent focus:ring-accent"
+                    />
+                    <span>
+                      <span className="block text-sm font-medium text-text-primary">
+                        Request admin approval before publishing
+                      </span>
+                      <span className="block text-xs text-text-tertiary">
+                        Leave unchecked to publish immediately.
+                      </span>
+                    </span>
+                  </label>
                   <div>
                     <label className="block text-xs font-medium text-text-secondary mb-1">Due Date</label>
                     <input

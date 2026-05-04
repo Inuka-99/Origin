@@ -15,6 +15,11 @@ import {
 } from '../components/ui/alert-dialog';
 import { useApiClient, unwrapList, type PaginatedList } from '../lib/api-client';
 import { useTaskRealtime } from '../lib/use-task-realtime';
+import {
+  getTaskApprovalClasses,
+  getTaskApprovalLabel,
+  type TaskApprovalStatus,
+} from '../lib/task-approval';
 
 interface Task {
   id: string;
@@ -23,6 +28,7 @@ interface Task {
   project: string;
   projectId: string | null;
   priority: 'High' | 'Medium' | 'Low';
+  approvalStatus: TaskApprovalStatus;
   dueDate: string;
   status: 'To Do' | 'In Progress' | 'In Review' | 'Done';
   assignee: string;
@@ -43,6 +49,9 @@ type ApiTask = {
   due_date: string | null;
   assignee_id: string | null;
   assigned_to: string | null;
+  approval_status?: TaskApprovalStatus | null;
+  approved_by?: string | null;
+  approved_at?: string | null;
   created_by?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
@@ -70,6 +79,7 @@ export function MyTasks() {
     project_id: string;
     status: Task['status'];
     priority: Task['priority'];
+    requestApproval: boolean;
     due_date: string;
     assignee_id: string;
   }>({
@@ -78,6 +88,7 @@ export function MyTasks() {
     project_id: '',
     status: 'To Do',
     priority: 'Medium',
+    requestApproval: false,
     due_date: '',
     assignee_id: '',
   });
@@ -92,6 +103,7 @@ export function MyTasks() {
       project: task.project_id || 'Unknown Project',
       projectId: task.project_id ?? null,
       priority: (task.priority?.charAt(0).toUpperCase() + task.priority?.slice(1)) as Task['priority'] || 'Medium',
+      approvalStatus: task.approval_status ?? 'approved',
       dueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No due date',
       status: (task.status
         ? ((() => {
@@ -265,6 +277,7 @@ export function MyTasks() {
       project_id: defaultProjectId,
       status: 'To Do',
       priority: 'Medium',
+      requestApproval: false,
       due_date: '',
       assignee_id: '',
     });
@@ -298,6 +311,7 @@ export function MyTasks() {
         project_id: assignedProjectId,
         status: databaseToDisplayStatus(fullTask.status),
         priority: (fullTask.priority?.charAt(0).toUpperCase() + fullTask.priority?.slice(1)) as Task['priority'] || 'Medium',
+        requestApproval: (fullTask.approval_status ?? 'approved') === 'pending',
         due_date: fullTask.due_date ? new Date(fullTask.due_date).toISOString().slice(0, 10) : '',
         assignee_id: fullTask.assignee_id || '',
       });
@@ -334,6 +348,7 @@ export function MyTasks() {
         description: fullTask.description,
         status: databaseToDisplayStatus(fullTask.status) as TaskDetailsData['status'],
         priority: (fullTask.priority?.charAt(0).toUpperCase() + fullTask.priority?.slice(1)) as TaskDetailsData['priority'],
+        approvalStatus: fullTask.approval_status ?? 'approved',
         assignee: assigneeLabel || 'Unassigned',
         dueDate: fullTask.due_date ? new Date(fullTask.due_date).toLocaleDateString() : 'Not set',
         project: projectName || 'No project assigned',
@@ -384,6 +399,7 @@ export function MyTasks() {
       description: taskForm.description.trim() || null,
       status: displayToDatabaseStatus(taskForm.status),
       priority: getPriorityEnumValue(taskForm.priority),
+      approval_status: taskForm.requestApproval ? 'pending' : 'approved',
       due_date: taskForm.due_date || null,
       assignee_id: taskForm.assignee_id || null,
     };
@@ -554,7 +570,14 @@ export function MyTasks() {
                     }}
                   >
                     <td className="px-6 py-4">
-                      <div className="font-medium text-text-primary">{task.title}</div>
+                      <div className="space-y-2">
+                        <div className="font-medium text-text-primary">{task.title}</div>
+                        <span
+                          className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${getTaskApprovalClasses(task.approvalStatus)}`}
+                        >
+                          {getTaskApprovalLabel(task.approvalStatus)}
+                        </span>
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <span className="text-sm text-text-secondary">{getTaskProjectName(task)}</span>
@@ -697,6 +720,23 @@ export function MyTasks() {
                     </select>
                   </div>
                 </div>
+
+                <label className="flex items-start gap-3 rounded-lg border border-border-subtle bg-surface-sunken px-3 py-3">
+                  <input
+                    type="checkbox"
+                    checked={taskForm.requestApproval}
+                    onChange={(e) => setTaskForm((prev) => ({ ...prev, requestApproval: e.target.checked }))}
+                    className="mt-0.5 h-4 w-4 rounded border-border-strong text-accent focus:ring-accent"
+                  />
+                  <span>
+                    <span className="block text-sm font-medium text-text-primary">
+                      Request admin approval before publishing
+                    </span>
+                    <span className="block text-xs text-text-tertiary">
+                      Leave unchecked to publish immediately.
+                    </span>
+                  </span>
+                </label>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>

@@ -13,6 +13,11 @@ import {
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { useApiClient } from '../lib/api-client';
+import {
+  getTaskApprovalClasses,
+  getTaskApprovalLabel,
+  type TaskApprovalStatus,
+} from '../lib/task-approval';
 
 export interface TaskDetailsData {
   id: string;
@@ -26,6 +31,7 @@ export interface TaskDetailsData {
   createdAt?: string | null;
   updatedAt?: string | null;
   createdBy?: string | null;
+  approvalStatus?: TaskApprovalStatus | null;
 }
 
 interface TaskDetailsDialogProps {
@@ -340,6 +346,11 @@ export function TaskDetailsDialog({
               className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${getPriorityClasses(task?.priority)}`}
             >
               {task?.priority || 'Medium'}
+            </span>
+            <span
+              className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${getTaskApprovalClasses(task?.approvalStatus)}`}
+            >
+              {getTaskApprovalLabel(task?.approvalStatus)}
             </span>
           </div>
 
