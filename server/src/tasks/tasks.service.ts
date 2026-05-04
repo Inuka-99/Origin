@@ -36,9 +36,14 @@ export interface Task {
   assigned_to: string | null; // User ID of the assigned team member
   assignee_id: string | null;
   created_by: string | null;
+  approval_status: 'pending' | 'approved' | 'rejected';
+  approved_by: string | null;
+  approved_at: string | null;
   created_at: string;
   updated_at: string;
 }
+
+export type TaskApprovalStatus = 'pending' | 'approved' | 'rejected';
 
 export interface CreateTaskDto {
   project_id?: string | null;
@@ -46,6 +51,7 @@ export interface CreateTaskDto {
   description?: string;
   status?: 'todo' | 'in_progress' | 'In Review' | 'Done' | 'completed';
   priority?: 'High' | 'Medium' | 'Low';
+  approval_status?: 'pending' | 'approved';
   due_date?: string;
   assigned_to?: string | null; // User ID to assign the task to on creation
   assignee_id?: string | null;
@@ -56,9 +62,14 @@ export interface UpdateTaskDto {
   description?: string | null;
   status?: 'todo' | 'in_progress' | 'In Review' | 'Done' | 'completed';
   priority?: 'High' | 'Medium' | 'Low';
+  approval_status?: 'pending' | 'approved';
   due_date?: string | null;
   assigned_to?: string | null; // User ID to assign (or null to unassign)
   assignee_id?: string | null;
+}
+
+export interface UpdateTaskApprovalDto {
+  approval_status: TaskApprovalStatus;
 }
 
 @Injectable()
@@ -80,7 +91,7 @@ export class TasksService {
     }
   }
 
-  async create(dto: CreateTaskDto, userId: string): Promise<Task> {
+  async create(dto: CreateTaskDto, userId: string, userRole: string): Promise<Task> {
     if (dto.project_id) {
       await this.assertProjectMember(dto.project_id, userId);
       if (dto.assignee_id) {
@@ -109,6 +120,9 @@ export class TasksService {
       return result;
     };
 
+    const requestedApprovalStatus = this.normalizeCreateOrEditApprovalStatus(dto.approval_status);
+    const resolvedApprovalStatus = requestedApprovalStatus ?? 'approved';
+
     const insertPayload: Partial<Task> = {
       project_id: dto.project_id ?? null,
       title: dto.title,
@@ -118,6 +132,9 @@ export class TasksService {
       due_date: dto.due_date ?? null,
       assigned_to: dto.assigned_to ?? null,
       created_by: userId,
+      approval_status: resolvedApprovalStatus,
+      approved_by: resolvedApprovalStatus === 'approved' && userRole === 'admin' ? userId : null,
+      approved_at: resolvedApprovalStatus === 'approved' && userRole === 'admin' ? new Date().toISOString() : null,
     };
 
     const { data, error } = await this.client
@@ -155,13 +172,20 @@ export class TasksService {
     userRole: string,
     rawPage?: string | number,
     rawLimit?: string | number,
+    approvalStatus?: string,
   ): Promise<Paginated<Task>> {
     const pagination = parsePagination(rawPage, rawLimit);
+    const normalizedApprovalStatus = this.normalizeApprovalStatus(approvalStatus);
     let tasks: Task[] = [];
     let total = 0;
 
     if (userRole === 'admin') {
-      ({ tasks, total } = await this.fetchTasks((q) => q, pagination));
+      ({ tasks, total } = await this.fetchTasks((q) => {
+        if (normalizedApprovalStatus) {
+          return q.eq('approval_status', normalizedApprovalStatus);
+        }
+        return q;
+      }, pagination));
     } else {
       const { data: memberships, error: mError } = await this.client
         .from('project_members')
@@ -171,13 +195,12 @@ export class TasksService {
       if (mError) throw new BadRequestException(mError.message);
 
       const projectIds = (memberships ?? []).map((m: any) => m.project_id);
-
-      ({ tasks, total } = await this.fetchTasks((q) => {
-        if (projectIds.length > 0) {
-          return q.in('project_id', projectIds);
-        }
-        return q.is('project_id', null);
-      }, pagination));
+      ({ tasks, total } = await this.fetchVisibleMemberTasks(
+        (q) => (projectIds.length > 0 ? q.in('project_id', projectIds) : q.is('project_id', null)),
+        userId,
+        pagination,
+        normalizedApprovalStatus,
+      ));
     }
 
     const data = await this.attachTaskAssignees(tasks);
@@ -190,16 +213,30 @@ export class TasksService {
     userRole: string,
     rawPage?: string | number,
     rawLimit?: string | number,
+    approvalStatus?: string,
   ): Promise<Paginated<Task>> {
+    const normalizedApprovalStatus = this.normalizeApprovalStatus(approvalStatus);
     if (userRole !== 'admin') {
       await this.assertProjectMember(projectId, userId);
     }
 
     const pagination = parsePagination(rawPage, rawLimit);
-    const { tasks, total } = await this.fetchTasks(
-      (q) => q.eq('project_id', projectId),
-      pagination,
-    );
+    const { tasks, total } = userRole === 'admin'
+      ? await this.fetchTasks(
+          (q) => {
+            const scoped = q.eq('project_id', projectId);
+            return normalizedApprovalStatus
+              ? scoped.eq('approval_status', normalizedApprovalStatus)
+              : scoped;
+          },
+          pagination,
+        )
+      : await this.fetchVisibleMemberTasks(
+          (q) => q.eq('project_id', projectId),
+          userId,
+          pagination,
+          normalizedApprovalStatus,
+        );
     const data = await this.attachTaskAssignees(tasks);
     return { data, total, page: pagination.page, limit: pagination.limit };
   }
@@ -280,7 +317,10 @@ export class TasksService {
       .single();
 
     if (membership) {
-      return this.attachTaskAssignees([task]).then((tasks) => tasks[0]);
+      if (task.approval_status === 'approved' || task.created_by === userId) {
+        return this.attachTaskAssignees([task]).then((tasks) => tasks[0]);
+      }
+      throw new ForbiddenException('Not authorized to access this task');
     }
 
     throw new ForbiddenException('Not authorized to access this task');
@@ -343,6 +383,12 @@ export class TasksService {
     if (updatePayload.priority) {
       updatePayload.priority = updatePayload.priority.toLowerCase();
     }
+    if (updatePayload.approval_status !== undefined) {
+      updatePayload.approval_status = this.normalizeCreateOrEditApprovalStatus(updatePayload.approval_status);
+      if (!updatePayload.approval_status) {
+        delete updatePayload.approval_status;
+      }
+    }
 
     const { data, error } = await this.client
       .from('tasks')
@@ -364,6 +410,51 @@ export class TasksService {
 
     await this.broadcastTaskEvent('task:updated', updatedTask);
     return updatedTask;
+  }
+
+  async updateApprovalStatus(
+    id: string,
+    dto: UpdateTaskApprovalDto,
+    userId: string,
+    userRole: string,
+  ): Promise<Task> {
+    if (userRole !== 'admin') {
+      throw new ForbiddenException('Only admins can approve or reject tasks');
+    }
+
+    const approvalStatus = this.normalizeApprovalStatus(dto.approval_status);
+    if (!approvalStatus) {
+      throw new BadRequestException('approval_status must be pending, approved, or rejected');
+    }
+
+    const { data: existing, error: fetchError } = await this.client
+      .from('tasks')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (fetchError || !existing) {
+      throw new NotFoundException('Task not found');
+    }
+
+    const { data, error } = await this.client
+      .from('tasks')
+      .update({
+        approval_status: approvalStatus,
+        approved_by: userId,
+        approved_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error || !data) {
+      throw new BadRequestException(error?.message ?? 'Unable to update approval status');
+    }
+
+    const [task] = await this.attachTaskAssignees([data as Task]);
+    await this.broadcastTaskEvent('task:updated', task);
+    return task;
   }
 
   private async syncTaskAssignment(taskId: string, userId: string | null): Promise<void> {
@@ -451,5 +542,63 @@ export class TasksService {
     if (!data || data.role !== 'admin') {
       throw new ForbiddenException('Only project admins can perform this action');
     }
+  }
+
+  private normalizeApprovalStatus(value?: string | null): TaskApprovalStatus | null {
+    if (!value) return null;
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'pending' || normalized === 'approved' || normalized === 'rejected') {
+      return normalized;
+    }
+    throw new BadRequestException(`Invalid approval status: ${value}`);
+  }
+
+  private normalizeCreateOrEditApprovalStatus(value?: string | null): 'pending' | 'approved' | null {
+    if (!value) return null;
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'pending' || normalized === 'approved') {
+      return normalized;
+    }
+    if (normalized === 'rejected') {
+      throw new BadRequestException('approval_status cannot be rejected during create or edit');
+    }
+    throw new BadRequestException(`Invalid approval status: ${value}`);
+  }
+
+  private async fetchVisibleMemberTasks(
+    applyScope: (q: ReturnType<typeof this.client.from> extends infer _ ? any : never) => any,
+    userId: string,
+    pagination: PaginationParams,
+    approvalStatus: TaskApprovalStatus | null,
+  ): Promise<{ tasks: Task[]; total: number }> {
+    if (approvalStatus === 'approved') {
+      return this.fetchTasks((q) => applyScope(q).eq('approval_status', 'approved'), pagination);
+    }
+
+    if (approvalStatus === 'pending' || approvalStatus === 'rejected') {
+      return this.fetchTasks(
+        (q) => applyScope(q).eq('approval_status', approvalStatus).eq('created_by', userId),
+        pagination,
+      );
+    }
+
+    const base = this.client
+      .from('tasks')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    const { data, error } = await applyScope(base);
+    if (error) {
+      throw new BadRequestException(error.message);
+    }
+
+    const visibleTasks = ((data ?? []) as Task[]).filter(
+      (task) => task.approval_status === 'approved' || task.created_by === userId,
+    );
+
+    return {
+      tasks: visibleTasks.slice(pagination.from, pagination.to + 1),
+      total: visibleTasks.length,
+    };
   }
 }
