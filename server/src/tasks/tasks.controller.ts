@@ -16,7 +16,12 @@ import {
   UserSyncInterceptor,
   type AuthenticatedUser,
 } from '../auth';
-import { TasksService, type CreateTaskDto, type UpdateTaskDto } from './tasks.service';
+import {
+  TasksService,
+  type CreateTaskDto,
+  type UpdateTaskDto,
+  type UpdateTaskApprovalDto,
+} from './tasks.service';
 import { SupabaseService } from '../supabase';
 import { UserRoleCache } from '../users';
 
@@ -58,9 +63,10 @@ export class TasksController {
     @CurrentUser() user: AuthenticatedUser,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('approval_status') approvalStatus?: string,
   ) {
     const role = await this.getUserRole(user.userId);
-    return this.tasksService.listForUser(user.userId, role, page, limit);
+    return this.tasksService.listForUser(user.userId, role, page, limit, approvalStatus);
   }
 
   @Get('project/:projectId')
@@ -69,9 +75,10 @@ export class TasksController {
     @CurrentUser() user: AuthenticatedUser,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('approval_status') approvalStatus?: string,
   ) {
     const role = await this.getUserRole(user.userId);
-    return this.tasksService.listByProject(projectId, user.userId, role, page, limit);
+    return this.tasksService.listByProject(projectId, user.userId, role, page, limit, approvalStatus);
   }
 
   @Post()
@@ -79,7 +86,8 @@ export class TasksController {
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreateTaskDto,
   ) {
-    return this.tasksService.create(dto, user.userId);
+    const role = await this.getUserRole(user.userId);
+    return this.tasksService.create(dto, user.userId, role);
   }
 
   @Get(':id')
@@ -99,6 +107,16 @@ export class TasksController {
   ) {
     const role = await this.getUserRole(user.userId);
     return this.tasksService.update(id, dto, user.userId, role);
+  }
+
+  @Patch(':id/approval')
+  async updateApproval(
+    @Param('id') id: string,
+    @Body() dto: UpdateTaskApprovalDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const role = await this.getUserRole(user.userId);
+    return this.tasksService.updateApprovalStatus(id, dto, user.userId, role);
   }
 
   @Delete(':id')

@@ -28,6 +28,9 @@ export interface Task {
   description?: string;
   status: 'todo' | 'in_progress' | 'done';
   priority: 'low' | 'medium' | 'high';
+  approval_status?: 'pending' | 'approved' | 'rejected';
+  approved_by?: string | null;
+  approved_at?: string | null;
   due_date?: string;
   project_id?: string;
   assigned_to?: string;
