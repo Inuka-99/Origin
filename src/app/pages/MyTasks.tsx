@@ -167,7 +167,7 @@ export function MyTasks() {
     try {
       // /tasks now returns { data, total, page, limit }; unwrapList
       // tolerates both the new envelope and the legacy bare-array shape.
-      const response = await api.get<ApiTask[] | PaginatedList<ApiTask>>('/tasks');
+      const response = await api.get<ApiTask[] | PaginatedList<ApiTask>>('/tasks?limit=200');
       setTasks(unwrapList(response).map(normalizeTask));
     } catch (error) {
       console.error('Failed to load tasks', error);

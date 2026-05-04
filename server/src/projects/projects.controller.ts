@@ -74,9 +74,10 @@ export class ProjectsController {
     @CurrentUser() user: AuthenticatedUser,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('q') search?: string,
   ) {
     const role = await this.getUserRole(user.userId);
-    return this.projectsService.listForUser(user.userId, role, page, limit);
+    return this.projectsService.listForUser(user.userId, role, page, limit, search);
   }
 
   @Post()

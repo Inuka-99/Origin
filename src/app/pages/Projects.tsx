@@ -129,7 +129,12 @@ export function Projects() {
       try {
         setIsLoading(true);
         setLoadError(null);
-        const response = await api.get<Project[] | PaginatedList<Project>>('/projects');
+        const params = new URLSearchParams({ limit: '200' });
+        const trimmedSearch = searchQuery.trim();
+        if (trimmedSearch) {
+          params.set('q', trimmedSearch);
+        }
+        const response = await api.get<Project[] | PaginatedList<Project>>(`/projects?${params.toString()}`);
         const normalizedProjects = unwrapList(response);
         if (!cancelled) {
           setProjects(Array.isArray(normalizedProjects) ? normalizedProjects : []);
@@ -151,7 +156,7 @@ export function Projects() {
     return () => {
       cancelled = true;
     };
-  }, [api]);
+  }, [api, searchQuery]);
 
   const filteredProjects = useMemo(() => {
     const projectList = Array.isArray(projects) ? projects : [];

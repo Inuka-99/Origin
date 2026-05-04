@@ -153,19 +153,32 @@ export class ProjectsService {
     userRole: string,
     rawPage?: string | number,
     rawLimit?: string | number,
+    rawSearch?: string,
   ): Promise<Paginated<Project>> {
     const client = this.supabase.getClient();
     const pagination = parsePagination(rawPage, rawLimit);
+    const search = rawSearch?.trim();
+
+    const applyProjectSearch = (query: any) => {
+      if (!search) return query;
+      const escaped = search.replace(/[%_]/g, (m) => `\\${m}`);
+      const pattern = `%${escaped}%`;
+      return query.or(
+        `name.ilike.${pattern},description.ilike.${pattern},department.ilike.${pattern}`,
+      );
+    };
 
     if (userRole === 'admin') {
-      const { data, error, count } = await client
+      const baseQuery = client
         .from('projects')
         .select('*', { count: 'exact' })
-        .order('created_at', { ascending: false })
+        .order('created_at', { ascending: false });
+
+      const { data, error, count } = await applyProjectSearch(baseQuery)
         .range(pagination.from, pagination.to);
 
       if (error) throw new BadRequestException(error.message);
-      const projects = (data ?? []).map((project) => ({
+      const projects = (data ?? []).map((project: any) => ({
         ...project,
         user_role: 'admin',
       })) as Project[];
@@ -192,16 +205,18 @@ export class ProjectsService {
       return { data: [], total: 0, page: pagination.page, limit: pagination.limit };
     }
 
-    const { data, error, count } = await client
+    const baseQuery = client
       .from('projects')
       .select('*', { count: 'exact' })
       .in('id', projectIds)
-      .order('created_at', { ascending: false })
+      .order('created_at', { ascending: false });
+
+    const { data, error, count } = await applyProjectSearch(baseQuery)
       .range(pagination.from, pagination.to);
 
     if (error) throw new BadRequestException(error.message);
 
-    const projectsWithRoles = (data ?? []).map((project) => {
+    const projectsWithRoles = (data ?? []).map((project: any) => {
       const membership = memberships?.find((m) => m.project_id === project.id);
       return { ...project, user_role: membership?.role || null };
     });
