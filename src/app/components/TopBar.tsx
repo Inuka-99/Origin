@@ -1,7 +1,8 @@
-import { Search, Bell, ChevronDown } from 'lucide-react';
+import { Search, ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuthUser, LogoutButton } from '../auth';
+import { SmartRemindersBell } from './SmartRemindersBell';
 
 export function TopBar() {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -42,10 +43,7 @@ export function TopBar() {
       {/* Right Side */}
       <div className="flex items-center gap-4">
         {/* Notifications */}
-        <button className="relative p-2 hover:bg-surface-hover rounded-lg transition-colors">
-          <Bell className="w-5 h-5 text-text-secondary" />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full" style={{ background: 'var(--accent)' }} />
-        </button>
+        <SmartRemindersBell taskRoute="/tasks" />
 
         {/* User Menu */}
         <div className="relative">
