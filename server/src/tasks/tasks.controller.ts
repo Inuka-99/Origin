@@ -9,7 +9,10 @@ import {
   Query,
   UseGuards,
   UseInterceptors,
+  UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   JwtAuthGuard,
   CurrentUser,
@@ -17,6 +20,7 @@ import {
   type AuthenticatedUser,
 } from '../auth';
 import { TasksService, type CreateTaskDto, type UpdateTaskDto } from './tasks.service';
+import { AttachmentsService } from './attachments.service';
 import { SupabaseService } from '../supabase';
 import { UserRoleCache } from '../users';
 
@@ -26,6 +30,7 @@ import { UserRoleCache } from '../users';
 export class TasksController {
   constructor(
     private readonly tasksService: TasksService,
+    private readonly attachmentsService: AttachmentsService,
     private readonly supabase: SupabaseService,
     private readonly roleCache: UserRoleCache,
   ) {}
@@ -108,6 +113,71 @@ export class TasksController {
   ) {
     const role = await this.getUserRole(user.userId);
     await this.tasksService.delete(id, user.userId, role);
+    return { deleted: true };
+  }
+
+  /**
+   * Upload a file attachment to a task
+   * POST /tasks/:id/attachments
+   * Body: multipart/form-data with 'file' field
+   */
+  @Post(':id/attachments')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadAttachment(
+    @Param('id') taskId: string,
+    @UploadedFile() file: any,
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('activityLogId') activityLogId?: string,
+  ) {
+    if (!file) {
+      throw new BadRequestException('No file provided');
+    }
+
+    return this.attachmentsService.uploadAttachment(
+      file,
+      taskId,
+      user.userId,
+      activityLogId,
+    );
+  }
+
+  /**
+   * Get all attachments for a task
+   * GET /tasks/:id/attachments
+   */
+  @Get(':id/attachments')
+  async getTaskAttachments(@Param('id') taskId: string) {
+    return this.attachmentsService.getTaskAttachments(taskId);
+  }
+
+  /**
+   * Get download URL for an attachment
+   * GET /tasks/attachments/:id/download
+   */
+  @Get('attachments/:id/download')
+  async getDownloadUrl(
+    @Param('id') attachmentId: string,
+    @Query('expiresIn') expiresIn?: string,
+  ) {
+    const expiresInSeconds = expiresIn ? parseInt(expiresIn, 10) : 3600;
+    const url = await this.attachmentsService.getDownloadUrl(
+      attachmentId,
+      expiresInSeconds,
+    );
+    return { url };
+  }
+
+  /**
+   * Delete an attachment
+   * DELETE /tasks/attachments/:id
+   */
+  @Delete('attachments/:id')
+  async deleteAttachment(
+    @Param('id') attachmentId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const role = await this.getUserRole(user.userId);
+    await this.attachmentsService.deleteAttachment(attachmentId, user.userId, role);
     return { deleted: true };
   }
 }

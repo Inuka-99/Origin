@@ -110,13 +110,13 @@ export function useMessages(channelId: string | null): UseMessagesReturn {
             size: file.size,
           });
           // 2) Upload directly to Supabase Storage.
-          const put = await fetch(upload.uploadUrl, {
-            method: 'PUT',
-            headers: { 'Content-Type': file.type || 'application/octet-stream' },
-            body: file,
-          });
-          if (!put.ok) {
-            throw new Error(`Upload failed (${put.status})`);
+          const { error: uploadError } = await supabaseClient.storage
+            .from('chat-attachments')
+            .uploadToSignedUrl(upload.path, upload.token, file, {
+              contentType: file.type || 'application/octet-stream',
+            });
+          if (uploadError) {
+            throw new Error(`Upload failed: ${uploadError.message}`);
           }
           attachment = {
             attachment_url: upload.publicUrl,

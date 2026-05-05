@@ -38,6 +38,7 @@ export interface Task {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  attachments?: TaskAttachment[]; // Task file attachments
 }
 
 export interface CreateTaskDto {

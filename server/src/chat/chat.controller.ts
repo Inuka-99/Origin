@@ -140,8 +140,9 @@ export class ChatController {
     @Body() body: { filename: string; content_type?: string; size?: number },
     @CurrentUser() user: AuthenticatedUser,
   ) {
+    const safeUserId = user.userId.replace(/[^A-Za-z0-9._-]/g, '_');
     const safeName = (body.filename ?? 'file').replace(/[^A-Za-z0-9._-]/g, '_');
-    const path = `${user.userId}/${Date.now()}-${safeName}`;
+    const path = `${safeUserId}/${Date.now()}-${safeName}`;
     const client = this.supabase.getClient();
     const { data, error } = await client.storage
       .from(ATTACHMENT_BUCKET)
